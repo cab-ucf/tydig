@@ -1,0 +1,73 @@
+# The tydig app server. Multi-stage: build the client with Vite, then ship
+# only the server plus the built assets. One port serves everything (REST,
+# auth, sync ws, lsp ws, static client), so no reverse proxy is needed for
+# localhost. Put one in front anyway for TLS beyond localhost.
+#
+#   podman build -t tydig -f Containerfile.server .
+#
+# Recipe *builds* are NOT run in here: the server calls out to podman, which
+# starts the separate `tydig-build` sandbox image. See compose.yml.
+
+# ---------- stage 1: build the client ----------
+FROM docker.io/library/node:22-slim AS client
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY client/package.json client/
+COPY server/package.json server/
+RUN npm ci
+COPY client/ client/
+RUN npm run build
+
+# ---------- stage 2: runtime ----------
+FROM docker.io/library/node:22-slim
+# Debian has no podman-remote package, and the full podman package would drag
+# in a container runtime this image never uses -- it only ever *talks* to the
+# host's podman over a socket. So: the official statically linked remote
+# client, pinned and checksum-verified.
+ARG PODMAN_VERSION=5.8.0
+ARG PODMAN_SHA256_amd64=95f348126f708e2f18c85341a3630849055d72a3d22d3e102146331277588637
+ARG PODMAN_SHA256_arm64=ad3e00885b27034b34f508c21265d43dd62f3d11b69fa822390800bfc17fe3f7
+# git: project history. tini: signal handling. curl: the download + healthcheck.
+# The find below is deliberate: across releases this archive has carried the
+# binary both at bin/ and at the archive root.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git tini ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && arch="$(dpkg --print-architecture)" \
+ && case "$arch" in \
+      amd64) sha="$PODMAN_SHA256_amd64" ;; \
+      arm64) sha="$PODMAN_SHA256_arm64" ;; \
+      *) echo "no podman-remote build for $arch" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/podman-remote.tar.gz \
+      "https://github.com/containers/podman/releases/download/v${PODMAN_VERSION}/podman-remote-static-linux_${arch}.tar.gz" \
+ && echo "$sha  /tmp/podman-remote.tar.gz" | sha256sum -c - \
+ && tar -xzf /tmp/podman-remote.tar.gz -C /tmp \
+ && install -m0755 \
+      "$(find /tmp -type f -name 'podman-remote-static-linux_*' ! -name '*.tar.gz' | head -1)" \
+      /usr/local/bin/podman \
+ && rm -rf /tmp/podman-remote.tar.gz /tmp/bin \
+ && podman --version
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY server/package.json server/
+# better-sqlite3 needs a native build; --omit=dev keeps the client toolchain out
+RUN npm ci --omit=dev -w server || npm install --omit=dev -w server
+COPY server/ server/
+COPY --from=client /app/client/dist/ client/dist/
+
+# git needs an identity to commit autosaves and checkpoints
+RUN git config --system user.email 'collab@localhost' \
+ && git config --system user.name 'tydig' \
+ && git config --system --add safe.directory '*'
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    TYDIG_SYNC_PORT=0 \
+    TYDIG_DATA=/var/lib/tydig/data
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
+  CMD curl -fsS "http://127.0.0.1:${PORT}/api/auth-config" > /dev/null || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "server/index.mjs"]
