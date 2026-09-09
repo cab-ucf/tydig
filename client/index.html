@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>tydig</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header id="bar">
+    <span id="brand">tydig</span>
+    <nav id="menubar">
+      <div class="menu"><button>File</button><div class="dropdown">
+        <button data-act="new-file">New file<kbd>Alt-N</kbd></button>
+        <button data-act="upload">Upload binary</button>
+        <button data-act="projects">Projects...</button>
+        <button data-act="quick-open">Open file...<kbd>Ctrl-P</kbd></button>
+        <hr/>
+        <button data-act="checkpoint">Checkpoint...<kbd>Ctrl-S</kbd></button>
+        <button data-act="export-pdf">Export preview PDF<kbd>Alt-E</kbd></button>
+      </div></div>
+      <div class="menu"><button>Edit</button><div class="dropdown">
+        <button data-act="undo">Undo<kbd>Ctrl-Z</kbd></button>
+        <button data-act="redo">Redo<kbd>Ctrl-Shift-Z</kbd></button>
+        <hr/>
+        <button data-act="comment">Comment on selection<kbd>Ctrl-Alt-M</kbd></button>
+      </div></div>
+      <div class="menu"><button>View</button><div class="dropdown">
+        <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Alt-1</kbd></button>
+        <button data-act="toggle-side" data-check="sideOpen">Panel<kbd>Alt-2</kbd></button>
+        <button data-act="focus" data-check="focus">Focus mode<kbd>Alt-0</kbd></button>
+        <hr/>
+        <button data-act="dark-preview" data-check="darkPreview">Dark preview</button>
+        <hr/>
+        <button data-act="comments">Comments<kbd>Alt-C</kbd></button>
+        <button data-act="history">History<kbd>Alt-H</kbd></button>
+        <button data-act="build">Build panel<kbd>Alt-B</kbd></button>
+        <button data-act="review">Review changes</button>
+      </div></div>
+      <div class="menu"><button>Settings</button><div class="dropdown">
+        <button data-act="vim" data-check="vim">Vim mode</button>
+        <button data-act="lsp" data-check="lsp">LSP (tinymist)</button>
+        <hr/>
+        <button data-act="share">Share project...</button>
+        <button data-act="federation">Federate with another hub...</button>
+        <button data-act="gitremote">Git remote (durable copy)...</button>
+        <hr/>
+        <button data-act="signout">Sign out</button>
+      </div></div>
+      <div class="menu"><button>Help</button><div class="dropdown">
+        <button data-act="shortcuts">Shortcuts</button>
+        <a href="https://typst.app/docs/" target="_blank" rel="noopener">Typst docs</a>
+      </div></div>
+    </nav>
+    <span id="projname"></span>
+    <span id="peers" title="connected collaborators"></span>
+    <span class="spacer"></span>
+    <label id="main-label">compile <select id="main-sel"></select></label>
+    <button id="bar-comment" title="Comment on selection (Ctrl-Alt-M)">comment</button>
+    <button id="bar-build" title="Build panel (Alt-B)">build</button>
+    <span id="wordcount" title="words in current file"></span>
+    <button id="tgl-tree" class="tgl" title="Toggle sidebar (Alt-1)">&#9707;</button>
+    <button id="tgl-side" class="tgl" title="Toggle panel (Alt-2)">&#9706;</button>
+    <span id="status" data-state="connecting">connecting</span>
+  </header>
+  <main id="layout">
+    <nav id="tree-pane">
+      <div class="sect">
+        <div class="sect-head" data-sect="projectsOpen"><span class="tw">&#9662;</span> projects
+          <button id="proj-new-btn" title="New project">+</button></div>
+        <div class="sect-body" id="projects-list"></div>
+      </div>
+      <div class="sect grow">
+        <div class="sect-head" data-sect="filesOpen"><span class="tw">&#9662;</span> files
+          <span><button id="new-file" title="New file (use / for directories)">+file</button>
+          <button id="upload" title="Upload binary (image, data)">up</button></span></div>
+        <div class="sect-body" id="tree"></div>
+      </div>
+      <input id="upload-input" type="file" hidden multiple />
+    </nav>
+    <section id="editor"></section>
+    <section id="preview">
+      <div id="zoomctl"><button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button></div>
+      <div id="page"></div><pre id="diag" hidden></pre>
+    </section>
+    <aside id="side" hidden>
+      <div id="side-head"><span id="side-title"></span><button id="side-close">close</button></div>
+      <div id="side-body"></div>
+    </aside>
+  </main>
+  <button id="focus-exit" title="exit focus mode (Alt-0)">⤢ exit focus</button>
+  <dialog id="qo"><input id="qo-input" placeholder="open file..." /><div id="qo-list"></div></dialog>
+  <dialog id="picker">
+    <h3>Projects</h3>
+    <div id="proj-list"></div>
+    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w-]{1,64}" required /><button>create</button></form>
+    <form method="dialog" id="proj-join"><input id="proj-invite" placeholder="or paste a federation invite from another hub" /><button>join</button></form>
+    <form method="dialog" id="proj-git"><input id="proj-git-url" placeholder="or a git URL to open a project stored on GitHub / GitLab / Codeberg" /><button>open</button></form>
+    <form method="dialog" class="dlg-close"><button>close</button></form>
+  </dialog>
+  <dialog id="share">
+    <h3>Share project</h3>
+    <div id="share-body"></div>
+    <form method="dialog" class="dlg-close"><button>close</button></form>
+  </dialog>
+  <dialog id="git">
+    <h3>Git remote</h3>
+    <div id="git-body"></div>
+    <form method="dialog" class="dlg-close"><button>close</button></form>
+  </dialog>
+  <dialog id="fed">
+    <h3>Federate this project</h3>
+    <div id="fed-body"></div>
+    <form method="dialog" class="dlg-close"><button>close</button></form>
+  </dialog>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

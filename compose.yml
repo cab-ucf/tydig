@@ -1,0 +1,52 @@
+# tydig, containerised. `just up` (or `podman compose up`) then open
+# http://localhost:8080 -- one port serves the client, REST, auth, sync, LSP.
+#
+# The one subtlety: recipe builds run in a *separate* sandbox container, and
+# the server asks the host's podman to start it. The host mounts the project
+# directory by the path the server names, so that path must mean the same
+# thing on both sides. Hence TYDIG_DATA is mounted at itself, and must be
+# absolute. `just` sets it to <repo>/data for you.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile.server
+    image: localhost/tydig
+    ports:
+      - "${TYDIG_PORT:-8080}:3000"
+    environment:
+      # Public origin, for auth cookies and CSRF checks. Must match the URL
+      # you actually open in the browser.
+      TYDIG_URL: "${TYDIG_URL:-http://localhost:8080}"
+      TYDIG_ORIGINS: "${TYDIG_ORIGINS:-http://localhost:8080}"
+      # Stable secret: sessions survive restarts. Generate one for production.
+      TYDIG_SECRET: "${TYDIG_SECRET:-}"
+      # Same absolute path inside and outside the container (see above).
+      TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
+      # Where to find the host's podman, mounted below.
+      CONTAINER_HOST: "unix:///run/podman/podman.sock"
+      TYDIG_IMAGE: "${TYDIG_IMAGE:-localhost/tydig-build}"
+      TYDIG_BUILD_NET: "${TYDIG_BUILD_NET:-1}"
+      # Hub-to-hub federation over iroh. n0 = free public relays + discovery
+      # (default), off = direct only, local = LAN/tests. TYDIG_IROH=0 disables.
+      TYDIG_IROH: "${TYDIG_IROH:-1}"
+      TYDIG_IROH_RELAY: "${TYDIG_IROH_RELAY:-n0}"
+      # Institutional SSO (optional; see README > Accounts).
+      TYDIG_SSO_DISCOVERY: "${TYDIG_SSO_DISCOVERY:-}"
+      TYDIG_SSO_CLIENT_ID: "${TYDIG_SSO_CLIENT_ID:-}"
+      TYDIG_SSO_CLIENT_SECRET: "${TYDIG_SSO_CLIENT_SECRET:-}"
+      TYDIG_SSO_LABEL: "${TYDIG_SSO_LABEL:-Institution SSO}"
+      TYDIG_SSO_ONLY: "${TYDIG_SSO_ONLY:-}"
+    volumes:
+      # Projects, accounts, keys, git history. Identical path both sides.
+      - "${TYDIG_DATA:-/var/lib/tydig/data}:${TYDIG_DATA:-/var/lib/tydig/data}:z"
+      # The host's rootless podman socket: lets the server start build
+      # sandboxes as siblings rather than nesting containers. Start it with
+      #   systemctl --user enable --now podman.socket
+      - "${TYDIG_PODMAN_SOCK:-/run/user/1000/podman/podman.sock}:/run/podman/podman.sock"
+    # Federation over iroh needs no published port: hubs reach each other by
+    # public key through NAT (hole punching, relays as fallback). For the best
+    # chance of direct connections instead of relayed ones, uncomment:
+    # network_mode: host
+    restart: unless-stopped
