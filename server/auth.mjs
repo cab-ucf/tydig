@@ -18,7 +18,7 @@ await mkdir(DATA, { recursive: true })
 const secretFile = path.join(DATA, '.auth-secret')
 const SECRET = process.env.TYDIG_SECRET ||
   (existsSync(secretFile) ? (await readFile(secretFile, 'utf8')).trim()
-    : await (async () => { const s = randomBytes(32).toString('base64url'); await writeFile(secretFile, s); return s })())
+    : await (async () => { const s = randomBytes(32).toString('base64url'); await writeFile(secretFile, s, { mode: 0o600 }); return s })())
 
 const db = new Database(path.join(DATA, 'auth.db'))
 db.pragma('journal_mode = WAL')

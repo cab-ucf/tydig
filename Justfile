@@ -219,7 +219,7 @@ test-git:
     rm -rf /tmp/tydig-hubA /tmp/tydig-hubB /tmp/tydig-remote.git /tmp/plainclone
     git init -q --bare /tmp/tydig-remote.git
     git -C /tmp/tydig-remote.git symbolic-ref HEAD refs/heads/main
-    common="TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0"
+    common="TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0 TYDIG_GIT_LOCAL=1"
     env -u TYDIG_DATA $common PORT=3100 TYDIG_DATA=/tmp/tydig-hubA \
         TYDIG_URL=http://localhost:3100 TYDIG_ORIGINS=http://localhost:3100 \
         node server/index.mjs >/tmp/tc-gitA.log 2>&1 &
@@ -242,7 +242,7 @@ test-ui:
     set -euo pipefail
     npm install >/dev/null
     npm run build >/dev/null
-    mkdir -p .uitest && cd .uitest && { test -f package.json || npm init -y >/dev/null; } \
+    mkdir -p .uitest && cd .uitest && { test -f package.json || echo '{"private":true}' > package.json; } \
         && { test -d node_modules/puppeteer || npm i puppeteer --no-audit --no-fund >/dev/null; } && cd ..
     rm -rf data
     env -u TYDIG_DATA TYDIG_URL=http://localhost:3000 TYDIG_ORIGINS=http://localhost:3000 \
@@ -261,7 +261,7 @@ paper project target="all":
         --read-only --tmpfs /tmp:rw,size=512m \
         -e HOME=/tmp -e MPLCONFIGDIR=/tmp/mpl \
         -e TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages \
-        -v "{{TYDIG_DATA}}/{{project}}:/work:rw,Z" -w /work \
+        -v "{{TYDIG_DATA}}/{{project}}:/work:rw,z" -v "{{TYDIG_DATA}}/{{project}}/.git:/work/.git:ro,z" -w /work \
         localhost/tydig-build make {{target}}
 
 # Generate a stable session secret (put it in .env before first sign-up).
