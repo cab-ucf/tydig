@@ -11,6 +11,7 @@ import { vim } from '@replit/codemirror-vim'
 import { typst } from 'codemirror-lang-typst'
 import { LanguageServerClient, WebSocketTransport, languageServerWithTransport } from 'codemirror-languageserver'
 import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
+import { preloadFontAssets } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url'
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
 
@@ -99,7 +100,7 @@ const sessionToken = () => /better-auth\.session_token=([^;]+)/.exec(document.co
 // "while you were away" review so a non-technical user can keep or revert
 // each change. (The CRDT already merged everything; this is about awareness
 // and one-click undo, not conflict resolution.)
-let awaySnapshot = null
+let away = false
 const snapshotFiles = () => {
   const m = {}
   for (const [p, t] of filesMap) m[p] = t.toString()
@@ -114,9 +115,11 @@ const provider = new HocuspocusProvider({
     el.dataset.state = status
     el.textContent = status === 'connected' ? 'online'
       : status === 'connecting' ? 'connecting' : 'offline (saving locally)'
-    if (status === 'disconnected' && !awaySnapshot && offlineReady) awaySnapshot = snapshotFiles()
-    if (status === 'connected' && awaySnapshot) {
-      const before = awaySnapshot; awaySnapshot = null
+    if (status === 'disconnected' && offlineReady) away = true
+    // 'connected' fires before the sync applies: this snapshot is my offline
+    // version, own offline edits included, so "revert to mine" keeps them.
+    if (status === 'connected' && away) {
+      const before = snapshotFiles(); away = false
       setTimeout(() => maybeReview(before), 1200) // let remote updates settle
     }
   },
@@ -270,6 +273,11 @@ ycomments.observe(() => {
 // ---------- file tree ----------
 let diskFiles = []
 const isImg = p => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(p)
+const GEN = /^(out|build|figures)\//
+const TEXT = /\.(typ|bib|csv|tsv|py|jl|r|toml|yaml|yml|json|md|txt|tex|just|mk)$|(^|\/)(justfile|Makefile|makefile|GNUmakefile|\.gitignore)$/i
+const okPath = p => /^[\w./@ -]+$/.test(p) && p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
+// Text outside generated dirs lives in the CRDT; anything else is a disk file.
+const badNew = p => !okPath(p) ? 'Bad path.' : GEN.test(p) ? `${p.split('/')[0]}/ is build output: text there is never saved.` : filesMap.has(p) ? 'Target exists.' : null
 async function refreshDisk() { diskFiles = await api(P('/files')); renderTree(); scheduleCompile() }
 // server bumps meta.diskRev whenever anything changes on disk (builds, shell
 // edits, other collaborators' builds) -> live preview without clicking build
@@ -310,10 +318,10 @@ function renderTree() {
     el.querySelector('.fname').onclick = () =>
       yPaths.has(p) ? openFile(p) : window.open(rawUrl(p), '_blank')
     el.querySelector('.rn').onclick = () => renameFile(p)
-    el.querySelector('.del').onclick = () => {
+    el.querySelector('.del').onclick = async () => {
       if (!confirm(`Delete ${p}?`)) return
       if (yPaths.has(p)) filesMap.delete(p)
-      else alert('Disk-only files (uploads, build outputs) are kept; remove via a clean recipe or shell.')
+      else { await api(P('/raw/' + p), { method: 'DELETE' }); refreshDisk() }
     }
     return el
   }
@@ -350,7 +358,11 @@ $('tree').ondragover = e => e.preventDefault()
 $('tree').ondrop = e => { e.preventDefault(); dropUpload(e.dataTransfer.files, '') }
 
 async function dropUpload(files, dir) {
-  for (const f of files) await fetch(rawUrl((dir ? dir + '/' : '') + f.name), { method: 'PUT', body: f })
+  for (const f of files) {
+    const p = (dir ? dir + '/' : '') + f.name.replace(/[^\w.@ -]/g, '_'), t = filesMap.get(p)
+    if (!TEXT.test(p) || !okPath(p) || GEN.test(p)) await fetch(rawUrl(p), { method: 'PUT', body: f })
+    else { const s = await f.text(); t ? ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) }) : filesMap.set(p, new Y.Text(s)) } // editable, synced
+  }
   refreshDisk()
 }
 function uploadTo(dir) {
@@ -362,8 +374,7 @@ function renameFile(p) {
   if (!yt) return alert('Disk-only files: move via shell or a recipe.')
   const np = prompt('New path:', p)?.replace(/^\/+/, '')
   if (!np || np === p) return
-  if (!/^[\w./@ -]+$/.test(np) || np.split('/').some(s => !s || s === '..')) return alert('Bad path.')
-  if (filesMap.has(np)) return alert('Target exists.')
+  const bad = badNew(np); if (bad) return alert(bad)
   const saved = [...ycomments.entries()].filter(([, c]) => c.file === p)
     .map(([id, c]) => ({ id, c, from: absIn(yt, c.anchor), to: absIn(yt, c.head) }))
   const content = yt.toString()
@@ -378,13 +389,16 @@ function renameFile(p) {
   if (currentPath === p) openFile(np)
 }
 
-filesMap.observeDeep(() => { renderTree(); renderMainSel(); scheduleCompile(); maybeWatchBuild() })
+filesMap.observeDeep(evs => {
+  renderTree(); renderMainSel(); scheduleCompile()
+  if (evs.some(e => (e.target === filesMap ? [...e.keysChanged] : e.path.slice(0, 1)).some(p => /^(data|scripts)\//.test(p)))) maybeWatchBuild()
+})
 
 function newFile(prefix = '') {
   const p = prompt('Path (dirs auto-created), e.g. chapters/01-intro.typ:', prefix)
   if (!p) return
   const clean = p.replace(/^\/+/, '')
-  if (!/^[\w./@ -]+$/.test(clean) || clean.split('/').some(s => !s || s === '..')) return alert('Bad path.')
+  const bad = !filesMap.has(clean) && badNew(clean); if (bad) return alert(bad)
   if (!filesMap.has(clean)) filesMap.set(clean, new Y.Text(''))
   openFile(clean)
 }
@@ -398,7 +412,7 @@ $('upload-input').onchange = async e => {
 }
 
 // ---------- typst preview (live 'typst watch' in-browser) ----------
-$typst.setCompilerInitOptions({ getModule: () => compilerWasm })
+$typst.setCompilerInitOptions({ getModule: () => compilerWasm, beforeBuild: [preloadFontAssets({ assets: ['text'], assetUrlPrefix: '/fonts/' })] })
 $typst.setRendererInitOptions({ getModule: () => rendererWasm })
 
 function renderMainSel() {
@@ -522,7 +536,7 @@ async function exportPdf() {
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
   a.download = main.replace(/\.typ$/, '.pdf')
-  a.click(); URL.revokeObjectURL(a.href)
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
 }
 
 // ---------- watch builds: rerun a recipe when data/ or scripts/ change ----------
@@ -555,8 +569,9 @@ function renderComments() {
   sideBody.replaceChildren(...items.map(c => {
     const el = document.createElement('div')
     el.className = 'comment'
-    el.innerHTML = `<div class="meta"><span class="pin-n"></span><span class="dot" style="background:${c.color}"></span><b></b><time>${new Date(c.ts).toLocaleString()}</time></div><div class="cfile"></div><p></p><button>resolve</button>`
+    el.innerHTML = `<div class="meta"><span class="pin-n"></span><span class="dot"></span><b></b><time>${new Date(c.ts).toLocaleString()}</time></div><div class="cfile"></div><p></p><button>resolve</button>`
     el.querySelector('.pin-n').textContent = c.n
+    el.querySelector('.dot').style.background = c.color
     if (!pinSafe(c.file, c.from)) {
       el.querySelector('.pin-n').classList.add('no-pin')
       el.querySelector('.pin-n').title = 'no preview pin: anchor is inside code/raw/math'
@@ -589,7 +604,7 @@ async function renderHistory() {
     el.innerHTML = `<code>${hash}</code><span></span>${badge}<time>${new Date(date).toLocaleString()}</time><button>restore</button>`
     el.querySelector('span').textContent = message
     el.querySelector('button').onclick = async () => {
-      if (!confirm(`Restore ${hash}? Applies live as an undoable edit for everyone.`)) return
+      if (!confirm(`Restore ${hash}? Applies live for everyone; restore a later commit to go back.`)) return
       await api(P('/restore/' + hash), { method: 'POST' })
     }
     return el
@@ -601,7 +616,7 @@ async function renderBuild() {
   const recipes = await api(P('/recipes'))
   sideBody.innerHTML = ''
   if (recipes.error) {
-    sideBody.innerHTML = `<p class="empty">${recipes.error}</p><p class="empty">The live preview does not need builds; recipes are for figures, scripts, and final PDFs.</p>`
+    sideBody.innerHTML = `<p class="empty">${esc(recipes.error)}</p><p class="empty">The live preview does not need builds; recipes are for figures, scripts, and final PDFs.</p>`
     return
   }
   // The server tells us whether this project is make- or just-driven so the
@@ -735,7 +750,7 @@ document.querySelectorAll('.sect-head[data-sect]').forEach(h => {
 
 async function renderProjects() {
   const list = await api('/projects')
-  $('projects-list').replaceChildren(...list.map(n => {
+  $('projects-list').replaceChildren(...list.map(({ name: n }) => {
     const a = document.createElement('a')
     a.href = `?proj=${n}`
     a.className = 'pnode' + (n === projName ? ' active' : '')
@@ -773,8 +788,8 @@ async function showGitRemote() {
         Codeberg, your institution's GitLab, or a bare repo on a NAS. The working tree is pushed in
         readable form, so the paper is browsable and clonable there, alongside this hub's CRDT state
         under <code>.collab/crdt/</code>. Every hub writes only its own state file, so several hubs can
-        share one remote without conflicts. Generated output (<code>out/</code>, <code>build/</code>,
-        <code>figures/</code>) is never pushed: each hub rebuilds it.</p>
+        share one remote without conflicts. Checkpoint signatures and comments travel as git notes
+        (<code>refs/notes/&lt;hub&gt;/*</code>). <code>out/</code> is never pushed: each hub rebuilds it.</p>
       <label>Repository URL
         <div class="fed-row"><input id="git-url" placeholder="https://github.com/lab/paper.git" value="${st.configured ? esc(st.url) : ''}" />
         <input id="git-branch" style="flex:0 0 6rem" placeholder="main" value="${esc(st.branch || 'main')}" /></div></label>
@@ -871,20 +886,17 @@ async function showShare() {
   const isOwner = mine?.role === 'owner' || mine?.role === 'admin'
   const full = await authClient.organization.getFullOrganization({ query: { organizationSlug: projName } }).catch(() => null)
   const members = full?.data?.members || []
-  const invites = (full?.data?.invitations || []).filter(i => i.status === 'pending')
   body.innerHTML = `
     <div class="share-list">
-      ${members.map(m => `<div class="share-row"><span>${esc(m.user?.email || m.user?.name || m.userId)}</span><em>${m.role}</em></div>`).join('')}
-      ${invites.map(i => `<div class="share-row pending"><span>${esc(i.email)}</span><em>invited</em></div>`).join('')}
+      ${members.map(m => `<div class="share-row"><span>${esc(m.user?.email || m.user?.name || m.userId)}</span><em>${esc(m.role)}</em></div>`).join('')}
     </div>
-    ${isOwner ? `<form id="share-add"><input type="email" id="share-email" placeholder="collaborator@email" required /><button>invite</button></form>
-      <p class="hint">They need an account; the invite appears when they sign in.</p>`
-      : '<p class="hint">Only the owner can invite collaborators.</p>'}`
+    ${isOwner ? `<form id="share-add"><input type="email" id="share-email" placeholder="collaborator@email" required /><button>add</button></form>
+      <p class="hint">They need an account on this hub; the project appears in their list right away.</p>`
+      : '<p class="hint">Only the owner can add collaborators.</p>'}`
   if (isOwner) $('share-add').onsubmit = async e => {
     e.preventDefault()
-    const email = $('share-email').value
-    const r = await authClient.organization.inviteMember({ email, role: 'member', organizationId: full.data.id })
-    if (r.error) return alert(r.error.message || 'invite failed')
+    const r = await api(P('/members'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: $('share-email').value }) })
+    if (r.error) return alert(r.error)
     showShare()
   }
 }
@@ -900,9 +912,9 @@ const actions = {
     // an unsigned checkpoint if signing is unavailable.
     let signed = {}
     try {
-      await registerDeviceKey(api)
-      const files = [...filesMap.entries()].map(([p, t]) => [p, t.toString()])
-      signed = await signCheckpoint({ project: projName, message, files })
+      await registerDeviceKey(api, me.id)
+      const files = [...filesMap.entries()].filter(([p]) => okPath(p) && !GEN.test(p)).map(([p, t]) => [p, t.toString()])
+      signed = await signCheckpoint({ user: me.id, project: projName, message, files })
     } catch (e) { console.warn('checkpoint will be unsigned:', e) }
     await api(P('/checkpoint'), { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message, ...signed }) })
@@ -965,7 +977,7 @@ const KEYMAP = {
   'C-KeyP': 'quick-open', 'C-KeyS': 'checkpoint', 'C-A-KeyM': 'comment',
 }
 document.addEventListener('keydown', e => {
-  const combo = (e.ctrlKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey ? 'S-' : '') + e.code
+  const combo = (e.ctrlKey || e.metaKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey ? 'S-' : '') + e.code
   const act = KEYMAP[combo]
   if (!act) return
   e.preventDefault(); e.stopPropagation()

@@ -87,7 +87,8 @@ matters in a dispute over authorship, priority, or research integrity --
 often years later, possibly with the original server long gone.
 
 Device-held ML-DSA signatures over content hashes answer it directly, and
-answer it *offline*: given a clone and a public key, anyone can verify that a
+answer it *offline*: given a clone (`git fetch origin 'refs/notes/*:refs/notes/*'`
+brings the signed notes, each carrying its public key), anyone can verify that a
 specific person's device attested to a specific manuscript state at a
 specific time. A dishonest or compromised hub can censor (delete history) but
 cannot forge, because it never holds a signing key and the signed hashes
@@ -158,8 +159,6 @@ users.
    batches rather than only checkpoint snapshots.
 5. **Multiple IdPs per hub** (one per partner institution) with per-provider
    sign-in buttons.
-6. **Durable CRDT state** (`@hocuspocus/extension-sqlite`) so keystroke-level
-   history survives a restart, not just git checkpoints.
-7. **Container digest pinning in provenance**, so an attestation records the
+6. **Container digest pinning in provenance**, so an attestation records the
    exact build image that produced the numbers -- closing the loop between
    signed manuscript and reproducible computation.

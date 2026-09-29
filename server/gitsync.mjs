@@ -37,6 +37,15 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
   // A remote URL may embed a token, so it is never written into the repo and
   // never returned to the browser in full.
   const redact = url => String(url).replace(/\/\/[^/@]*@/, '//***@')
+  // Both reach git as arguments: a branch of "--upload-pack=<cmd>" runs <cmd>
+  // on this host, and a local path would read any repo the hub can see --
+  // other projects included. Local remotes (a mounted NAS, tests) are opt-in.
+  const LOCAL = process.env.TYDIG_GIT_LOCAL === '1'
+  const check = (url, branch) => {
+    if (!(LOCAL ? /^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)\S+$/ : /^(https?:\/\/|git@|ssh:\/\/)\S+$/).test(String(url || '')))
+      throw new Error(`not a git URL${LOCAL ? '' : ' (local paths need TYDIG_GIT_LOCAL=1 on the hub)'}`)
+    if (!/^(?!-)(?!.*\.\.)[\w./-]{1,100}$/.test(String(branch))) throw new Error('bad branch name')
+  }
 
   async function doc(p) {
     const dc = await hocuspocus.openDirectConnection(p, { gitsync: true })
@@ -69,14 +78,17 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     const task = (async () => {
       const c = await cfg(p)
       if (!c?.url) return { skipped: 'no remote configured' }
+      check(c.url, c.branch || 'main')
       const { ydoc, close } = await doc(p)
       try {
         await git(p, 'remote', 'remove', 'origin').catch(() => {})
         await git(p, 'remote', 'add', 'origin', c.url)
         const branch = c.branch || 'main'
-        await git(p, 'symbolic-ref', 'HEAD', `refs/heads/${branch}`).catch(() => {})
+        // rename, not re-point HEAD: re-pointing orphans the history on the old branch
+        await git(p, 'branch', '-M', branch).catch(() => {})
 
         // 1. our state + working tree in, committed
+        await mirror(p, ydoc)
         await writeState(p, ydoc)
         await git(p, 'add', '-A')
         await git(p, 'commit', '-q', '-m', `tydig sync (${reason})`).catch(() => {})
@@ -110,8 +122,9 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
           }
         }
 
-        // 3. push
-        const pushed = await git(p, 'push', '-u', 'origin', branch)
+        // 3. push, with provenance and comment notes under this hub's own
+        //    namespace (one writer per ref, like the CRDT files)
+        const pushed = await git(p, 'push', '-u', 'origin', branch, `refs/notes/*:refs/notes/${hubId()}/*`)
           .then(() => true)
           .catch(async e => { log(`gitsync: push to ${redact(c.url)} failed (${e.message})`); return false })
         c.lastSync = new Date().toISOString()
@@ -127,10 +140,13 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
   }
 
   // First contact: pull an existing project down from a remote.
-  async function adopt(p, url, branch = 'main') {
-    await saveCfg(p, { url, branch })
+  async function adopt(p, url, branch) {
+    check(url, branch ?? 'main')
     await git(p, 'remote', 'remove', 'origin').catch(() => {})
     await git(p, 'remote', 'add', 'origin', url)
+    branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(p, 'ls-remote', '--symref', 'origin', 'HEAD').catch(() => ''))?.[1] || 'main'
+    check(url, branch)
+    await saveCfg(p, { url, branch })
     await git(p, 'fetch', 'origin', branch)
     // Adopt means take the remote's history wholesale, not merge against a
     // local one. Merging unrelated histories makes git treat every file as
@@ -139,35 +155,13 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     // would appear while edits vanished. Checking the remote branch out makes
     // this hub a descendant of it, so every later merge is a real merge.
     await git(p, 'checkout', '-B', branch, `origin/${branch}`)
+    // Loading the document absorbs the remote's CRDT states and any text
+    // they lack (a repo written by hand, or by git alone).
     const { ydoc, close } = await doc(p)
-    try {
-      const n = await absorb(p, ydoc)
-      // No CRDT files in the remote (a repo written by hand, or by git alone):
-      // seed the document from whatever text files are there.
-      if (!n && !ydoc.getMap('files').size) {
-        const files = ydoc.getMap('files')
-        for await (const rel of walkText(proj(p))) files.set(rel, new Y.Text(await readFile(path.join(proj(p), rel), 'utf8')))
-      }
-      await mirror(p, ydoc)
-      await writeState(p, ydoc)
-    } finally { close() }
+    try { await mirror(p, ydoc); await writeState(p, ydoc) } finally { close() }
     await git(p, 'add', '-A')
     await git(p, 'commit', '-q', '-m', 'tydig: adopted from git remote').catch(() => {})
     return { ok: true }
-  }
-
-  // Minimal text walk for the adopt-a-plain-repo case.
-  const TEXTY = /\.(typ|bib|csv|tsv|py|jl|r|toml|yaml|yml|json|md|txt|tex|just|mk)$|(^|\/)(justfile|Makefile|makefile|\.gitignore)$/i
-  async function* walkText(dir, base = dir) {
-    for (const e of await readdir(dir, { withFileTypes: true })) {
-      if (e.name === '.git' || e.name === '.collab') continue
-      const full = path.join(dir, e.name)
-      if (e.isDirectory()) yield* walkText(full, base)
-      else {
-        const rel = path.relative(base, full).replaceAll('\\', '/')
-        if (TEXTY.test(rel) && !/^(out|build|figures)\//.test(rel)) yield rel
-      }
-    }
   }
 
   return {
@@ -177,7 +171,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     },
     async setRemote(p, url, branch = 'main') {
       if (!okName(p)) throw new Error('bad project name')
-      if (!/^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)/.test(String(url || ''))) throw new Error('not a git URL')
+      check(url, branch)
       const c = (await cfg(p)) || {}
       await saveCfg(p, { ...c, url, branch })
       return this.status(p)

@@ -64,6 +64,10 @@ const hist = await api('/p/demo/history')
 const cp = hist.find(h => h.message.includes('pre-delete'))
 fA.delete('summary.typ')
 fA.get('main.typ').insert(0, 'GARBAGE ')
+const mt = fA.get('main.typ'), at = mt.toString().indexOf('Pre-registration')
+A.getMap('comments').set('c2', { file: 'main.typ', anchor: Buffer.from(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(mt, at, 0))).toString('base64'),
+  head: Buffer.from(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(mt, at + 16, -1))).toString('base64') })
+fA.set('.git/config', new Y.Text('[core]\n\tfsmonitor = "touch PWNED"\n'))
 await sleep(2800)
 check('file deletion mirrored', !((await api('/p/demo/files')).some(f => f.path === 'summary.typ')))
 await api(`/p/demo/restore/${cp.hash}`, { method: 'POST' })
@@ -71,6 +75,9 @@ await sleep(1200)
 check('restore resurrected deleted file on both clients',
   fA.get('summary.typ')?.toString().startsWith('// edited by A') && fB.has('summary.typ'))
 check('restore rolled back edit', !fB.get('main.typ').toString().includes('GARBAGE'))
+const c2 = A.getMap('comments').get('c2')
+check('restore keeps comments anchored outside the change', fA.get('main.typ').toString().slice(abs(c2.anchor), abs(c2.head)) === 'Pre-registration')
+check('CRDT path cannot write .git/config', !execSync('cat data/demo/.git/config').toString().includes('fsmonitor'))
 check('out/ PDFs excluded from history', !(await api('/p/demo/history')).length === false &&
   !execSync(`git -C data/demo ls-tree -r --name-only ${cp.hash}`).toString().includes('out/'))
 
@@ -95,6 +102,15 @@ const filesAfter = await api('/p/demo/files')
 check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.json'))
 await sleep(600)
 check('analysis output still not CRDT-managed', !fA.has('build/results.json'))
+
+// symlinks (planted by a build or a git checkout) never lead out of the project
+const { symlinkSync, writeFileSync, readFileSync } = await import('node:fs')
+symlinkSync(`${process.cwd()}/data/auth.db`, 'data/demo/leak.bin')
+writeFileSync('data/outside', 'untouched'); symlinkSync(`${process.cwd()}/data/outside`, 'data/demo/trap.typ')
+check('symlink out of the project not served', (await fetch('http://localhost:3000/api/p/demo/raw/leak.bin', { headers: { cookie: COOKIE, origin: O } })).status === 400)
+fA.set('trap.typ', new Y.Text('overwritten'))
+await sleep(2800)
+check('mirror does not write through a symlink', readFileSync('data/outside', 'utf8') === 'untouched')
 
 // path traversal guards
 const bad = await fetch('http://localhost:3000/api/p/demo/raw/../../etc/passwd')

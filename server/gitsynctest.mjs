@@ -76,6 +76,15 @@ check('concurrent edits both survived (no clobber)',
   (await readFile(`${DATA_A}/${PROJ}/main.typ`, 'utf8')).includes(MA) &&
   (await readFile(`${DATA_B}/${PROJ}/notes-b.typ`, 'utf8')).includes(MB))
 
+// Notes (comments, signatures) and history travel too
+docA.getMap('comments').set('c1', { file: 'main.typ', text: 'check this' })
+await sleep(500)
+await a.post(`/p/${PROJ}/checkpoint`, { message: 'noted' })
+await a.post(`/p/${PROJ}/gitremote/sync`)
+const refs = (await run('git', ['-C', REMOTE, 'for-each-ref', '--format=%(refname)', 'refs/notes'])).stdout
+check('comment notes pushed under the hub namespace', /refs\/notes\/[0-9a-f]+\/comments/.test(refs))
+check('project history survives on the remote', (await run('git', ['-C', REMOTE, 'log', '--format=%s', 'main'])).stdout.includes('checkpoint: project created'))
+
 // The remote is a normal repo: a plain clone gives you the paper
 await run('rm', ['-rf', '/tmp/plainclone'])
 await run('git', ['clone', '-q', REMOTE, '/tmp/plainclone'])

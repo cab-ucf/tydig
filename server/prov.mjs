@@ -43,8 +43,11 @@ export function initKeyStore(db) {
   const byId = db.prepare('SELECT * FROM deviceKey WHERE keyId = ?')
   const byUser = db.prepare('SELECT keyId, alg, label, createdAt FROM deviceKey WHERE userId = ?')
   return {
-    register(userId, publicKey, label = '') {
+    // Public keys are public (every note carries one), so registering needs
+    // proof of possession: a signature over {register: <this account's id>}.
+    register(userId, publicKey, label = '', proof = '') {
       if (typeof publicKey !== 'string' || publicKey.length > 4000) throw new Error('bad key')
+      if (!verify(publicKey, { register: userId }, proof)) throw new Error('key registration needs a valid proof of possession')
       const keyId = keyIdOf(publicKey)
       ins.run(keyId, userId, ALG, publicKey, String(label).slice(0, 80), new Date().toISOString())
       return { keyId, alg: ALG }

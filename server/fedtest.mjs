@@ -85,5 +85,9 @@ const c = await hub(B, 'eve')
 const badJoin = await c.api(`/projects/other`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite: bad }) })
 check('invite for a different project name is rejected', !!badJoin.error)
 
+// Rotating the token evicts now, not at the next reconnect
+await a.api(`/p/${PROJ}/federation/rotate`, { method: 'POST' })
+check('rotate drops the live peer', await until(async () => !(await a.api(`/p/${PROJ}/federation`)).project.connected.length, 15000))
+
 console.log(pass ? '\nFEDERATION ALL PASS' : '\nFEDERATION FAILURES')
 process.exit(pass ? 0 : 1)

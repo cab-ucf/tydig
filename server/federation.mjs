@@ -77,11 +77,13 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
     const ydoc = await doc(proj)
     const remoteId = conn.remoteId().toString()
     const key = `${proj}|${remoteId}`
-    peers.set(key, { proj, remoteId, since: Date.now(), direction })
+    peers.set(key, { proj, remoteId, since: Date.now(), direction, conn })
     log(`federation: ${direction} peer ${remoteId.slice(0, 10)}… synced on "${proj}"`)
     const origin = { federation: remoteId }
     let alive = true
-    const send = (type, payload) => bi.send.writeAll(frame(type, payload)).catch(() => { alive = false })
+    // one frame at a time: concurrent writes on a stream could interleave bytes
+    let q = Promise.resolve()
+    const send = (type, payload) => (q = q.then(() => bi.send.writeAll(frame(type, payload))).catch(() => { alive = false }))
     const onUpdate = (update, o) => { if (o !== origin && alive) send(MSG.UPDATE, update) }
     ydoc.on('update', onUpdate)
     try {
@@ -196,8 +198,6 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
       dialAll()
       setInterval(() => { refreshTicket(); dialAll() }, 30_000).unref()
     },
-    // Short, stable id for this hub: names its CRDT file in the git remote.
-    shortId: () => (endpoint ? endpoint.id().toString().slice(0, 16) : null),
     async status(proj) {
       const c = proj ? await cfg(proj) : null
       return {
@@ -239,7 +239,11 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
     async rotate(proj) {
       const c = await ensureCfg(proj)
       c.token = randomBytes(24).toString('base64url')
+      c.peers = []
       await saveCfg(proj, c)
+      // evict means now: drop live sessions and our own dialers too
+      for (const [k, d] of dialers) if (k.startsWith(proj + '|')) { d.stop(); dialers.delete(k) }
+      for (const p of peers.values()) if (p.proj === proj) p.conn.close(3n, Array.from(enc.encode('token rotated')))
       return { ok: true }
     },
     async stop() {

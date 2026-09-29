@@ -26,27 +26,29 @@ export async function sha256hex(text) {
   return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-const STORE = 'tydig.devicekey'
-export function deviceKey() {
+// one key per account: two accounts in one browser must not share a key
+const STORE = user => `tydig.devicekey:${user}`
+export function deviceKey(user) {
   let k = null
-  try { k = JSON.parse(localStorage[STORE]) } catch {}
+  try { k = JSON.parse(localStorage[STORE(user)]) } catch {}
   if (!k?.publicKey || !k?.secretKey) {
     const seed = crypto.getRandomValues(new Uint8Array(32))
     const pair = ml_dsa65.keygen(seed)
     k = { alg: 'ml-dsa-65', publicKey: b64u(pair.publicKey), secretKey: b64u(pair.secretKey) }
-    localStorage[STORE] = JSON.stringify(k)
+    localStorage[STORE(user)] = JSON.stringify(k)
   }
   return k
 }
 
 let registered = false
-export async function registerDeviceKey(api) {
+export async function registerDeviceKey(api, user) {
   if (registered) return
-  const k = deviceKey()
+  const k = deviceKey(user)
+  const proof = b64u(ml_dsa65.sign(new TextEncoder().encode(canon({ register: user })), unb64u(k.secretKey)))
   const label = (navigator.userAgentData?.platform || navigator.platform || 'browser').slice(0, 40)
   const r = await api('/keys', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ publicKey: k.publicKey, label }),
+    body: JSON.stringify({ publicKey: k.publicKey, label, proof }),
   }).catch(() => null)
   if (r?.keyId) registered = true
   return r
@@ -55,8 +57,8 @@ export async function registerDeviceKey(api) {
 // Sign the checkpoint: payload covers project, message, time, and the sha256
 // of every CRDT text file. The server independently recomputes the file map;
 // "verified" requires both the signature and the state to match.
-export async function signCheckpoint({ project, message, files }) {
-  const k = deviceKey()
+export async function signCheckpoint({ user, project, message, files }) {
+  const k = deviceKey(user)
   const hashed = {}
   for (const [path, text] of files) hashed[path] = await sha256hex(text)
   const payload = {

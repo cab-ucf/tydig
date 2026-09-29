@@ -43,20 +43,27 @@ check('Bob blocked from project files (403)', (await as(bob, `/p/${proj}/files`)
 // Ann can read her files
 check('Ann reads her project files', (await as(ann, `/p/${proj}/files`)).ok)
 
-// Ann invites Bob (organization invitation via better-auth)
-// resolve org id
-const orgs = await (await as(ann, '/auth/organization/list')).json()
-const org = orgs.find(o => o.slug === proj)
-check('org resolvable for invite', !!org)
-let invited = false
-if (org) {
-  const inv = await as(ann, '/auth/organization/invite-member', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: meAnn.email, organizationId: org.id, role: 'member' }),
-  })
-  invited = inv.ok
-}
-check('invite-member endpoint reachable', invited || org)  // endpoint exists; full accept flow needs email
+// Ann shares with Bob by adding his account; only owners may share
+const bobEmail = (await (await as(bob, '/me')).json()).email
+const post = (jar, p, body) => as(jar, p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+check('Bob cannot add himself', (await post(bob, `/p/${proj}/members`, { email: bobEmail })).status === 403)
+check('unknown email refused', (await post(ann, `/p/${proj}/members`, { email: 'nobody@t.co' })).status === 404)
+check('Ann adds Bob', (await (await post(ann, `/p/${proj}/members`, { email: bobEmail })).json()).ok === true)
+check('Bob now sees and reads the project', (await (await as(bob, '/projects')).json()).some(p => p.name === proj) &&
+  (await as(bob, `/p/${proj}/files`)).ok)
+
+// Hardening: none of these may reach git, the disk outside a project, or another project
+const { existsSync } = await import('node:fs')
+check('orgs cannot be minted over HTTP (slug would claim gitsync/)',
+  (await post(ann, '/auth/organization/create', { name: 'gitsync', slug: 'gitsync' })).status === 403)
+check('adopting a local path refused (would read other projects)',
+  (await post(bob, '/projects/steal' + Date.now().toString(36), { gitUrl: `${process.cwd()}/data/${proj}` })).status === 400)
+await post(bob, '/projects/inj' + Date.now().toString(36), { gitUrl: 'https://example.com/x.git', branch: '--upload-pack=touch data/PWNED' })
+await post(ann, `/p/${proj}/gitremote`, { url: 'https://example.com/x.git', branch: '--receive-pack=touch data/PWNED' })
+check('branch cannot inject git options', !existsSync('data/PWNED'))
+check('.git unreachable through raw files',
+  (await as(ann, `/p/${proj}/raw/.git/config`, { method: 'PUT', body: '[core]' })).status === 400)
+check('untrusted origin cannot POST', (await fetch(`${B}/api/projects/x${Date.now()}`, { method: 'POST', headers: { cookie: ann.cookie, origin: 'http://evil.example.net' } })).status === 403)
 
 // Origin handling: the loopback twin of a trusted origin is accepted (people
 // type both), while a foreign origin or a different port is not.
