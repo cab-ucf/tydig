@@ -19,7 +19,7 @@ page.on('error', e => errors.push('[CRASH] ' + e.message))
 page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
 const external = []
 page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && new URL(r.url()).origin !== new URL(B).origin) external.push(r.url()) })
-page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept('first signed checkpoint'); else await d.dismiss() })
+page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(d.defaultValue() || 'first signed checkpoint'); else await d.dismiss() })
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden, title: document.getElementById('side-title').textContent, body: document.getElementById('side-body').innerText.slice(0, 300) }))
 
@@ -51,6 +51,15 @@ const pvAnchor = await page.evaluate(() => {
   return { line: i + 1, text: lines[i]?.querySelector('.cm-comment-anchor').textContent }
 })
 check('comment from a preview selection lands on the right source text', pvBtn && pvAnchor.text === 'decision rule' && pvAnchor.line === 23)
+
+// Uploads: into figures/ (the prompt's default), which opens to show them.
+// The .dat has no MIME type, so the browser sends no Content-Type.
+const { writeFileSync } = await import('node:fs'), tmp = (await import('node:os')).tmpdir()
+writeFileSync(`${tmp}/ui-logo.png`, Buffer.from('89504e470d0a1a0a', 'hex')); writeFileSync(`${tmp}/ui-raw.dat`, 'raw')
+const [chooser] = await Promise.all([page.waitForFileChooser(), page.click('#upload')])
+await chooser.accept([`${tmp}/ui-logo.png`, `${tmp}/ui-raw.dat`]); await sleep(2000)
+const shown = await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')].map(e => e.title))
+check('uploads land in the chosen folder and show in the tree', ['figures/ui-logo.png', 'figures/ui-raw.dat'].every(p => shown.includes(p)))
 
 // 1. Comments pane via the View menu action
 await page.evaluate(() => document.querySelector('[data-action="comments"], button[data-act="comments"]')?.click())
