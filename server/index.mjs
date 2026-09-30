@@ -213,13 +213,14 @@ const hocuspocus = Server.configure({
       try { Y.applyUpdate(document, new Uint8Array(await readFile(f)), 'crdt-load') }
       catch (e) { console.warn(`crdt state ${f} unreadable: ${e.message}`) }
     // Text the CRDT lacks, or that was edited outside the app since the last
-    // save (a shell, a plain git checkout), is taken from disk.
+    // save (a shell, a plain git checkout), is taken from disk. New text over
+    // 1 MB -- data, mostly -- stays a disk file, as uploads do.
     const saved = existsSync(crdtFile(name)) ? (await stat(crdtFile(name))).mtimeMs : Infinity
     const texts = []
     for await (const rel of walk(proj(name))) {
       if (!TEXT.test(rel) || !okPath(rel) || GENERATED.test(rel)) continue
-      const f = inProj(name, rel)
-      if (!files.has(rel) || (await stat(f)).mtimeMs > saved) texts.push([rel, await readFile(f, 'utf8')])
+      const f = inProj(name, rel), s = await stat(f)
+      if (files.has(rel) ? s.mtimeMs > saved : s.size < 1e6) texts.push([rel, await readFile(f, 'utf8')])
     }
     document.transact(() => { for (const [rel, c] of texts) files.has(rel) ? setText(files.get(rel), c) : files.set(rel, new Y.Text(c)) })
     written.set(name, new Set(files.keys()))
@@ -431,13 +432,19 @@ p.get('/files', async (req, res) => {
 })
 
 // Uploads are served as sandboxed documents: an .html or .svg a collaborator
-// uploads must not run script in everyone else's session.
+// uploads must not run script in everyone else's session. PDFs are exempt:
+// browsers refuse to show them sandboxed, and their viewers run no page script.
 p.get('/raw/*', async (req, res) => {
-  try { res.set('Content-Security-Policy', 'sandbox').set('X-Content-Type-Options', 'nosniff').sendFile(await safe(req.params.proj, wild(req))) }
+  try {
+    const rel = wild(req)
+    if (!/\.pdf$/i.test(rel)) res.set('Content-Security-Policy', 'sandbox')
+    res.set('X-Content-Type-Options', 'nosniff').sendFile(await safe(req.params.proj, rel))
+  }
   catch (e) { res.status(e.status || 500).json({ error: e.message }) }
 })
 
-p.put('/raw/*', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+// any body: browsers send no Content-Type for extensions they don't know (.dat, .npy, .h5)
+p.put('/raw/*', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   try {
     const rel = wild(req)
     await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })

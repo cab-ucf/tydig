@@ -389,7 +389,7 @@ function renderTree() {
     el.querySelector('.upd').onclick = e => { e.stopPropagation(); uploadTo(full) }
     el.ondragover = e => { e.preventDefault(); el.classList.add('dropping') }
     el.ondragleave = () => el.classList.remove('dropping')
-    el.ondrop = e => { e.preventDefault(); el.classList.remove('dropping'); dropUpload(e.dataTransfer.files, full) }
+    el.ondrop = e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('dropping'); dropUpload(e.dataTransfer.files, full) }
     return el
   }
   const emit = (node, prefix, depth) => {
@@ -406,16 +406,26 @@ function renderTree() {
 $('tree').ondragover = e => e.preventDefault()
 $('tree').ondrop = e => { e.preventDefault(); dropUpload(e.dataTransfer.files, '') }
 
+// Text under 1 MB outside build dirs goes into the CRDT (editable, synced);
+// anything else, data included, is a disk file.
 async function dropUpload(files, dir) {
+  const failed = []
   for (const f of files) {
     const p = (dir ? dir + '/' : '') + f.name.replace(/[^\w.@ -]/g, '_'), t = filesMap.get(p)
-    if (!TEXT.test(p) || !okPath(p) || GEN.test(p)) await fetch(rawUrl(p), { method: 'PUT', body: f })
-    else { const s = await f.text(); t ? ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) }) : filesMap.set(p, new Y.Text(s)) } // editable, synced
+    if (t || (TEXT.test(p) && okPath(p) && !GEN.test(p) && f.size < 1e6)) {
+      const s = await f.text()
+      t ? ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) }) : filesMap.set(p, new Y.Text(s))
+    } else {
+      const r = await fetch(rawUrl(p), { method: 'PUT', body: f })
+      if (!r.ok) failed.push(`${p}: ${r.status === 413 ? 'larger than 50 MB' : (await r.json().catch(() => ({}))).error || r.statusText}`)
+    }
   }
-  refreshDisk()
+  dir.split('/').forEach((_, i, a) => a[0] && openDirs.add(a.slice(0, i + 1).join('/'))) // show where it went
+  saveDirs(); refreshDisk()
+  if (failed.length) alert(`Not uploaded:\n${failed.join('\n')}`)
 }
-function uploadTo(dir) {
-  $('upload-input').dataset.dir = dir ?? ''
+function uploadTo(dir = '') {
+  $('upload-input').dataset.dir = dir
   $('upload-input').click()
 }
 function renameFile(p) {
@@ -452,12 +462,12 @@ function newFile(prefix = '') {
   openFile(clean)
 }
 $('new-file').onclick = newFile
-$('upload').onclick = () => $('upload-input').click()
+$('upload').onclick = () => uploadTo()
 $('upload-input').onchange = async e => {
-  let dir = e.target.dataset.dir
-  if (dir === undefined || dir === '') dir = prompt('Upload into directory (empty for root):', dir || 'figures') ?? ''
-  await dropUpload(e.target.files, dir.replace(/\/+$/, ''))
-  e.target.dataset.dir = ''
+  // copy, then clear: the same file can be picked again, and no folder lingers
+  const files = [...e.target.files], dir = e.target.dataset.dir || prompt('Upload into directory (empty for root):', 'figures')
+  e.target.value = ''; e.target.dataset.dir = ''
+  if (dir != null) await dropUpload(files, dir.replace(/^\/+|\/+$/g, ''))
 }
 
 // ---------- typst preview (live 'typst watch' in-browser) ----------
@@ -955,7 +965,7 @@ async function showShare() {
 
 const actions = {
   'new-file': newFile,
-  upload: () => $('upload-input').click(),
+  upload: () => uploadTo(),
   projects: openPicker,
   checkpoint: async () => {
     const message = prompt('Checkpoint name:')
