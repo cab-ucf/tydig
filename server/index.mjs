@@ -7,8 +7,8 @@ import express from 'express'
 import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdir, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
+import { existsSync, readFileSync, writeFileSync, constants as FS } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 
@@ -42,7 +42,8 @@ const sandboxArgs = dir => ['run', '--rm', ...NET,
   '--cap-drop=ALL', '--security-opt', 'no-new-privileges',
   '--read-only', '--tmpfs', '/tmp:rw,size=512m',
   '-e', 'HOME=/tmp', '-e', 'MPLCONFIGDIR=/tmp/mpl', '-e', 'TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages',
-  '-v', `${dir}:/work:rw,Z`, '-w', '/work', IMAGE]
+  // .git read-only: hooks or config written by a build would run on the host at the next commit
+  '-v', `${dir}:/work:rw,z`, '-v', `${dir}/.git:/work/.git:ro,z`, '-w', '/work', IMAGE]
 const building = new Set() // one build at a time per project
 // Recipes run in the sandbox: `make <target>` when the project has a
 // Makefile, `just <recipe>` when it has a justfile. make is the default for
@@ -96,16 +97,43 @@ const GENERATED = /^(out|build|figures)\//
 const okName = n => /^[\w-]{1,64}$/.test(n)
 const okHash = h => /^[0-9a-f]{7,40}$/.test(h)
 const okPath = p => typeof p === 'string' && p.length < 256 && /^[\w./@ -]+$/.test(p) &&
-  p.split('/').every(s => s && s !== '.' && s !== '..')
+  p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
 const okRecipe = r => /^[\w-]{1,64}$/.test(r)
 const proj = n => path.join(DATA, n)
 const inProj = (n, p) => path.join(proj(n), p)
-const git = (n, ...a) => run('git', ['-C', proj(n), ...a]).then(r => r.stdout)
+const gitQ = new Map()
+const git = (n, ...a) => {
+  const r = (gitQ.get(n) || Promise.resolve()).then(() => run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28 }))
+  gitQ.set(n, r.catch(() => {}))
+  return r.then(r => r.stdout)
+}
+// Symlinks (from a build or a git checkout) must never lead the server out of the project.
+const safe = async (n, rel) => {
+  const f = inProj(n, rel), d = await realpath(path.dirname(f)).catch(() => '')
+  if (!(d + path.sep).startsWith(await realpath(proj(n)) + path.sep) || (await lstat(f).catch(() => null))?.isSymbolicLink())
+    throw Object.assign(new Error('bad path'), { status: 400 })
+  return f
+}
+const NOFOLLOW = FS.O_WRONLY | FS.O_CREAT | FS.O_TRUNC | (FS.O_NOFOLLOW || 0)
+// Replace a Y.Text's content with a minimal edit, so comment anchors and
+// concurrent edits outside the changed span survive. Never splits a surrogate pair.
+const setText = (t, s) => {
+  const o = t.toString(), hi = i => (o.charCodeAt(i) & 0xFC00) === 0xD800
+  if (o === s) return
+  let a = 0, b = 0
+  while (a < o.length && o[a] === s[a]) a++
+  if (a && hi(a - 1)) a--
+  while (b < o.length - a && b < s.length - a && o[o.length - 1 - b] === s[s.length - 1 - b]) b++
+  if (b && hi(o.length - b - 1)) b--
+  t.delete(a, o.length - a - b); t.insert(a, s.slice(a, s.length - b))
+}
+// This hub's CRDT state, inside .git: never committed, gone with the project.
+const crdtFile = n => path.join(proj(n), '.git', 'tydig-crdt')
 
 async function ensureRepo(name) {
   if (existsSync(path.join(proj(name), '.git'))) return
   await mkdir(proj(name), { recursive: true })
-  await git(name, 'init', '-q')
+  await git(name, 'init', '-q', '-b', 'main')
   await git(name, 'config', 'user.email', 'collab@localhost')
   await git(name, 'config', 'user.name', 'tydig')
 }
@@ -114,7 +142,7 @@ async function* walk(dir, base = dir) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     // .collab holds hub machinery (per-hub CRDT state for git sync), not
     // project content: never listed, never mirrored, never in the CRDT.
-    if (e.name === '.git' || e.name === '.collab') continue
+    if (e.name === '.git' || e.name === '.collab' || e.isSymbolicLink()) continue
     const p = path.join(dir, e.name)
     if (e.isDirectory()) yield* walk(p, base)
     else yield path.relative(base, p).replaceAll('\\', '/')
@@ -131,13 +159,12 @@ async function mirror(name, document) {
     const cur = new Set()
     for (const [rel, t] of document.getMap('files')) {
       if (!okPath(rel) || GENERATED.test(rel)) continue
-      const f = inProj(name, rel)
-      await mkdir(path.dirname(f), { recursive: true })
-      await writeFile(f, t.toString())
+      await mkdir(path.dirname(inProj(name, rel)), { recursive: true })
+      await safe(name, rel).then(f => writeFile(f, t.toString(), { flag: NOFOLLOW })).catch(e => console.warn(`mirror: skipped ${rel} (${e.message})`))
       cur.add(rel)
     }
     for (const old of written.get(name) ?? [])
-      if (!cur.has(old) && okPath(old) && !GENERATED.test(old)) await rm(inProj(name, old), { force: true })
+      if (!cur.has(old) && okPath(old) && !GENERATED.test(old)) await safe(name, old).then(f => rm(f, { force: true })).catch(() => {})
     written.set(name, cur)
   } finally { setTimeout(() => mirroring.delete(name), 300) }
 }
@@ -162,6 +189,7 @@ const hocuspocus = Server.configure({
   port: 1234,
   debounce: 2000,
   async onAuthenticate({ token, requestHeaders, documentName }) {
+    if (!originOk(requestHeaders?.origin)) throw new Error('untrusted origin')
     const headers = new Headers()
     if (requestHeaders?.cookie) headers.set('cookie', requestHeaders.cookie)
     else if (token) headers.set('cookie', `better-auth.session_token=${token}`)
@@ -174,30 +202,27 @@ const hocuspocus = Server.configure({
     if (!okName(name) || !existsSync(proj(name))) return document
     const files = document.getMap('files')
     if (files.size) return document
-    // A git-synced project carries CRDT state in .collab/crdt/. Load that in
-    // preference to the working tree: seeding from text would mint fresh Yjs
-    // types for the same paths, and a peer's later edits -- made against the
-    // types in their state -- would then be invisible here. The CRDT is the
-    // identity of the document; the working tree is a rendering of it.
-    const crdtDir = path.join(proj(name), '.collab/crdt')
-    if (existsSync(crdtDir)) {
-      let applied = 0
-      for (const f of await readdir(crdtDir)) {
-        if (!f.endsWith('.bin')) continue
-        try { Y.applyUpdate(document, new Uint8Array(await readFile(path.join(crdtDir, f))), 'crdt-load'); applied++ }
-        catch (e) { console.warn(`crdt state ${f} unreadable: ${e.message}`) }
-      }
-      if (applied && files.size) {
-        written.set(name, new Set([...files.keys()]))
-        watchProject(name, document)
-        return document
-      }
-    }
+    // The CRDT is the identity of the document; the working tree is a
+    // rendering of it. Load this hub's saved state and every peer hub's
+    // (.collab/crdt/, from git sync). Seeding from text instead would mint
+    // fresh Yjs types, and edits made against the old ones -- by an offline
+    // browser or a peer hub -- would lose the merge and vanish.
+    const dir = inProj(name, '.collab/crdt')
+    const peers = existsSync(dir) ? (await readdir(dir)).filter(f => f.endsWith('.bin')).map(f => path.join(dir, f)) : []
+    for (const f of [crdtFile(name), ...peers].filter(existsSync))
+      try { Y.applyUpdate(document, new Uint8Array(await readFile(f)), 'crdt-load') }
+      catch (e) { console.warn(`crdt state ${f} unreadable: ${e.message}`) }
+    // Text the CRDT lacks, or that was edited outside the app since the last
+    // save (a shell, a plain git checkout), is taken from disk.
+    const saved = existsSync(crdtFile(name)) ? (await stat(crdtFile(name))).mtimeMs : Infinity
     const texts = []
-    for await (const rel of walk(proj(name)))
-      if (TEXT.test(rel) && okPath(rel) && !GENERATED.test(rel)) texts.push([rel, await readFile(inProj(name, rel), 'utf8')])
-    document.transact(() => { for (const [rel, c] of texts) files.set(rel, new Y.Text(c)) })
-    written.set(name, new Set(texts.map(t => t[0])))
+    for await (const rel of walk(proj(name))) {
+      if (!TEXT.test(rel) || !okPath(rel) || GENERATED.test(rel)) continue
+      const f = inProj(name, rel)
+      if (!files.has(rel) || (await stat(f)).mtimeMs > saved) texts.push([rel, await readFile(f, 'utf8')])
+    }
+    document.transact(() => { for (const [rel, c] of texts) files.has(rel) ? setText(files.get(rel), c) : files.set(rel, new Y.Text(c)) })
+    written.set(name, new Set(files.keys()))
     watchProject(name, document)
     return document
   },
@@ -205,14 +230,21 @@ const hocuspocus = Server.configure({
     watchers.get(name)?.close()
     watchers.delete(name)
   },
-  async onStoreDocument({ documentName: name, document }) {
-    if (!okName(name)) return
-    await mirror(name, document)
-    await git(name, 'add', '-A')
-    try { await git(name, 'commit', '-q', '-m', 'autosave') } catch { /* no change */ }
-    gitsync.markDirty(name)
-  },
+  onStoreDocument: ({ documentName: name, document }) => store(name, document),
 })
+// State first, then the working tree: a crash in between leaves the disk
+// older than the state, which the next load correctly ignores.
+async function store(name, document) {
+  if (!okName(name) || !existsSync(proj(name))) return
+  await ensureRepo(name)
+  const tmp = `${crdtFile(name)}.${randomBytes(4).toString('hex')}`
+  await writeFile(tmp, Y.encodeStateAsUpdate(document))
+  await rename(tmp, crdtFile(name))
+  await mirror(name, document)
+  await git(name, 'add', '-A')
+  await git(name, 'commit', '-q', '-m', 'autosave').catch(() => {})
+  gitsync.markDirty(name)
+}
 // Hub-to-hub sync over iroh (see federation.mjs). Off with TYDIG_IROH=0.
 import { createFederation } from './federation.mjs'
 const federation = createFederation({ hocuspocus, dataDir: DATA, okName })
@@ -222,14 +254,13 @@ const federation = createFederation({ hocuspocus, dataDir: DATA, okName })
 import { createGitSync } from './gitsync.mjs'
 // Every hub needs a stable, unique id of its own: it names this hub's CRDT
 // file in the shared git remote, and two hubs sharing an id would overwrite
-// each other's state. Derived from iroh when federation is on, otherwise
-// persisted locally -- git sync must work with iroh disabled entirely.
+// each other's state. Persisted locally, so it holds with iroh on or off.
 const hubIdFile = path.join(DATA, 'hub-id')
 if (!existsSync(hubIdFile)) writeFileSync(hubIdFile, randomBytes(8).toString('hex') + '\n')
 const localHubId = readFileSync(hubIdFile, 'utf8').trim()
 const gitsync = createGitSync({
   hocuspocus, dataDir: DATA, proj, git, mirror, okName,
-  hubId: () => federation.shortId?.() || localHubId,
+  hubId: () => localHubId,
 })
 
 // The sync server also shares the main HTTP port at /sync (see below), which
@@ -262,8 +293,14 @@ const app = express()
 const originAllowed = origin => TRUSTED.some(p => p.includes('*') || p.includes('?')
   ? new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$').test(origin)
   : p === origin)
+const originOk = o => !o || originAllowed(o)
 
 app.all('/api/auth/*', (req, res, next) => {
+  // Projects are organizations keyed by slug == directory. Only the server
+  // may mint, rename or delete one: a slug chosen over HTTP could claim an
+  // internal directory (gitsync/, federation/) or an orphaned project.
+  if (/^\/api\/auth\/organization\/(create|update|delete)\b/.test(req.path))
+    return res.status(403).json({ error: 'projects are created and removed through tydig' })
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
     console.warn(`auth request refused: origin ${origin} is not trusted.\n` +
@@ -281,6 +318,9 @@ app.all('/api/auth/*', (req, res, next) => {
   next()
 }, toNodeHandler(auth))
 
+// Cookies are SameSite=Lax, which still lets a sibling subdomain (any page
+// on *.your-university.edu) forge requests. Refuse untrusted origins.
+app.use('/api', (req, res, next) => req.method === 'GET' || originOk(req.headers.origin) ? next() : res.status(403).json({ error: 'untrusted origin' }))
 app.use(express.json())
 
 // Public: tells the login screen whether an institutional SSO is configured.
@@ -296,7 +336,7 @@ app.get('/api/auth-config', (req, res) => res.json({
   // from the running process rather than from a config file.
   trustedOrigins: TRUSTED,
   yourOrigin: req.headers.origin || null,
-  originOk: !req.headers.origin || originAllowed(req.headers.origin),
+  originOk: originOk(req.headers.origin),
   startedAt: STARTED_AT,
 }))
 
@@ -317,8 +357,8 @@ app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name
 // secret never leaves the device. One user may hold many device keys.
 app.post('/api/keys', (req, res) => {
   try {
-    const { publicKey, label } = req.body || {}
-    res.json(keyStore.register(req.user.id, publicKey, label))
+    const { publicKey, label, proof } = req.body || {}
+    res.json(keyStore.register(req.user.id, publicKey, label, proof))
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 app.get('/api/keys', (req, res) => res.json(keyStore.listFor(req.user.id)))
@@ -371,7 +411,7 @@ const p = express.Router({ mergeParams: true })
 app.use('/api/p/:proj', async (req, res, next) => {
   if (!okName(req.params.proj) || !existsSync(proj(req.params.proj)))
     return res.status(404).json({ error: 'no such project' })
-  if (!await authorizeProject(req.authHeaders, req.params.proj))
+  if (!(req.org = await authorizeProject(req.authHeaders, req.params.proj)))
     return res.status(403).json({ error: 'you do not have access to this project' })
   next()
 }, p)
@@ -390,8 +430,10 @@ p.get('/files', async (req, res) => {
   res.json(out)
 })
 
-p.get('/raw/*', (req, res) => {
-  try { res.sendFile(inProj(req.params.proj, wild(req))) }
+// Uploads are served as sandboxed documents: an .html or .svg a collaborator
+// uploads must not run script in everyone else's session.
+p.get('/raw/*', async (req, res) => {
+  try { res.set('Content-Security-Policy', 'sandbox').set('X-Content-Type-Options', 'nosniff').sendFile(await safe(req.params.proj, wild(req))) }
   catch (e) { res.status(e.status || 500).json({ error: e.message }) }
 })
 
@@ -399,9 +441,24 @@ p.put('/raw/*', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) =>
   try {
     const rel = wild(req)
     await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
-    await writeFile(inProj(req.params.proj, rel), req.body)
+    await writeFile(await safe(req.params.proj, rel), req.body, { flag: NOFOLLOW })
     res.json({ ok: true })
   } catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+})
+
+p.delete('/raw/*', async (req, res) => {
+  try { await rm(await safe(req.params.proj, wild(req))); res.json({ ok: true }) }
+  catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+})
+
+// Sharing: an owner or admin adds an existing account. Nothing here sends
+// mail, so email invitations could never be accepted.
+p.post('/members', async (req, res) => {
+  if (!['owner', 'admin'].includes(req.org.role)) return res.status(403).json({ error: 'only the owner can share this project' })
+  const u = authDb.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(String(req.body?.email || ''))
+  if (!u) return res.status(404).json({ error: 'no account with that email yet: ask them to sign up, then share again' })
+  auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
+    .then(() => res.json({ ok: true }), e => res.status(400).json({ error: e.message }))
 })
 
 const sandboxHint = e => {
@@ -473,8 +530,9 @@ p.post('/checkpoint', async (req, res) => {
     const sigOk = provVerify(publicKey, payload, signature)
     const server = await filesDigest(name)
     const stateOk = canon(payload.files || {}) === canon(server)
+    // The public key travels with the note, so a clone can verify it offline.
     provenance = {
-      alg: ALG, keyId, user: req.user.id,
+      alg: ALG, keyId, publicKey, user: req.user.id,
       verified: !!(known && known.userId === req.user.id && sigOk && stateOk),
       sigOk, stateOk, registered: !!known,
       payload, signature,
@@ -495,7 +553,7 @@ p.post('/checkpoint', async (req, res) => {
 })
 
 p.get('/history', async (req, res) => {
-  const log = await git(req.params.proj, 'log', '--notes=provenance',
+  const log = await git(req.params.proj, 'log', '-n', '1000', '--notes=provenance',
     '--pretty=format:%h%x1f%aI%x1f%s%x1f%N%x1e').catch(() => '')
   res.json(log.split('\x1e').map(l => l.trim()).filter(Boolean).map(l => {
     const [hash, date, message, noteRaw] = l.split('\x1f')
@@ -524,11 +582,7 @@ p.post('/restore/:hash', async (req, res) => {
     const files = doc.getMap('files')
     const keep = new Set(texts.map(t => t[0]))
     for (const k of [...files.keys()]) if (!keep.has(k)) files.delete(k)
-    for (const [rel, content] of texts) {
-      const t = files.get(rel)
-      if (t) { if (t.toString() !== content) { t.delete(0, t.length); t.insert(0, content) } }
-      else files.set(rel, new Y.Text(content))
-    }
+    for (const [rel, content] of texts) files.has(rel) ? setText(files.get(rel), content) : files.set(rel, new Y.Text(content))
   })
   res.json({ ok: true })
 })
@@ -562,6 +616,22 @@ p.post('/federation/rotate', async (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 
+// Preview fonts. typst.ts would have every browser fetch them from GitHub on
+// every load; instead the hub fetches each once and serves it. To run
+// air-gapped, seed DATA/.fonts/ from github.com/Myriad-Dreamin/typst/tree/assets-fonts.
+const FONTS = path.join(DATA, '.fonts')
+app.get('/fonts/:f', async (req, res) => {
+  const f = req.params.f, local = path.join(FONTS, f)
+  if (!/^[\w-]+\.(ttf|otf)$/.test(f)) return res.sendStatus(404)
+  if (!existsSync(local)) {
+    const r = await fetch(`https://raw.githubusercontent.com/Myriad-Dreamin/typst/assets-fonts/${f}`).catch(() => null)
+    if (!r?.ok) return res.sendStatus(502)
+    const tmp = `${local}.${randomBytes(4).toString('hex')}`
+    await mkdir(FONTS, { recursive: true }); await writeFile(tmp, Buffer.from(await r.arrayBuffer())); await rename(tmp, local)
+  }
+  res.set('Cache-Control', 'public, max-age=31536000, immutable').sendFile(local)
+})
+
 // Serve the built client when it exists (production/container). In dev, Vite
 // serves it on :5173 and proxies here instead.
 const STATIC = process.env.TYDIG_STATIC ||
@@ -586,11 +656,14 @@ const httpServer = app.listen(PORT, () => {
 // Saving on the way out is what makes a hub disposable: the git remote holds
 // the project, so this machine can disappear.
 let leaving = false
+// Express 4 does not catch async handler errors; one failed git call must not take the hub down.
+process.on('unhandledRejection', e => console.error('unhandled:', e))
 for (const sig of ['SIGINT', 'SIGTERM'])
   process.on(sig, async () => {
     if (leaving) process.exit(1)
     leaving = true
-    console.log('shutting down: pushing to git remotes...')
+    console.log('shutting down: saving open documents, pushing to git remotes...')
+    for (const [name, doc] of hocuspocus.documents) await store(name, doc).catch(e => console.warn(`save of "${name}" failed (${e.message})`))
     await gitsync.flushAll().catch(() => {})
     await federation.stop().catch(() => {})
     process.exit(0)
@@ -614,7 +687,7 @@ httpServer.on('upgrade', async (req, sock, head) => {
   if (req.headers.cookie) headers.set('cookie', req.headers.cookie)
   else if (u.searchParams.get('t')) headers.set('cookie', `better-auth.session_token=${u.searchParams.get('t')}`)
   const sess = await sessionFrom(headers)
-  if (!sess?.user || !await authorizeProject(headers, name)) return sock.destroy()
+  if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name)) return sock.destroy()
   lspWss.handleUpgrade(req, sock, head, ws => {
     const lsp = spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })
     lsp.on('error', () => ws.close(1011, 'tinymist not installed on server'))

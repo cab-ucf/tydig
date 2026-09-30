@@ -32,8 +32,12 @@ await ann(`/projects/${PROJ}`, { method: 'POST' })
 // device key: generate + register under Ann
 const keys = ml_dsa65.keygen(crypto.getRandomValues(new Uint8Array(32)))
 const publicKey = b64u(keys.publicKey)
+const proofFor = id => b64u(ml_dsa65.sign(new TextEncoder().encode(canon({ register: id })), keys.secretKey))
+const squat = await eve('/keys', { method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ publicKey, label: 'squat', proof: proofFor('someone-else') }) })
+check('key cannot be registered without proof of possession', !!squat.error)
 const reg = await ann('/keys', { method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ publicKey, label: 'test-device' }) })
+  body: JSON.stringify({ publicKey, label: 'test-device', proof: proofFor((await ann('/me')).id) }) })
 check('device key registered', typeof reg.keyId === 'string' && reg.alg === 'ml-dsa-65')
 const mine = await ann('/keys')
 check('key listed for owner', mine.some(k => k.keyId === reg.keyId))
@@ -100,6 +104,9 @@ const hist = await ann(`/p/${PROJ}/history`)
 const signed = hist.find(h => h.message === 'checkpoint: signed cp' && h.provenance)
 check('history shows verified provenance', signed?.provenance?.verified === true && signed?.provenance?.keyId === reg.keyId)
 check('autosave commits carry no provenance', hist.some(h => !h.provenance))
+const { execSync } = await import('node:child_process')
+const note = JSON.parse(execSync(`git -C data/${PROJ} notes --ref=provenance show ${signed.hash}`).toString())
+check('note alone verifies offline (carries the public key)', ml_dsa65.verify(Buffer.from(note.signature, 'base64url'), new TextEncoder().encode(canon(note.payload)), Buffer.from(note.publicKey, 'base64url')))
 
 console.log(pass ? '\nALL PASS' : '\nFAILURES')
 process.exit(pass ? 0 : 1)

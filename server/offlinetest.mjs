@@ -45,6 +45,20 @@ check('after reconnect: A local edit survived', merged.includes('AAA-local'))
 check('after reconnect: B remote edit merged in', merged.includes('BBB-remote'))
 check('both clients converge', A.f.get('main.typ').toString() === B.f.get('main.typ').toString())
 
+// Everyone leaves, the server unloads the doc; A keeps editing offline (its
+// IndexedDB copy). The reloaded doc must be the same CRDT, not a re-seed with
+// fresh types -- or A's edit loses the merge and silently vanishes.
+const id = A.f.get('main.typ')._item.id
+A.p.destroy(); B.p.destroy()
+await sleep(3500)
+A.f.get('main.typ').insert(0, 'AFTER-UNLOAD\n')
+const C = mk(); await sleep(1500)
+check('reloaded doc keeps its CRDT identity', C.f.get('main.typ')._item.id.client === id.client && C.f.get('main.typ')._item.id.clock === id.clock)
+const A2 = new HocuspocusProvider({ url: 'ws://localhost:1234', name: proj, document: A.doc, token: tok, WebSocketPolyfill: WebSocket })
+await sleep(1500)
+check('offline edit made after unload survives reconnect', C.f.get('main.typ').toString().includes('AFTER-UNLOAD'))
+A2.destroy(); C.p.destroy()
+
 // review diff logic (same LCS as client)
 function lineDiff(a, b) {
   const A = a.split('\n'), B = b.split('\n'), n = A.length, m = B.length

@@ -1,19 +1,19 @@
 {
- "generated_utc": "2026-08-29 17:08:15Z",
+ "generated_utc": "2026-09-29 16:26:13Z",
  "n": 31,
  "t_span_min": 30.0,
- "T1": 73.22,
+ "T1": 73.37,
  "T2": 22.76,
- "delta": -50.46,
+ "delta": -50.61,
  "T_ambient": 21.0,
- "slope_c_per_min": -1.613,
- "noise_c": 7.014,
+ "slope_c_per_min": -1.616,
+ "noise_c": 6.949,
  "direction": "cooling",
  "conclusive": true,
  "newton": {
-  "k_per_min": 0.1241,
-  "tau_min": 8.06,
-  "r2": 0.997,
-  "t_within_1c_min": 31.9
+  "k_per_min": 0.1231,
+  "tau_min": 8.13,
+  "r2": 0.9991,
+  "t_within_1c_min": 32.2
  }
 }
