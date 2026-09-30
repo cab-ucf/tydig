@@ -251,19 +251,68 @@ function updateWordCount() {
   $('wordcount').textContent = src ? `${(src.match(/[\p{L}\p{N}']+/gu) || []).length} words` : ''
 }
 
-function addComment() {
-  if (!view) return
-  const { from, to } = view.state.selection.main
-  if (from === to) return alert('Select text to comment on.')
+function addComment(ctx = previewContext()) {
+  const sel = view?.state.selection.main, at = ctx ? locate(...ctx) : sel && { file: currentPath, from: sel.from, to: sel.to }
+  if (ctx && !at) return alert('Could not find that text in the source. Select it in the editor instead.')
+  if (!at || at.from === at.to) return alert('Select text to comment on, in the editor or the preview.')
   const text = prompt('Comment:')
   if (!text) return
-  const yt = filesMap.get(currentPath)
+  const yt = filesMap.get(at.file)
   ycomments.set(crypto.randomUUID(), {
-    file: currentPath, author: userName, color: userColor, text, ts: Date.now(),
-    anchor: rel(yt, from, 0), head: rel(yt, to, -1),
+    file: at.file, author: userName, color: userColor, text, ts: Date.now(),
+    anchor: rel(yt, at.from, 0), head: rel(yt, at.to, -1),
   })
   openSidebar('comments')
 }
+
+// ---------- comments from the preview ----------
+// The preview's text layer is the source minus markup, so a selection there
+// is found in the source by letters and digits alone (math italics folded). The text around it
+// picks among repeats, and computed text (#f(R.T1)) anchors to the code
+// between the literal text on either side.
+const LN = /[\p{L}\p{N}]/u
+const norm = s => { let k = ''; const at = []; for (let i = 0; i < s.length; i++) if (LN.test(s[i])) { k += s[i]; at.push(i) } return { k, at } }
+const back = (a, i, b) => { let n = 0; while (n < i && n < b.length && a[i - 1 - n] === b[b.length - 1 - n]) n++; return n }
+const fwd = (a, i, b) => { let n = 0; while (i + n < a.length && n < b.length && a[i + n] === b[n]) n++; return n }
+function locate(before, sel, after) {
+  const [L, Q, R] = [before, sel, after].map(s => norm(s.normalize('NFKC')).k) // 𝑇 -> T, ﬁ -> fi
+  let best = { score: 2 }
+  for (const [file, yt] of filesMap) {
+    if (!file.endsWith('.typ')) continue
+    const src = yt.toString(), { k, at } = norm(src)
+    const hit = (from, to, score) => score > best.score && (best = { score, file, from, to })
+    for (let i = Q ? k.indexOf(Q) : -1; i >= 0; i = k.indexOf(Q, i + 1)) hit(at[i], at[i + Q.length - 1] + 1, Q.length + back(k, i, L) + fwd(k, i + Q.length, R))
+    let i = 0, b = 0
+    for (let x = 1; x <= k.length; x++) { const n = back(k, x, L); if (n > b) [i, b] = [x, n] }
+    let j = i, f = 0
+    for (let y = i; y <= Math.min(k.length, i + 400); y++) { const n = fwd(k, y, R); if (n > f) [j, f] = [y, n] }
+    // everything between the two matches, trimmed of surrounding whitespace
+    let from = i ? at[i - 1] + 1 : 0, to = j < k.length ? at[j] : src.length
+    while (from < to && /\s/.test(src[from])) from++
+    while (to > from && /\s/.test(src[to - 1])) to--
+    hit(from, to, b + f)
+  }
+  return best.file && { ...best, to: Math.max(best.to, best.from + 1) }
+}
+// [before, selected, after] for a selection inside the preview, else null
+function previewContext() {
+  const s = getSelection(), r = s.rangeCount && s.getRangeAt(0)
+  if (!r || r.collapsed || !$('page').contains(r.commonAncestorContainer)) return null
+  const side = start => { const x = document.createRange(); x.selectNodeContents($('page')); start ? x.setEnd(r.startContainer, r.startOffset) : x.setStart(r.endContainer, r.endOffset); return x.toString() }
+  return [side(true).slice(-300), r.toString(), side(false).slice(0, 300)]
+}
+// A comment button follows a selection in the preview. The context is taken
+// now: a re-render (someone typing) would drop the selection before the click.
+document.addEventListener('mouseup', () => setTimeout(() => {
+  const ctx = previewContext(), b = $('pv-comment')
+  b.hidden = !ctx
+  if (!ctx) return
+  const r = getSelection().getRangeAt(0).getBoundingClientRect(), p = $('preview').getBoundingClientRect()
+  b.style.left = `${r.right - p.left + $('preview').scrollLeft}px`
+  b.style.top = `${Math.max(0, r.top - p.top + $('preview').scrollTop - 30)}px`
+  b.onclick = () => { b.hidden = true; getSelection().removeAllRanges(); addComment(ctx) }
+}))
+$('pv-comment').onmousedown = $('bar-comment').onmousedown = e => e.preventDefault() // keep the selection
 ycomments.observe(() => {
   view?.dispatch({ annotations: commentsChanged.of(true) })
   if (sidebarMode === 'comments') renderComments()
@@ -523,7 +572,7 @@ async function compile() {
     let svg
     try { await loadVfs(true); svg = await $typst.svg({ mainFilePath: '/' + main }) }
     catch { await loadVfs(false); svg = await $typst.svg({ mainFilePath: '/' + main }) }
-    if (my === seq) { $('page').innerHTML = svg; $('diag').hidden = true }
+    if (my === seq) { $('page').innerHTML = svg; $('page').querySelector('script')?.remove(); $('diag').hidden = true }
   } catch (e) {
     if (my === seq) { $('diag').textContent = explainCompileError(e); $('diag').hidden = false }
   }
@@ -987,7 +1036,7 @@ document.addEventListener('keydown', e => {
   actions[act]?.()
 }, true)
 $('focus-exit').onclick = () => actions.focus()
-$('bar-comment').onclick = addComment
+$('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
 $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()

@@ -217,6 +217,8 @@ body.sect-files-closed #tree { display: none; }
 #zoomctl button { background: var(--ink); color: var(--fg-dim); border: 1px solid var(--ink-3); border-radius: 4px;
   font: .75rem var(--mono); padding: .15rem .5rem; cursor: pointer; opacity: .65; }
 #zoomctl button:hover { opacity: 1; color: #fff; border-color: var(--teal); }
+#pv-comment { position: absolute; z-index: 6; transform: translateX(-100%); background: var(--teal); color: #fff; border: none;
+  border-radius: 4px; font: .75rem var(--mono); padding: .25rem .6rem; cursor: pointer; box-shadow: 0 2px 8px #0004; }
 
 /* v5: change review + share */
 .review-head p { font-size: .82rem; color: var(--fg); margin: 0 0 .6rem; }
