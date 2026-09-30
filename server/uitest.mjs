@@ -33,6 +33,25 @@ const pv = await page.evaluate(() => ({ diagHidden: document.getElementById('dia
 check('preview compiled on a fresh project (no missing files)', pv.diagHidden && pv.svg)
 if (!pv.diagHidden) console.log('  diag:', pv.diag)
 
+// 0. Comment straight from the preview: select rendered text, click the
+//    button that appears. "decision rule" occurs twice; take the second.
+await page.evaluate(() => {
+  const nodes = [], w = document.createTreeWalker(document.getElementById('page'), NodeFilter.SHOW_TEXT); let n, all = ''
+  while ((n = w.nextNode())) if (n.parentElement.closest('.tsel')) { nodes.push([n, all.length]); all += n.textContent }
+  const i = all.indexOf('decision rule', all.indexOf('decision rule') + 1), at = o => { const [nd, s] = nodes.findLast(([, s]) => s <= o); return [nd, o - s] }
+  const r = document.createRange(); r.setStart(...at(i)); r.setEnd(...at(i + 13))
+  getSelection().removeAllRanges(); getSelection().addRange(r); document.dispatchEvent(new MouseEvent('mouseup'))
+})
+await sleep(200)
+const pvBtn = await page.evaluate(() => !document.getElementById('pv-comment').hidden)
+if (pvBtn) await page.click('#pv-comment')
+await sleep(800)
+const pvAnchor = await page.evaluate(() => {
+  const lines = [...document.querySelectorAll('.cm-line')], i = lines.findIndex(l => l.querySelector('.cm-comment-anchor'))
+  return { line: i + 1, text: lines[i]?.querySelector('.cm-comment-anchor').textContent }
+})
+check('comment from a preview selection lands on the right source text', pvBtn && pvAnchor.text === 'decision rule' && pvAnchor.line === 23)
+
 // 1. Comments pane via the View menu action
 await page.evaluate(() => document.querySelector('[data-action="comments"], button[data-act="comments"]')?.click())
 let s = await side(); if (s.hidden) { await page.keyboard.down('Alt'); await page.keyboard.press('c'); await page.keyboard.up('Alt'); await sleep(500); s = await side() }
