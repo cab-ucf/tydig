@@ -17,6 +17,8 @@ const errors = []
 page.on('pageerror', e => errors.push('[pageerror] ' + e.message))
 page.on('error', e => errors.push('[CRASH] ' + e.message))
 page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
+const external = []
+page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && new URL(r.url()).origin !== new URL(B).origin) external.push(r.url()) })
 page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept('first signed checkpoint'); else await d.dismiss() })
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden, title: document.getElementById('side-title').textContent, body: document.getElementById('side-body').innerText.slice(0, 300) }))
@@ -27,7 +29,7 @@ await page.type('input[name=name]', 'Ada'); await page.type('input[name=email]',
 await page.click('.auth-submit'); await sleep(2000)
 await page.evaluate(async () => (await fetch('/api/projects/demo', { method: 'POST' })).json())
 await page.goto(`${B}/?proj=demo`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(12000)
-const pv = await page.evaluate(() => ({ diagHidden: document.getElementById('diag').hidden, svg: !!document.querySelector('#page svg'), diag: document.getElementById('diag').textContent.slice(0, 200) }))
+const pv = await page.evaluate(() => ({ diagHidden: document.getElementById('diag').hidden, svg: document.querySelectorAll('#page svg use, #page svg path').length > 0, diag: document.getElementById('diag').textContent.slice(0, 200) }))
 check('preview compiled on a fresh project (no missing files)', pv.diagHidden && pv.svg)
 if (!pv.diagHidden) console.log('  diag:', pv.diag)
 
@@ -54,6 +56,8 @@ const signed = await page.evaluate(() => [...document.querySelectorAll('.commit'
 check('checkpoint shows signed badge', signed.some(c => /first signed checkpoint.*signed/.test(c)))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
+check('the app talks to no other host (fonts are bundled)', external.length === 0)
+if (external.length) console.log('  external:', external.slice(0, 3).join(' '))
 if (realErrors.length) console.log(realErrors.join('\n'))
 await browser.close()
 console.log(pass ? '\nUI ALL PASS' : '\nUI FAILURES')
