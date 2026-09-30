@@ -9,7 +9,6 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
-      '/fonts': 'http://localhost:3000',
       '/lsp': { target: 'ws://localhost:3000', ws: true },
       '/sync': { target: 'ws://localhost:1234', ws: true, rewrite: p => p.replace(/^\/sync/, '') },
     },

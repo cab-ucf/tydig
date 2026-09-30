@@ -11,7 +11,7 @@ import { vim } from '@replit/codemirror-vim'
 import { typst } from 'codemirror-lang-typst'
 import { LanguageServerClient, WebSocketTransport, languageServerWithTransport } from 'codemirror-languageserver'
 import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
-import { preloadFontAssets } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
+import { preloadRemoteFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url'
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
 
@@ -412,7 +412,10 @@ $('upload-input').onchange = async e => {
 }
 
 // ---------- typst preview (live 'typst watch' in-browser) ----------
-$typst.setCompilerInitOptions({ getModule: () => compilerWasm, beforeBuild: [preloadFontAssets({ assets: ['text'], assetUrlPrefix: '/fonts/' })] })
+// Typst's own fonts (what the CLI embeds), bundled: the preview needs no
+// network and sets type exactly like the built PDF.
+const fonts = Object.values(import.meta.glob('./fonts/*.{otf,ttf}', { query: '?url', import: 'default', eager: true }))
+$typst.setCompilerInitOptions({ getModule: () => compilerWasm, beforeBuild: [preloadRemoteFonts(fonts, { assets: false })] })
 $typst.setRendererInitOptions({ getModule: () => rendererWasm })
 
 function renderMainSel() {

@@ -616,22 +616,6 @@ p.post('/federation/rotate', async (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 
-// Preview fonts. typst.ts would have every browser fetch them from GitHub on
-// every load; instead the hub fetches each once and serves it. To run
-// air-gapped, seed DATA/.fonts/ from github.com/Myriad-Dreamin/typst/tree/assets-fonts.
-const FONTS = path.join(DATA, '.fonts')
-app.get('/fonts/:f', async (req, res) => {
-  const f = req.params.f, local = path.join(FONTS, f)
-  if (!/^[\w-]+\.(ttf|otf)$/.test(f)) return res.sendStatus(404)
-  if (!existsSync(local)) {
-    const r = await fetch(`https://raw.githubusercontent.com/Myriad-Dreamin/typst/assets-fonts/${f}`).catch(() => null)
-    if (!r?.ok) return res.sendStatus(502)
-    const tmp = `${local}.${randomBytes(4).toString('hex')}`
-    await mkdir(FONTS, { recursive: true }); await writeFile(tmp, Buffer.from(await r.arrayBuffer())); await rename(tmp, local)
-  }
-  res.set('Cache-Control', 'public, max-age=31536000, immutable').sendFile(local)
-})
-
 // Serve the built client when it exists (production/container). In dev, Vite
 // serves it on :5173 and proxies here instead.
 const STATIC = process.env.TYDIG_STATIC ||
