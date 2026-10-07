@@ -52,6 +52,12 @@ await page.keyboard.down('Alt'); await page.keyboard.press('h'); await page.keyb
 const hist = await side(); check('history pane opens', !hist.hidden && hist.title === 'history')
 const signed = await page.evaluate(() => [...document.querySelectorAll('.commit')].map(c => c.innerText.replace(/\s+/g, ' ')).slice(0, 3))
 check('checkpoint shows signed badge', signed.some(c => /first signed checkpoint.*signed/.test(c)))
+
+// 5. Share with an address that has no account yet: it is listed as invited
+await page.evaluate(() => document.querySelector('[data-act="share"]').click()); await sleep(1500)
+await page.type('#share-email', 'newcomer@example.com'); await page.click('#share-add button'); await sleep(1500)
+check('sharing with a new address lists it as invited', await page.evaluate(() =>
+  /newcomer@example\.com\s*invited/.test(document.getElementById('share-body').innerText)))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 if (realErrors.length) console.log(realErrors.join('\n'))

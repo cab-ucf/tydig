@@ -1,7 +1,8 @@
 # tydig task runner. Run `just` on its own for the guided path.
 #
 # Everything below assumes rootless podman. `just up` needs nothing else
-# installed -- not even Node.
+# installed -- not even Node. Settings (TYDIG_URL, ...) come from .env.
+set dotenv-load
 
 # Projects, accounts and git history live here. Absolute, and mounted at the
 # same path inside the container so the server and the host's podman agree on
@@ -101,6 +102,7 @@ help:
     @echo "  just restart        restart after changing .env or code"
     @echo "  just shell          shell inside the running server"
     @echo "  just doctor         diagnose sign-in / origin / socket problems"
+    @echo "  just passwd EMAIL   give an account a fresh password (printed)"
     @echo
     @echo "Pieces, one at a time:"
     @echo "  just sandbox        build the recipe sandbox image (typst/just/make/python)"
@@ -126,7 +128,7 @@ sandbox:
 
 # The app server image (client build + Node runtime).
 image:
-    podman build -t tydig -f Containerfile.server .
+    podman build --format docker -t tydig -f Containerfile.server .
 
 # Start the server. Needs the host's podman socket for sandboxed builds:
 #   systemctl --user enable --now podman.socket
@@ -145,6 +147,10 @@ restart: down up
 logs:
     podman compose logs -f app
 
+# Give an account a fresh password and print it (no mail to reset by).
+passwd email:
+    podman compose exec app node server/passwd.mjs {{email}}
+
 # Shell inside the running server (inspect data/, git history, run git notes).
 shell:
     podman compose exec app bash
@@ -154,11 +160,12 @@ shell:
 # browser is at Vite's :5173, so they must be overridden or every sign-in
 # fails with "Invalid origin".
 dev:
+    #!/usr/bin/env bash
     npm install
-    TYDIG_URL=http://localhost:5173 \
-    TYDIG_ORIGINS=http://localhost:5173,http://localhost:3000 \
-    TYDIG_DATA="{{TYDIG_DATA}}" \
-    npm run dev
+    trap 'kill 0' EXIT
+    export TYDIG_URL=http://localhost:5173 \
+        TYDIG_ORIGINS=http://localhost:5173,http://localhost:3000
+    npm -w server start & npm -w client run dev
 
 # Full test suite. Each suite gets a fresh server and a fresh data dir.
 test:
@@ -166,13 +173,15 @@ test:
     set -euo pipefail
     npm install >/dev/null
     npm run build >/dev/null
-    for suite in test authtest offlinetest provtest singleporttest; do
+    for suite in test authtest offlinetest provtest singleporttest signuptest; do
         rm -rf data
         echo "--- $suite"
         # The suites talk to :3000 directly, so the trusted origin must match
         # that, not the containerised port exported above. Legacy :1234 stays
         # on: the older suites connect to it (singleporttest uses /sync).
+        # signuptest checks the invite-only default; the rest sign up freely
         env -u TYDIG_DATA \
+            TYDIG_SIGNUP=$([ $suite = signuptest ] || echo open) \
             TYDIG_URL=http://localhost:3000 \
             TYDIG_ORIGINS=http://localhost:3000 \
             TYDIG_UNSAFE_BUILDS=1 \
@@ -194,7 +203,7 @@ test-fed:
     #!/usr/bin/env bash
     set -uo pipefail
     rm -rf /tmp/tydig-hubA /tmp/tydig-hubB
-    common="TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH_RELAY=local TYDIG_IROH_BIND=127.0.0.1:0"
+    common="TYDIG_SIGNUP=open TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH_RELAY=local TYDIG_IROH_BIND=127.0.0.1:0"
     env -u TYDIG_DATA $common PORT=3100 TYDIG_DATA=/tmp/tydig-hubA \
         TYDIG_URL=http://localhost:3100 TYDIG_ORIGINS=http://localhost:3100 \
         node server/index.mjs >/tmp/tc-hubA.log 2>&1 &
@@ -219,7 +228,7 @@ test-git:
     rm -rf /tmp/tydig-hubA /tmp/tydig-hubB /tmp/tydig-remote.git /tmp/plainclone
     git init -q --bare /tmp/tydig-remote.git
     git -C /tmp/tydig-remote.git symbolic-ref HEAD refs/heads/main
-    common="TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0 TYDIG_GIT_LOCAL=1"
+    common="TYDIG_SIGNUP=open TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0 TYDIG_GIT_LOCAL=1"
     env -u TYDIG_DATA $common PORT=3100 TYDIG_DATA=/tmp/tydig-hubA \
         TYDIG_URL=http://localhost:3100 TYDIG_ORIGINS=http://localhost:3100 \
         node server/index.mjs >/tmp/tc-gitA.log 2>&1 &
@@ -255,7 +264,7 @@ test-ui:
 # Run a project's build graph in the sandbox, without the app.
 #   just paper my-project all
 paper project target="all":
-    podman run --rm \
+    podman run --rm --userns=keep-id:uid=1000,gid=1000 \
         --memory=2g --pids-limit=512 --cpus=2 \
         --cap-drop=ALL --security-opt no-new-privileges \
         --read-only --tmpfs /tmp:rw,size=512m \

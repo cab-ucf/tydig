@@ -239,7 +239,8 @@ body.sect-files-closed #tree { display: none; }
 #share::backdrop { background: #0009; }
 #share h3 { margin: 0 0 .7rem; font-variant: small-caps; letter-spacing: .08em; color: var(--teal); }
 .share-list { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .7rem; }
-.share-row { display: flex; justify-content: space-between; font: .8rem var(--sans); padding: .3rem .5rem; background: var(--ink-2); border-radius: 5px; }
+.share-row { display: flex; gap: .5rem; align-items: center; font: .8rem var(--sans); padding: .3rem .5rem; background: var(--ink-2); border-radius: 5px; }
+.share-row span { flex: 1; }
 .share-row em { color: var(--fg-dim); font-style: normal; font-size: .72rem; }
 .share-row.pending { opacity: .65; }
 #share-add { display: flex; gap: .4rem; }

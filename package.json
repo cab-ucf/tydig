@@ -2,12 +2,11 @@
   "name": "tydig",
   "private": true,
   "type": "module",
-  "workspaces": ["server", "client"],
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
-    "dev": "concurrently -n srv,web \"npm -w server start\" \"npm -w client run dev\"",
     "build": "npm -w client run build"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.0"
   }
 }

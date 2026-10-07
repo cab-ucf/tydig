@@ -9,8 +9,10 @@ RUN pip install --no-cache-dir numpy pandas matplotlib seaborn pooch
 
 ARG TYPST_VERSION=0.15.1
 ARG JUST_VERSION=1.46.0
-# make drives the project build graph. typst and just come as static musl
-# binaries for whatever arch this is built on (x86_64 or aarch64); curl and
+ARG TINYMIST_VERSION=0.15.8
+# make drives the project build graph; tinymist serves the editor's LSP.
+# typst, just and tinymist come as static musl binaries for whatever arch
+# this is built on (x86_64 or aarch64); curl and
 # xz-utils are only needed to fetch them, so they are dropped afterwards.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends make xz-utils curl \
@@ -19,9 +21,11 @@ RUN apt-get update \
     | tar -xJ -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
  && curl -fsSL https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-$a-unknown-linux-musl.tar.gz \
     | tar -xz -C /usr/local/bin just \
+ && curl -fsSL https://github.com/Myriad-Dreamin/tinymist/releases/download/v${TINYMIST_VERSION}/tinymist-$a-unknown-linux-musl.tar.gz \
+    | tar -xz -C /usr/local/bin --strip-components=1 tinymist-$a-unknown-linux-musl/tinymist \
  && apt-get purge -y xz-utils curl && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
- && typst --version && just --version && make --version | head -1
+ && typst --version && just --version && tinymist --version && make --version | head -1
 
 # Typst @preview packages download on first use; the runtime has no network by
 # default, so warm the cache at image build. Add the packages your documents

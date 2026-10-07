@@ -258,7 +258,8 @@ function addComment() {
   const text = prompt('Comment:')
   if (!text) return
   const yt = filesMap.get(currentPath)
-  ycomments.set(crypto.randomUUID(), {
+  // randomUUID exists only in secure contexts; a hub on plain-http LAN is not one
+  ycomments.set(crypto.getRandomValues(new Uint32Array(4)).join('-'), {
     file: currentPath, author: userName, color: userColor, text, ts: Date.now(),
     anchor: rel(yt, from, 0), head: rel(yt, to, -1),
   })
@@ -884,15 +885,24 @@ async function showShare() {
   const orgs = await api('/projects')
   const mine = orgs.find(o => o.name === projName)
   const isOwner = mine?.role === 'owner' || mine?.role === 'admin'
-  const full = await authClient.organization.getFullOrganization({ query: { organizationSlug: projName } }).catch(() => null)
-  const members = full?.data?.members || []
+  const full = (await authClient.organization.getFullOrganization({ query: { organizationSlug: projName } }).catch(() => null))?.data
+  const row = (who, role, act, id) => `<div class="share-row"><span>${esc(who)}</span><em>${esc(role)}</em>${
+    isOwner && act && role !== 'owner' ? `<button data-${act}="${esc(id)}">${act}</button>` : ''}</div>`
   body.innerHTML = `
     <div class="share-list">
-      ${members.map(m => `<div class="share-row"><span>${esc(m.user?.email || m.user?.name || m.userId)}</span><em>${esc(m.role)}</em></div>`).join('')}
+      ${(full?.members || []).map(m => row(m.user?.email || m.user?.name || m.userId, m.role, 'remove', m.id)).join('')}
+      ${(full?.invitations || []).filter(i => i.status === 'pending').map(i => row(i.email, 'invited', 'cancel', i.id)).join('')}
     </div>
     ${isOwner ? `<form id="share-add"><input type="email" id="share-email" placeholder="collaborator@email" required /><button>add</button></form>
-      <p class="hint">They need an account on this hub; the project appears in their list right away.</p>`
+      <p class="hint">An address with no account here is invited: it can then sign up, and the project is waiting.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}`
+  body.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
+    if (!confirm('Remove this collaborator? They lose access at once.')) return
+    const r = await api(P('/members/' + b.dataset.remove), { method: 'DELETE' })
+    r.error ? alert(r.error) : showShare()
+  })
+  body.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () =>
+    authClient.organization.cancelInvitation({ invitationId: b.dataset.cancel }).then(showShare))
   if (isOwner) $('share-add').onsubmit = async e => {
     e.preventDefault()
     const r = await api(P('/members'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: $('share-email').value }) })
@@ -938,6 +948,12 @@ const actions = {
   federation: showFederation,
   gitremote: showGitRemote,
   signout: async () => { await authClient.signOut(); location.href = '/' },
+  password: async () => {
+    const currentPassword = prompt('Current password:'), newPassword = currentPassword && prompt('New password (8+ characters):')
+    if (!newPassword) return
+    const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true })
+    alert(error ? error.message : 'Password changed; other sessions are signed out.')
+  },
   'quick-open': () => quickOpen(),
   shortcuts: () => alert(
 `Ctrl-P    open file (fuzzy)
