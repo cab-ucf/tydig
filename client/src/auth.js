@@ -60,7 +60,7 @@ async function loginScreen() {
         <form id="auth-form">
           <label class="up-only" hidden>Name<input name="name" autocomplete="name" /></label>
           <label>Email<input name="email" type="email" autocomplete="email" required
-            placeholder="you@example.com" pattern="[^@\s]+@[^@\s]+\.[^@\s]+" /></label>
+            placeholder="you@example.com" /></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8" /></label>
           <p class="auth-err" hidden></p>
           <button type="submit" class="auth-submit">Sign in</button>
