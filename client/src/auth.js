@@ -19,10 +19,13 @@ export async function requireUser() {
   }
 }
 
-// The two failures people hit on a fresh install, phrased as what to do.
+// The failures people hit, phrased as what to do. By code: a wrong password
+// reads "Invalid email or password", which is not a malformed address.
 function explain(error, email) {
   const msg = error.message || 'Sign-in failed.'
-  if (/invalid email/i.test(msg)) {
+  if (error.code === 'INVALID_EMAIL_OR_PASSWORD')
+    return 'Wrong email or password. No account with this address yet? Use Create account.'
+  if (['INVALID_EMAIL', 'VALIDATION_ERROR'].includes(error.code) && /email/i.test(msg)) {
     return `"${email}" isn't a valid address. It needs a dot and a suffix -- ` +
       `bare hosts like name@localhost are rejected. Try you@example.com; ` +
       `nothing is ever sent to it.`
