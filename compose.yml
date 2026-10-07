@@ -22,6 +22,13 @@ services:
       TYDIG_ORIGINS: "${TYDIG_ORIGINS:-http://localhost:8080}"
       # Stable secret: sessions survive restarts. Generate one for production.
       TYDIG_SECRET: "${TYDIG_SECRET:-}"
+      # invite (default): after the first account, sharing a project with an
+      # address is what lets it sign up. open: anyone who reaches the hub.
+      TYDIG_SIGNUP: "${TYDIG_SIGNUP:-invite}"
+      # Behind a reverse proxy: hops to trust for the client IP that sign-in
+      # rate limits key on (1 for one proxy), or 'loopback' / its address.
+      TYDIG_TRUST_PROXY: "${TYDIG_TRUST_PROXY:-}"
+      TYDIG_MAX_BUILDS: "${TYDIG_MAX_BUILDS:-2}"
       # Same absolute path inside and outside the container (see above).
       TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
       # Where to find the host's podman, mounted below.

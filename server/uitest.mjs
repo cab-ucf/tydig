@@ -16,6 +16,7 @@ await page.setViewport({ width: 1400, height: 900 })
 const errors = []
 page.on('pageerror', e => errors.push('[pageerror] ' + e.message))
 page.on('error', e => errors.push('[CRASH] ' + e.message))
+page.on('console', m => { if (m.type() === 'error') errors.push('[console] ' + m.text()) })
 page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
 const external = []
 page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && new URL(r.url()).origin !== new URL(B).origin) external.push(r.url()) })
@@ -82,6 +83,12 @@ await page.keyboard.down('Alt'); await page.keyboard.press('h'); await page.keyb
 const hist = await side(); check('history pane opens', !hist.hidden && hist.title === 'history')
 const signed = await page.evaluate(() => [...document.querySelectorAll('.commit')].map(c => c.innerText.replace(/\s+/g, ' ')).slice(0, 3))
 check('checkpoint shows signed badge', signed.some(c => /first signed checkpoint.*signed/.test(c)))
+
+// 5. Share with an address that has no account yet: it is listed as invited
+await page.evaluate(() => document.querySelector('[data-act="share"]').click()); await sleep(1500)
+await page.type('#share-email', 'newcomer@example.com'); await page.click('#share-add button'); await sleep(1500)
+check('sharing with a new address lists it as invited', await page.evaluate(() =>
+  /newcomer@example\.com\s*invited/.test(document.getElementById('share-body').innerText)))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host (fonts are bundled)', external.length === 0)

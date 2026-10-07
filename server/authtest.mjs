@@ -47,7 +47,7 @@ check('Ann reads her project files', (await as(ann, `/p/${proj}/files`)).ok)
 const bobEmail = (await (await as(bob, '/me')).json()).email
 const post = (jar, p, body) => as(jar, p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 check('Bob cannot add himself', (await post(bob, `/p/${proj}/members`, { email: bobEmail })).status === 403)
-check('unknown email refused', (await post(ann, `/p/${proj}/members`, { email: 'nobody@t.co' })).status === 404)
+check('unknown email invited', (await (await post(ann, `/p/${proj}/members`, { email: 'nobody@t.co' })).json()).invited === true)
 check('Ann adds Bob', (await (await post(ann, `/p/${proj}/members`, { email: bobEmail })).json()).ok === true)
 check('Bob now sees and reads the project', (await (await as(bob, '/projects')).json()).some(p => p.name === proj) &&
   (await as(bob, `/p/${proj}/files`)).ok)

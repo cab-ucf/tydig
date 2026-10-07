@@ -4,6 +4,7 @@
 import { betterAuth } from 'better-auth'
 import { organization, genericOAuth } from 'better-auth/plugins'
 import { getMigrations } from 'better-auth/db/migration'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import Database from 'better-sqlite3'
 import { randomBytes } from 'node:crypto'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
@@ -55,6 +56,16 @@ const withLoopbackTwins = origins => [...new Set(origins.flatMap(o => [
   o.replace('//127.0.0.1', '//localhost'),
 ]))]
 
+// Sign-up: the first account is free (whoever installs the hub). After that,
+// an email sign-up needs a pending invitation, which sharing a project with
+// an address creates; the account joins those projects as it is created. SSO
+// sign-ins skip the check: the institution's IdP is the gate.
+// TYDIG_SIGNUP=open lets anyone who can reach the hub register.
+const OPEN = process.env.TYDIG_SIGNUP === 'open'
+const invitesFor = email => db.prepare(
+  "SELECT * FROM invitation WHERE lower(email) = lower(?) AND status = 'pending'")
+  .all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
+
 export const auth = betterAuth({
   database: db,
   secret: SECRET,
@@ -62,6 +73,21 @@ export const auth = betterAuth({
   trustedOrigins: withLoopbackTwins(configuredOrigins),
   emailAndPassword: { enabled: !(ssoInfo?.only), autoSignIn: true },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
+  // set by index.mjs from the socket (or a trusted proxy): never client-chosen
+  advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } },
+  hooks: {
+    before: createAuthMiddleware(async ctx => {
+      if (ctx.path === '/sign-up/email' && !OPEN && db.prepare('SELECT 1 FROM user').get() &&
+        !invitesFor(ctx.body?.email).length) throw new APIError('FORBIDDEN', {
+        message: 'This hub is invite-only: ask a project owner to share a project with this address.' })
+    }),
+  },
+  databaseHooks: { user: { create: { after: async u => {
+    for (const i of invitesFor(u.email)) {
+      await auth.api.addMember({ body: { userId: u.id, organizationId: i.organizationId, role: i.role || 'member' } })
+      db.prepare("UPDATE invitation SET status = 'accepted' WHERE id = ?").run(i.id)
+    }
+  } } } },
   plugins: [
     ...(ssoInfo ? [genericOAuth({
       config: [{

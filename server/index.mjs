@@ -37,14 +37,18 @@ const UNSAFE = process.env.TYDIG_UNSAFE_BUILDS === '1'
 const NET = process.env.TYDIG_BUILD_NET === '0' ? ['--network=none'] : []
 // just is never run on the host unless UNSAFE: even `just --summary`
 // evaluates backtick assignments in the justfile (code execution).
-const sandboxArgs = dir => ['run', '--rm', ...NET,
-  '--memory=2g', '--pids-limit=512', '--cpus=2',
+// keep-id: the hub's user is uid 1000 inside, so a build can write the
+// project that user owns (rootless podman otherwise maps 1000 to a subuid).
+// --timeout: conmon kills the container even if the podman client dies.
+const sandboxArgs = (dir, secs, ...extra) => ['run', '--rm', ...NET, `--timeout=${secs}`, ...extra,
+  '--userns=keep-id:uid=1000,gid=1000', '--memory=2g', '--pids-limit=512', '--cpus=2',
   '--cap-drop=ALL', '--security-opt', 'no-new-privileges',
   '--read-only', '--tmpfs', '/tmp:rw,size=512m',
   '-e', 'HOME=/tmp', '-e', 'MPLCONFIGDIR=/tmp/mpl', '-e', 'TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages',
   // .git read-only: hooks or config written by a build would run on the host at the next commit
   '-v', `${dir}:/work:rw,z`, '-v', `${dir}/.git:/work/.git:ro,z`, '-w', '/work', IMAGE]
 const building = new Set() // one build at a time per project
+const MAX_BUILDS = Number(process.env.TYDIG_MAX_BUILDS || 2)
 // Recipes run in the sandbox: `make <target>` when the project has a
 // Makefile, `just <recipe>` when it has a justfile. make is the default for
 // new projects because it rebuilds only what the change actually invalidated
@@ -55,7 +59,7 @@ const runner = (name, args, timeout = 180_000) => {
   const argv = tool === 'make' ? ['-C', '/work', ...args] : args
   return UNSAFE
     ? run(tool, args, { cwd: proj(name), timeout, maxBuffer: 8e6 })
-    : run('podman', [...sandboxArgs(proj(name)), tool, ...argv], { timeout, maxBuffer: 8e6 })
+    : run('podman', [...sandboxArgs(proj(name), timeout / 1000), tool, ...argv], { timeout: timeout + 10_000, maxBuffer: 8e6 })
 }
 const runnerTool = name => {
   for (const f of ['Makefile', 'makefile', 'GNUmakefile']) if (existsSync(inProj(name, f))) return 'make'
@@ -281,7 +285,32 @@ const TEMPLATE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'te
 // ---------- REST ----------
 import { toNodeHandler } from 'better-auth/node'
 import { fromNodeHeaders } from 'better-auth/node'
+import compression from 'compression'
+import { trustedOrigins } from './auth.mjs'
+const TRUSTED = trustedOrigins()
 const app = express()
+// Behind a reverse proxy, TYDIG_TRUST_PROXY (hop count, 'loopback', or IPs)
+// lets req.ip see the real client, which is what sign-in rate limits key on.
+const TP = process.env.TYDIG_TRUST_PROXY
+app.set('trust proxy', isNaN(TP) ? TP ?? false : +TP)
+app.disable('x-powered-by')
+app.use(compression())
+// The preview is compiler-made SVG inserted into the page; a link or image a
+// collaborator writes must never run script with another's session and keys.
+// No inline script, handlers or javascript: URLs. ('unsafe-eval' only because
+// the typst compiler's wasm calls new Function('return 0').)
+// Sync's websocket is named outright: Safari's 'self' does not cover ws(s).
+const HTTPS = /^https:/.test(process.env.TYDIG_URL || '')
+const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace(/^http/, 'ws')).join(' ')}; ` +
+  "script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+  "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+app.use((req, res, next) => (res.set({
+  'Content-Security-Policy': CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'same-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  ...HTTPS && { 'Strict-Transport-Security': 'max-age=31536000' },
+}), next()))
 
 // better-auth's own endpoints (sign-up/in/out, session, organizations,
 // invitations) — mounted before express.json so it can read raw bodies.
@@ -296,7 +325,7 @@ const originAllowed = origin => TRUSTED.some(p => p.includes('*') || p.includes(
   : p === origin)
 const originOk = o => !o || originAllowed(o)
 
-app.all('/api/auth/*', (req, res, next) => {
+app.all('/api/auth/*splat', (req, res, next) => {
   // Projects are organizations keyed by slug == directory. Only the server
   // may mint, rename or delete one: a slug chosen over HTTP could claim an
   // internal directory (gitsync/, federation/) or an orphaned project.
@@ -316,6 +345,7 @@ app.all('/api/auth/*', (req, res, next) => {
       origin, trusted: TRUSTED,
     })
   }
+  req.headers['x-tydig-ip'] = req.ip
   next()
 }, toNodeHandler(auth))
 
@@ -325,8 +355,7 @@ app.use('/api', (req, res, next) => req.method === 'GET' || originOk(req.headers
 app.use(express.json())
 
 // Public: tells the login screen whether an institutional SSO is configured.
-import { ssoInfo, db as authDb, trustedOrigins } from './auth.mjs'
-const TRUSTED = trustedOrigins()
+import { ssoInfo, db as authDb } from './auth.mjs'
 const STARTED_AT = new Date().toISOString()
 import { initKeyStore, verify as provVerify, keyIdOf, sha256hex, canon, ALG } from './prov.mjs'
 const keyStore = initKeyStore(authDb)
@@ -417,7 +446,7 @@ app.use('/api/p/:proj', async (req, res, next) => {
   next()
 }, p)
 const wild = req => {
-  const rel = req.params[0]
+  const rel = req.params.rel.join('/')
   if (!okPath(rel)) throw Object.assign(new Error('bad path'), { status: 400 })
   return rel
 }
@@ -434,38 +463,37 @@ p.get('/files', async (req, res) => {
 // Uploads are served as sandboxed documents: an .html or .svg a collaborator
 // uploads must not run script in everyone else's session. PDFs are exempt:
 // browsers refuse to show them sandboxed, and their viewers run no page script.
-p.get('/raw/*', async (req, res) => {
-  try {
-    const rel = wild(req)
-    if (!/\.pdf$/i.test(rel)) res.set('Content-Security-Policy', 'sandbox')
-    res.set('X-Content-Type-Options', 'nosniff').sendFile(await safe(req.params.proj, rel))
-  }
-  catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+p.get('/raw/*rel', async (req, res) => {
+  const rel = wild(req)
+  if (!/\.pdf$/i.test(rel)) res.set('Content-Security-Policy', 'sandbox')
+  res.sendFile(await safe(req.params.proj, rel))
 })
 
 // any body: browsers send no Content-Type for extensions they don't know (.dat, .npy, .h5)
-p.put('/raw/*', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
-  try {
-    const rel = wild(req)
-    await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
-    await writeFile(await safe(req.params.proj, rel), req.body, { flag: NOFOLLOW })
-    res.json({ ok: true })
-  } catch (e) { res.status(e.status || 500).json({ error: e.message }) }
+p.put('/raw/*rel', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+  const rel = wild(req)
+  await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
+  await writeFile(await safe(req.params.proj, rel), req.body ?? '', { flag: NOFOLLOW })
+  res.json({ ok: true })
 })
 
-p.delete('/raw/*', async (req, res) => {
-  try { await rm(await safe(req.params.proj, wild(req))); res.json({ ok: true }) }
-  catch (e) { res.status(e.status || 500).json({ error: e.message }) }
-})
-
-// Sharing: an owner or admin adds an existing account. Nothing here sends
-// mail, so email invitations could never be accepted.
+// Sharing: an owner or admin adds an account, or invites an address that has
+// none yet. Nothing sends mail: the invitation is what lets that address sign
+// up, and the project is waiting when it does.
 p.post('/members', async (req, res) => {
   if (!['owner', 'admin'].includes(req.org.role)) return res.status(403).json({ error: 'only the owner can share this project' })
-  const u = authDb.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(String(req.body?.email || ''))
-  if (!u) return res.status(404).json({ error: 'no account with that email yet: ask them to sign up, then share again' })
-  auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
-    .then(() => res.json({ ok: true }), e => res.status(400).json({ error: e.message }))
+  const email = String(req.body?.email || '').trim()
+  const u = authDb.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(email)
+  if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
+  else await auth.api.createInvitation({ headers: req.authHeaders, body: { email, role: 'member', organizationId: req.org.id } })
+  res.json({ ok: true, invited: !u })
+})
+// Removal through the hub, not better-auth directly, so it takes effect now:
+// every editor reconnects and re-authenticates, and the removed one cannot.
+p.delete('/members/:id', async (req, res) => {
+  await auth.api.removeMember({ headers: req.authHeaders, body: { memberIdOrEmail: req.params.id, organizationId: req.org.id } })
+  hocuspocus.closeConnections(req.params.proj)
+  res.json({ ok: true })
 })
 
 const sandboxHint = e => {
@@ -486,6 +514,7 @@ p.get('/recipes', async (req, res) => {
 p.post('/build/:recipe', async (req, res) => {
   if (!okRecipe(req.params.recipe)) return res.status(400).json({ error: 'bad recipe' })
   if (building.has(req.params.proj)) return res.status(409).json({ ok: false, output: 'a build is already running for this project' })
+  if (building.size >= MAX_BUILDS) return res.status(429).json({ ok: false, output: 'the hub is running other builds; try again shortly' })
   building.add(req.params.proj)
   try {
     const r = await runner(req.params.proj, [req.params.recipe])
@@ -594,7 +623,7 @@ p.post('/restore/:hash', async (req, res) => {
   res.json({ ok: true })
 })
 
-p.get('/info', (req, res) => res.json({ root: proj(req.params.proj), tool: runnerTool(req.params.proj) }))
+p.get('/info', (req, res) => res.json({ root: UNSAFE ? proj(req.params.proj) : '/work', tool: runnerTool(req.params.proj) }))
 
 // ---- federation: link this project to the same-named project on another hub ----
 p.get('/federation', async (req, res) => res.json(await federation.status(req.params.proj)))
@@ -628,6 +657,8 @@ p.post('/federation/rotate', async (req, res) => {
 const STATIC = process.env.TYDIG_STATIC ||
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'client', 'dist')
 if (existsSync(path.join(STATIC, 'index.html'))) {
+  // Vite names assets by content hash: cache them forever (the wasm is 20 MB).
+  app.use('/assets', express.static(path.join(STATIC, 'assets'), { immutable: true, maxAge: '1y' }))
   app.use(express.static(STATIC, { index: 'index.html' }))
   // SPA fallback: anything not /api and not a real asset gets index.html
   app.get(/^\/(?!api\/).*/, (req, res, next) =>
@@ -635,8 +666,17 @@ if (existsSync(path.join(STATIC, 'index.html'))) {
   console.log(`serving client from ${STATIC}`)
 }
 
+// Express 5 forwards rejected handlers here; say why, never hang the request.
+app.use((e, req, res, next) => {
+  if (res.headersSent) return next(e)
+  const code = [e.statusCode, e.status].find(Number.isInteger) ?? 500
+  if (code >= 500) console.error(e)
+  res.status(code).json({ error: code < 500 ? e.message : 'internal error' })
+})
+
 const PORT = Number(process.env.PORT || 3000)
-const httpServer = app.listen(PORT, () => {
+const httpServer = app.listen(PORT, e => {
+  if (e) throw e
   console.log(`http+sync+lsp on :${PORT} (ws /sync, /lsp)${SYNC_PORT ? `, legacy sync ws :${SYNC_PORT}` : ''}`)
   // Print this every boot: sign-in fails with "Invalid origin" if the address
   // in the browser is not one of these, and that is the commonest setup snag.
@@ -647,7 +687,7 @@ const httpServer = app.listen(PORT, () => {
 // Saving on the way out is what makes a hub disposable: the git remote holds
 // the project, so this machine can disappear.
 let leaving = false
-// Express 4 does not catch async handler errors; one failed git call must not take the hub down.
+// A failed background git call or peer sync must not take the hub down.
 process.on('unhandledRejection', e => console.error('unhandled:', e))
 for (const sig of ['SIGINT', 'SIGTERM'])
   process.on(sig, async () => {
@@ -664,6 +704,8 @@ for (const sig of ['SIGINT', 'SIGTERM'])
 import { WebSocketServer } from 'ws'
 import { spawn } from 'node:child_process'
 const lspWss = new WebSocketServer({ noServer: true })
+const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8)
+let lsps = 0
 const syncWss = new WebSocketServer({ noServer: true })
 httpServer.on('upgrade', async (req, sock, head) => {
   const u = new URL(req.url, 'http://x')
@@ -678,10 +720,15 @@ httpServer.on('upgrade', async (req, sock, head) => {
   if (req.headers.cookie) headers.set('cookie', req.headers.cookie)
   else if (u.searchParams.get('t')) headers.set('cookie', `better-auth.session_token=${u.searchParams.get('t')}`)
   const sess = await sessionFrom(headers)
-  if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name)) return sock.destroy()
+  if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name) || lsps >= MAX_LSP) return sock.destroy()
   lspWss.handleUpgrade(req, sock, head, ws => {
-    const lsp = spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })
-    lsp.on('error', () => ws.close(1011, 'tinymist not installed on server'))
+    // tinymist runs in the build sandbox, like any other project code: its
+    // commands write files, so on the host it would be a way out of the project.
+    const lsp = UNSAFE ? spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })
+      : spawn('podman', [...sandboxArgs(proj(name), 86400, '-i'), 'tinymist', 'lsp'], { stdio: ['pipe', 'pipe', 'ignore'] })
+    lsps++
+    lsp.on('close', () => lsps--)
+    lsp.on('error', () => ws.close(1011, 'tinymist unavailable'))
     ws.on('message', m => {
       const body = Buffer.from(m)
       lsp.stdin.write(`Content-Length: ${body.length}\r\n\r\n`)

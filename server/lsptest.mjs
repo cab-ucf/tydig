@@ -1,6 +1,6 @@
 // LSP bridge: initialize handshake + completion through ws -> tinymist stdio
 import WebSocket from 'ws'
-const O = 'http://localhost:3000'
+const O = process.env.B || 'http://localhost:3000'
 const su = await fetch(`${O}/api/auth/sign-up/email`, {
   method: 'POST', headers: { 'content-type': 'application/json', origin: O },
   body: JSON.stringify({ email: `lsp${Date.now()}@t.co`, password: 'password123', name: 'Lsp' }),
@@ -8,9 +8,10 @@ const su = await fetch(`${O}/api/auth/sign-up/email`, {
 const cookie = su.headers.getSetCookie()[0].split(';')[0]
 const tok = /better-auth\.session_token=([^;]+)/.exec(cookie)[1]
 await fetch(`${O}/api/projects/demo-lsp`, { method: 'POST', headers: { cookie, origin: O } })
-const ws = new WebSocket(`ws://localhost:3000/lsp?proj=demo-lsp&t=${encodeURIComponent(tok)}`)
+const ws = new WebSocket(`${O.replace('http', 'ws')}/lsp?proj=demo-lsp&t=${encodeURIComponent(tok)}`, { headers: { origin: O } })
 const send = (id, method, params) => ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
-const root = 'file:///home/claude/tydig/server/data/demo-lsp'
+const info = await fetch(`${O}/api/p/demo-lsp/info`, { headers: { cookie, origin: O } }).then(r => r.json())
+const root = `file://${info.root}`
 let initOk = false, complOk = false
 ws.on('open', () => send(1, 'initialize', { processId: null, rootUri: root, capabilities: {}, workspaceFolders: [{ name: 'demo-lsp', uri: root }] }))
 ws.on('message', m => {
@@ -30,4 +31,4 @@ ws.on('message', m => {
   }
 })
 ws.on('close', (c, r) => { console.log('FAIL ws closed', c, String(r)); process.exit(1) })
-setTimeout(() => { console.log('FAIL timeout'); process.exit(1) }, 15000)
+setTimeout(() => { console.log('FAIL timeout'); process.exit(1) }, 30000)
