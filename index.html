@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>tydig</title>
+<style>
+:root{--bg:#fff;--fg:#1d2329;--dim:#5b6570;--acc:#1f8a99;--code:#f2f4f6}
+@media (prefers-color-scheme:dark){:root{--bg:#14181c;--fg:#e6eaee;--dim:#98a2ad;--acc:#5ec5d4;--code:#1f252b}}
+body{font:17px/1.55 system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:42rem;margin:auto;padding:2.5rem 1rem}
+h1{margin:0;font-size:2.2rem}a{color:var(--acc)}p.dim{color:var(--dim);margin-top:.2rem}
+pre,code{background:var(--code);border-radius:6px;font-size:.9em}pre{padding:.8rem 1rem;overflow-x:auto}code{padding:.1em .3em}pre code{padding:0}
+</style>
+<h1>tydig</h1>
+<p class="dim"><b>Ty</b>pst, <b>d</b>ecentralized collaboration with <b>i</b>roh, saved in <b>g</b>it.</p>
+<p>A self-hosted collaborative Typst editor for papers written as
+<b>pre-registered reports</b>: the prose is fixed before the results exist, and every
+number and conclusion is computed by the project's own analysis.</p>
+<pre><code>#let R = json("build/results.json")
+The water was found to be
+#if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre>
+<p>Live preview and multi-cursor editing in the browser, comments pinned to the preview,
+sandboxed reproducible builds, post-quantum signed checkpoints, institutional sign-in,
+and every project kept as a plain git repository.</p>
+<h2>Run a hub</h2>
+<p>Needs only <a href="https://podman.io">podman</a> and <a href="https://just.systems">just</a>:</p>
+<pre><code>git clone https://github.com/cab-ucf/tydig && cd tydig
+just</code></pre>
+<p>Open the printed address, create the first account, and share projects by email.
+To serve beyond your machine, see <a href="https://github.com/cab-ucf/tydig#production">Production</a>.</p>
+<p><a href="https://github.com/cab-ucf/tydig">Source</a> ·
+<a href="https://github.com/cab-ucf/tydig/blob/main/DESIGN.md">Design notes</a></p>
