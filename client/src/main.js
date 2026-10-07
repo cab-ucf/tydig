@@ -1,3 +1,4 @@
+import { link } from './link.js' // first: patches fetch and WebSocket in link mode
 import { basicSetup } from 'codemirror'
 import { EditorView, keymap, Decoration, ViewPlugin } from '@codemirror/view'
 import { EditorState, Annotation, Compartment, Prec } from '@codemirror/state'
@@ -42,7 +43,7 @@ async function openPicker() {
   const list = await api('/projects')
   $('proj-list').replaceChildren(...list.map(({ name: n, role }) => {
     const a = document.createElement('a')
-    a.href = `?proj=${n}`; a.textContent = role === 'owner' ? `${n} (owner)` : n
+    a.href = `?proj=${n}${location.hash}`; a.textContent = role === 'owner' ? `${n} (owner)` : n
     if (n === projName) a.className = 'current'
     return a
   }))
@@ -76,6 +77,10 @@ if (!projName) { openPicker(); throw new Error('awaiting project choice') }
 $('projname').textContent = projName
 const P = p => `/p/${projName}${p}`
 const rawUrl = rel => `/api${P('/raw/' + rel)}`
+// A link visitor's tab cannot load the hub's URLs itself: fetch, then show.
+const openRaw = async p => link
+  ? window.open(URL.createObjectURL(await (await fetch(rawUrl(p))).blob()), '_blank')
+  : window.open(rawUrl(p), '_blank')
 
 // ---------- identity (from account; color stays a local preference) ----------
 const userName = me.name || me.email
@@ -90,7 +95,7 @@ const ymeta = ydoc.getMap('meta')
 
 // IndexedDB keeps the whole doc locally: edits made offline survive reloads
 // and replay (conflict-free, it is a CRDT) when the socket reconnects.
-const persistence = new IndexeddbPersistence(`tydig:${projName}`, ydoc)
+const persistence = new IndexeddbPersistence(`tydig:${link ? link.id + ':' : ''}${projName}`, ydoc)
 let offlineReady = false
 persistence.whenSynced.then(() => { offlineReady = true })
 
@@ -123,7 +128,7 @@ const provider = new HocuspocusProvider({
       setTimeout(() => maybeReview(before), 1200) // let remote updates settle
     }
   },
-  onAuthenticationFailed: () => { alert('Lost access to this project.'); location.href = '/' },
+  onAuthenticationFailed: () => { alert('Lost access to this project.'); location.search = '' },
 })
 provider.setAwarenessField('user', { name: userName, color: userColor, colorLight: userColor })
 provider.awareness.on('change', () => {
@@ -366,7 +371,7 @@ function renderTree() {
       const d = document.createElement('i'); d.className = 'dot'; d.style.background = u.color; d.title = u.name; return d
     }))
     el.querySelector('.fname').onclick = () =>
-      yPaths.has(p) ? openFile(p) : window.open(rawUrl(p), '_blank')
+      yPaths.has(p) ? openFile(p) : openRaw(p)
     el.querySelector('.rn').onclick = () => renameFile(p)
     el.querySelector('.del').onclick = async () => {
       if (!confirm(`Delete ${p}?`)) return
@@ -815,7 +820,7 @@ async function renderProjects() {
   const list = await api('/projects')
   $('projects-list').replaceChildren(...list.map(({ name: n }) => {
     const a = document.createElement('a')
-    a.href = `?proj=${n}`
+    a.href = `?proj=${n}${location.hash}`
     a.className = 'pnode' + (n === projName ? ' active' : '')
     a.textContent = n
     return a
@@ -941,7 +946,7 @@ async function showFederation() {
 
 async function showShare() {
   const dlg = $('share')
-  const body = $('share-body')
+  const body = $('share-body'), share = await api('/link')
   body.innerHTML = '<p class="empty">loading...</p>'
   dlg.showModal()
   const orgs = await api('/projects')
@@ -957,7 +962,8 @@ async function showShare() {
     </div>
     ${isOwner ? `<form id="share-add"><input type="email" id="share-email" placeholder="collaborator@email" required /><button>add</button></form>
       <p class="hint">An address with no account here is invited: it can then sign up, and the project is waiting.</p>`
-      : '<p class="hint">Only the owner can add collaborators.</p>'}`
+      : '<p class="hint">Only the owner can add collaborators.</p>'}
+    ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p><input readonly value="${esc(share.link)}">` : ''}`
   body.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
     if (!confirm('Remove this collaborator? They lose access at once.')) return
     const r = await api(P('/members/' + b.dataset.remove), { method: 'DELETE' })
@@ -1009,7 +1015,7 @@ const actions = {
   share: showShare,
   federation: showFederation,
   gitremote: showGitRemote,
-  signout: async () => { await authClient.signOut(); location.href = '/' },
+  signout: async () => { await authClient.signOut(); location.search = '' },
   password: async () => {
     const currentPassword = prompt('Current password:'), newPassword = currentPassword && prompt('New password (8+ characters):')
     if (!newPassword) return
@@ -1085,7 +1091,7 @@ function quickOpen() {
       const d = document.createElement('div')
       d.textContent = p
       d.className = i === sel ? 'sel' : ''
-      d.onclick = () => { dlg.close(); filesMap.has(p) ? openFile(p) : window.open(rawUrl(p), '_blank') }
+      d.onclick = () => { dlg.close(); filesMap.has(p) ? openFile(p) : openRaw(p) }
       return d
     }))
   }

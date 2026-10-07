@@ -26,6 +26,8 @@ serve: preflight sandbox image up
         if curl -sf "{{TYDIG_URL}}/api/auth-config" >/dev/null 2>&1; then
             echo
             echo "  tydig is up:  {{TYDIG_URL}}"
+            echo "  collaborators, from any browser, nothing to install:"
+            echo "                $(cat "{{TYDIG_DATA}}/link" 2>/dev/null || echo '(link off)')"
             echo
             echo "  Create an account, then create a project. It scaffolds a"
             echo "  pre-registered report: every number and conclusion is computed"
@@ -103,6 +105,7 @@ help:
     @echo "  just shell          shell inside the running server"
     @echo "  just doctor         diagnose sign-in / origin / socket problems"
     @echo "  just passwd EMAIL   give an account a fresh password (printed)"
+    @echo "  just link           the link collaborators open in a browser"
     @echo
     @echo "Pieces, one at a time:"
     @echo "  just sandbox        build the recipe sandbox image (typst/just/make/python)"
@@ -118,6 +121,7 @@ help:
     @echo "  just dev            vite :5173 + server :3000, hot reload"
     @echo "  just test           all API suites, two-hub federation, git remotes"
     @echo "  just test-ui        drive the real UI in headless Chrome"
+    @echo "  just test-link      open a hub by its link, via a local iroh-relay"
     @echo
     @echo "data dir : {{TYDIG_DATA}}"
     @echo "url      : {{TYDIG_URL}}"
@@ -146,6 +150,10 @@ restart: down up
 
 logs:
     podman compose logs -f app
+
+# The link collaborators open in any browser (also in Settings > Share).
+link:
+    @cat "{{TYDIG_DATA}}/link"
 
 # Give an account a fresh password and print it (no mail to reset by).
 passwd email:
@@ -260,6 +268,25 @@ test-ui:
     sleep 6
     node server/uitest.mjs || { echo "FAILED: uitest (log: /tmp/tc-ui.log)"; kill $srv; exit 1; }
     kill $srv 2>/dev/null || true
+
+# The link path in headless Chrome: a static server on another origin, a hub,
+# and a local relay between them (`iroh-relay` on PATH, from n0-computer/iroh
+# releases). The page reaches the hub only over iroh.
+test-link:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    npm run build >/dev/null
+    d=$(mktemp -d); mkdir -p $d/site; ln -s "$PWD/client/dist" $d/site/app
+    printf 'enable_metrics = false\nhttp_bind_addr = "127.0.0.1:3340"\n' > $d/relay.toml
+    iroh-relay --dev --config-path $d/relay.toml >$d/relay.log 2>&1 & r=$!
+    python3 -m http.server 8099 --directory $d/site >/dev/null 2>&1 & w=$!
+    env -u TYDIG_DATA TYDIG_DATA=$d/data TYDIG_URL=http://localhost:3000 TYDIG_ORIGINS=http://localhost:3000 \
+        TYDIG_UNSAFE_BUILDS=1 TYDIG_IROH=0 TYDIG_PAGE=http://localhost:8099/app/ \
+        TYDIG_LINK_RELAY=http://localhost:3340 node server/index.mjs >/tmp/tc-link.log 2>&1 & h=$!
+    sleep 6
+    LINKFILE=$d/data/link DATA=$d/data node server/linktest.mjs; rc=$?
+    kill $r $w $h 2>/dev/null
+    exit $rc
 
 # Run a project's build graph in the sandbox, without the app.
 #   just paper my-project all

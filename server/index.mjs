@@ -294,6 +294,9 @@ const app = express()
 const TP = process.env.TYDIG_TRUST_PROXY
 app.set('trust proxy', isNaN(TP) ? TP ?? false : +TP)
 app.disable('x-powered-by')
+// Link connections (link.mjs) reach the hub only from our own page over iroh:
+// no other site can send on them, so they count as the hub's own origin.
+app.use((req, res, next) => { if (req.socket.link) req.headers.origin = TRUSTED[0]; next() })
 app.use(compression())
 // The preview is compiler-made SVG inserted into the page; a link or image a
 // collaborator writes must never run script with another's session and keys.
@@ -381,6 +384,30 @@ app.use('/api', async (req, res, next) => {
 })
 
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
+app.get('/api/link', (req, res) => res.json({ link: LINK }))
+
+// Websockets for link visitors, whose page reaches the hub only by request and
+// response (link.mjs): a GET opens the socket here and streams its messages down
+// as [type u8][length u32][bytes] frames; each POST carries one message up.
+const bridges = new Map()
+app.get('/api/bridge', (req, res) => {
+  const { path: to = '', id = '' } = req.query
+  if (!/^\/(sync|lsp)\b/.test(to) || !/^\w{16,64}$/.test(id) || bridges.has(id)) return res.sendStatus(400)
+  const ws = new WebSocket(`ws://127.0.0.1:${PORT}${to}`, { headers: { cookie: req.headers.cookie || '', origin: TRUSTED[0] } })
+  bridges.set(id, { ws, user: req.user.id })
+  const frame = (type, d) => { const h = Buffer.alloc(5); h[0] = type; h.writeUInt32BE(d.length, 1); res.write(Buffer.concat([h, d])) }
+  ws.on('open', () => res.writeHead(200, { 'content-type': 'application/octet-stream' }).flushHeaders())
+  ws.on('message', (d, binary) => frame(binary ? 2 : 1, Buffer.from(d)))
+  ws.on('error', () => res.headersSent || res.sendStatus(502))
+  ws.on('close', () => res.end())
+  res.on('close', () => { ws.terminate(); bridges.delete(id) })
+})
+app.post('/api/bridge/:id', express.raw({ type: () => true, limit: '64mb' }), (req, res) => {
+  const b = bridges.get(req.params.id)
+  if (b?.user !== req.user.id) return res.sendStatus(404)
+  b.ws.send(req.body ?? Buffer.alloc(0), { binary: req.get('x-binary') === '1' })
+  res.sendStatus(204)
+})
 
 // ---- device signing keys (post-quantum checkpoint provenance) ----
 // A browser registers its locally generated ML-DSA-65 public key once; the
@@ -675,12 +702,26 @@ app.use((e, req, res, next) => {
 })
 
 const PORT = Number(process.env.PORT || 3000)
+// The hub's link: tydig's static page plus a seed only this hub holds (link.mjs).
+// Pages redirects the github.io address to the custom domain, fragment intact.
+import { startLink, newSeed } from './link.mjs'
+const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cab-ucf.github.io/tydig/app/'
+const seedFile = path.join(DATA, 'link-seed')
+if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
+const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
+const LINK = PAGE && `${PAGE}#${LINK_SEED}${process.env.TYDIG_LINK_RELAY ? `;r=${process.env.TYDIG_LINK_RELAY}` : ''}`
+if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n')
 const httpServer = app.listen(PORT, e => {
   if (e) throw e
   console.log(`http+sync+lsp on :${PORT} (ws /sync, /lsp)${SYNC_PORT ? `, legacy sync ws :${SYNC_PORT}` : ''}`)
   // Print this every boot: sign-in fails with "Invalid origin" if the address
   // in the browser is not one of these, and that is the commonest setup snag.
   console.log(`open the app at: ${TRUSTED.join('  or  ')}`)
+  if (LINK) {
+    console.log(`collaborators, from any browser: ${LINK}`)
+    startLink({ server: httpServer, seed: LINK_SEED, relay: process.env.TYDIG_LINK_RELAY })
+      .catch(e => console.warn('link: failed to start:', e.message))
+  }
   federation.start().catch(e => console.warn('federation: failed to start:', e.message))
   gitsync.start()
 })
@@ -701,7 +742,7 @@ for (const sig of ['SIGINT', 'SIGTERM'])
   })
 
 // ---------- LSP bridge: ws (JSON messages) <-> tinymist stdio (Content-Length framed) ----------
-import { WebSocketServer } from 'ws'
+import { WebSocketServer, WebSocket } from 'ws'
 import { spawn } from 'node:child_process'
 const lspWss = new WebSocketServer({ noServer: true })
 const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8)

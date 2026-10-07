@@ -29,6 +29,11 @@ services:
       # rate limits key on (1 for one proxy), or 'loopback' / its address.
       TYDIG_TRUST_PROXY: "${TYDIG_TRUST_PROXY:-}"
       TYDIG_MAX_BUILDS: "${TYDIG_MAX_BUILDS:-2}"
+      # The link collaborators open (`just link`): tydig's static site plus a
+      # seed this hub keeps in data/. Reached over iroh, so no domain or open
+      # port is needed. TYDIG_LINK=0 turns it off.
+      TYDIG_PAGE: "${TYDIG_PAGE:-https://cab-ucf.github.io/tydig/app/}"
+      TYDIG_LINK: "${TYDIG_LINK:-1}"
       # Same absolute path inside and outside the container (see above).
       TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
       # Where to find the host's podman, mounted below.

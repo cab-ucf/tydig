@@ -13,5 +13,6 @@ export default defineConfig({
       '/sync': { target: 'ws://localhost:1234', ws: true, rewrite: p => p.replace(/^\/sync/, '') },
     },
   },
+  base: './', // the same build is served by a hub and from the static site's app/
   build: { target: 'esnext' },
 })
