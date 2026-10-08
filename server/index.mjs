@@ -93,7 +93,11 @@ async function listRecipes(name) {
   const outp = await runner(name, ['--summary'], 30_000)
   return outp.stdout.trim().split(/\s+/).filter(Boolean)
 }
-const TEXT = /\.(typ|bib|csv|tsv|py|jl|r|toml|yaml|yml|json|md|txt|tex|just|mk)$|(^|\/)(justfile|Makefile|makefile|GNUmakefile|\.gitignore)$/i
+// Any file that is text is edited in the CRDT, whatever its name (a
+// Containerfile, an .svg, a script): UTF-8, no NUL byte, under 1 MB.
+// Anything else -- images, PDFs, big data -- is a disk file.
+const utf8 = new TextDecoder('utf-8', { fatal: true })
+const textOf = b => { if (b.length >= 1e6 || b.includes(0)) return null; try { return utf8.decode(b) } catch { return null } }
 // Generated directories are disk-only, owned by builds: they never enter the
 // CRDT (so a rebuilt build/results.json is not clobbered by a stale editor
 // copy) and reach previews via the raw-file shadow map instead.
@@ -221,14 +225,15 @@ const hocuspocus = Server.configure({
       try { Y.applyUpdate(document, new Uint8Array(await readFile(f)), 'crdt-load') }
       catch (e) { console.warn(`crdt state ${f} unreadable: ${e.message}`) }
     // Text the CRDT lacks, or that was edited outside the app since the last
-    // save (a shell, a plain git checkout), is taken from disk. New text over
-    // 1 MB -- data, mostly -- stays a disk file, as uploads do.
+    // save (a shell, a plain git checkout), is taken from disk.
     const saved = existsSync(crdtFile(name)) ? (await stat(crdtFile(name))).mtimeMs : Infinity
     const texts = []
     for await (const rel of walk(proj(name))) {
-      if (!TEXT.test(rel) || !okPath(rel) || GENERATED.test(rel)) continue
+      if (!okPath(rel) || GENERATED.test(rel)) continue
       const f = inProj(name, rel), s = await stat(f)
-      if (files.has(rel) ? s.mtimeMs > saved : s.size < 1e6) texts.push([rel, await readFile(f, 'utf8')])
+      if (s.size >= 1e6 || (files.has(rel) && s.mtimeMs <= saved)) continue
+      const t = textOf(await readFile(f))
+      if (t != null) texts.push([rel, t])
     }
     document.transact(() => { for (const [rel, c] of texts) files.has(rel) ? setText(files.get(rel), c) : files.set(rel, new Y.Text(c)) })
     written.set(name, new Set(files.keys()))
@@ -574,9 +579,10 @@ async function filesDigest(name) {
     for (const [rel, t] of doc.getMap('files'))
       if (okPath(rel) && !GENERATED.test(rel)) out[rel] = sha256hex(t.toString())
   } else {
-    for await (const rel of walk(proj(name)))
-      if (TEXT.test(rel) && okPath(rel) && !GENERATED.test(rel))
-        out[rel] = sha256hex(await readFile(inProj(name, rel), 'utf8'))
+    for await (const rel of walk(proj(name))) {
+      const t = okPath(rel) && !GENERATED.test(rel) ? textOf(await readFile(inProj(name, rel))) : null
+      if (t != null) out[rel] = sha256hex(t)
+    }
   }
   return out
 }
@@ -645,12 +651,13 @@ p.post('/restore/:hash', async (req, res) => {
   if (!okHash(hash)) return res.status(400).json({ error: 'bad hash' })
   const doc = hocuspocus.documents.get(name)
   if (!doc) return res.status(409).json({ error: 'project not open in any editor' })
+  // git knows which files are text: a binary one shows "-" in numstat
   let listing
-  try { listing = (await git(name, 'ls-tree', '-r', '--name-only', hash)).split('\n').filter(Boolean) }
+  try { listing = (await git(name, 'diff', '--numstat', '--no-renames', '4b825dc642cb6eb9a060e54bf8d69288fbee4904', hash)).split('\n').filter(Boolean) }
   catch { return res.status(404).json({ error: 'no such commit' }) }
   const texts = []
-  for (const rel of listing)
-    if (TEXT.test(rel) && okPath(rel) && !GENERATED.test(rel))
+  for (const [added, , rel] of listing.map(l => l.split('\t')))
+    if (added !== '-' && okPath(rel) && !GENERATED.test(rel))
       texts.push([rel, await git(name, 'show', `${hash}:${rel}`)])
   doc.transact(() => {
     const files = doc.getMap('files')

@@ -2,7 +2,8 @@ import { link } from './link.js' // first: patches fetch and WebSocket in link m
 import { basicSetup } from 'codemirror'
 import { EditorView, keymap, Decoration, ViewPlugin } from '@codemirror/view'
 import { EditorState, Annotation, Compartment, Prec } from '@codemirror/state'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, syntaxHighlighting, LanguageDescription } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import { indentWithTab } from '@codemirror/commands'
 import { tags as t } from '@lezer/highlight'
 import * as Y from 'yjs'
@@ -80,13 +81,20 @@ const rawUrl = rel => `/api${P('/raw/' + rel)}`
 // A link visitor's tab cannot load the hub's URLs itself: fetch, then show.
 // Anything but a PDF is downloaded: opened from a blob: URL it would run in
 // this page's origin, outside the sandbox the hub serves raw files under.
-const openRaw = async p => {
-  if (!link) return window.open(rawUrl(p), '_blank')
-  const pdf = /\.pdf$/i.test(p), a = document.createElement('a')
-  a.href = URL.createObjectURL(new Blob([await (await fetch(rawUrl(p))).arrayBuffer()], { type: pdf ? 'application/pdf' : 'application/octet-stream' }))
+const saveAs = (blob, p, type) => {
+  const a = document.createElement('a'), pdf = type === 'application/pdf'
+  a.href = URL.createObjectURL(new Blob([blob], { type }))
   pdf ? a.target = '_blank' : a.download = p.split('/').pop()
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
 }
+// Text is UTF-8 with no NUL byte, under 1 MB, whatever the file is called.
+const asText = async blob => {
+  const b = blob.size < 1e6 && new Uint8Array(await blob.arrayBuffer())
+  try { return b && !b.includes(0) ? new TextDecoder('utf-8', { fatal: true }).decode(b) : null } catch { return null }
+}
+// Syntax for any file the editor shows, by name (loaded on demand).
+const langFor = async p => p.endsWith('.typ') ? typst()
+  : await LanguageDescription.matchFilename(languages, p.replace(/Containerfile$/, 'Dockerfile'))?.load() ?? []
 
 // ---------- identity (from account; color stays a local preference) ----------
 const userName = me.name || me.email
@@ -239,8 +247,9 @@ async function openFile(p) {
   if (my !== opening) return // another file was opened meanwhile
   currentPath = p
   if (!undoManagers.has(p)) undoManagers.set(p, new Y.UndoManager(yt))
-  const isTyp = p.endsWith('.typ')
-  view?.destroy()
+  const lang = await langFor(p)
+  if (my !== opening) return
+  view?.destroy(); $('editor').replaceChildren()
   view = new EditorView({
     state: EditorState.create({
       doc: yt.toString(),
@@ -249,7 +258,7 @@ async function openFile(p) {
         basicSetup,
         darkHighlight, darkChrome,
         keymap.of([indentWithTab]),
-        langComp.of(isTyp ? typst() : []),
+        langComp.of(lang),
         lspComp.of(lsp),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
@@ -271,10 +280,35 @@ function updateWordCount() {
   $('wordcount').textContent = src ? `${(src.match(/[\p{L}\p{N}']+/gu) || []).length} words` : ''
 }
 
+// Files outside the CRDT open here too: build output as read-only text, an
+// image as itself, a PDF beside; only what has no view is downloaded.
+// (Never a blob: page: an uploaded .svg or .html would run in this origin.)
+async function openDisk(p) {
+  const my = ++opening, r = await fetch(rawUrl(p))
+  if (!r.ok) return alert(`${p}: ${r.status}`)
+  const blob = await r.blob(), text = isImg(p) ? null : await asText(blob)
+  if (my !== opening) return
+  if (/\.pdf$/i.test(p) || (!isImg(p) && text == null)) return saveAs(blob, p, /\.pdf$/i.test(p) ? 'application/pdf' : 'application/octet-stream')
+  const lang = text != null && await langFor(p)
+  if (my !== opening) return
+  view?.destroy(); view = null; currentPath = p
+  if (text == null) {
+    const img = Object.assign(new Image(), { className: 'disk-img', alt: p,
+      src: URL.createObjectURL(new Blob([blob], { type: /\.svg$/i.test(p) ? 'image/svg+xml' : blob.type })) })
+    img.onload = () => URL.revokeObjectURL(img.src)
+    $('editor').replaceChildren(img)
+  } else {
+    $('editor').replaceChildren()
+    view = new EditorView({ parent: $('editor'), state: EditorState.create({ doc: text, extensions: [
+      basicSetup, darkHighlight, darkChrome, lang, EditorView.lineWrapping, EditorState.readOnly.of(true)] }) })
+  }
+  updateWordCount(); renderTree()
+}
+
 function addComment(ctx = previewContext()) {
   const sel = view?.state.selection.main, at = ctx ? locate(...ctx) : sel && { file: currentPath, from: sel.from, to: sel.to }
   if (ctx && !at) return alert('Could not find that text in the source. Select it in the editor instead.')
-  if (!at || at.from === at.to) return alert('Select text to comment on, in the editor or the preview.')
+  if (!at || at.from === at.to || !filesMap.has(at.file)) return alert('Select text to comment on, in the editor or the preview.')
   const text = prompt('Comment:')
   if (!text) return
   const yt = filesMap.get(at.file)
@@ -344,7 +378,6 @@ ycomments.observe(() => {
 let diskFiles = []
 const isImg = p => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(p)
 const GEN = /^(out|build|figures)\//
-const TEXT = /\.(typ|bib|csv|tsv|py|jl|r|toml|yaml|yml|json|md|txt|tex|just|mk)$|(^|\/)(justfile|Makefile|makefile|GNUmakefile|\.gitignore)$/i
 const okPath = p => /^[\w./@ -]+$/.test(p) && p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
 // Text outside generated dirs lives in the CRDT; anything else is a disk file.
 const badNew = p => !okPath(p) ? 'Bad path.' : GEN.test(p) ? `${p.split('/')[0]}/ is build output: text there is never saved.` : filesMap.has(p) ? 'Target exists.' : null
@@ -386,7 +419,7 @@ function renderTree() {
       const d = document.createElement('i'); d.className = 'dot'; d.style.background = u.color; d.title = u.name; return d
     }))
     el.querySelector('.fname').onclick = () =>
-      yPaths.has(p) ? openFile(p) : openRaw(p)
+      yPaths.has(p) ? openFile(p) : openDisk(p)
     el.querySelector('.rn').onclick = () => renameFile(p)
     el.querySelector('.del').onclick = async () => {
       if (!confirm(`Delete ${p}?`)) return
@@ -427,14 +460,14 @@ function renderTree() {
 $('tree').ondragover = e => e.preventDefault()
 $('tree').ondrop = e => { e.preventDefault(); dropUpload(e.dataTransfer.files, '') }
 
-// Text under 1 MB outside build dirs goes into the CRDT (editable, synced);
-// anything else, data included, is a disk file.
+// Text outside build dirs goes into the CRDT (editable, synced); anything
+// else -- images, PDFs, big data -- is a disk file.
 async function dropUpload(files, dir) {
   const failed = []
   for (const f of files) {
     const p = (dir ? dir + '/' : '') + f.name.replace(/[^\w.@ -]/g, '_'), t = filesMap.get(p)
-    if (t || (TEXT.test(p) && okPath(p) && !GEN.test(p) && f.size < 1e6)) {
-      const s = await f.text()
+    const s = okPath(p) && !GEN.test(p) ? await asText(f) : null
+    if (s != null) {
       t ? ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) }) : filesMap.set(p, new Y.Text(s))
     } else {
       const r = await fetch(rawUrl(p), { method: 'PUT', body: f })
@@ -1129,7 +1162,7 @@ function quickOpen() {
       const d = document.createElement('div')
       d.textContent = p
       d.className = i === sel ? 'sel' : ''
-      d.onclick = () => { dlg.close(); filesMap.has(p) ? openFile(p) : openRaw(p) }
+      d.onclick = () => { dlg.close(); filesMap.has(p) ? openFile(p) : openDisk(p) }
       return d
     }))
   }
