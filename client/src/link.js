@@ -3,8 +3,9 @@
 // /lsp, go to the hub over iroh instead, through irp's wasm client
 // (public/irweb, from github.com/cab-ucf/irp); server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
+import { relayFor } from '../../server/relay.mjs'
 const m = /^#([a-z2-7]{26})(?:;r=(\S+))?$/.exec(location.hash)
-export const link = m && { seed: m[1], relay: m[2] && decodeURIComponent(m[2]), id: m[1].slice(0, 8) }
+export const link = m && { seed: m[1], relay: m[2] ? decodeURIComponent(m[2]) : relayFor(m[1]), id: m[1].slice(0, 8) }
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {
@@ -12,6 +13,10 @@ const say = (html, fail) => {
   el.className = fail ? 'fail' : ''; el.innerHTML = html
   el.querySelector('button')?.addEventListener('click', () => location.reload())
 }
+// n0's relays refuse Firefox's WebSocket when its TLS hello carries ECH GREASE
+const FIREFOX = /Firefox\//.test(navigator.userAgent) ? `<br><b>In Firefox</b>, n0's relays
+  refuse the connection: open this link in Chrome, Edge or Safari, or in
+  <code>about:config</code> set <code>security.tls.ech.grease_probability</code> to 0.` : ''
 let client
 const connect = () => client ??= new Promise((ok, no) => {
   say('Connecting to the hub&hellip;')
@@ -25,7 +30,7 @@ const connect = () => client ??= new Promise((ok, no) => {
   client = null
   say(`<b>Could not reach the hub</b> (${String(e?.message || e).replace(/[<&]/g, '')}).<br>
     The hub must be running and online, and this link must be its current one
-    (<code>just link</code> prints it). <button>try again</button>`, true)
+    (<code>just link</code> prints it).${FIREFOX} <button>try again</button>`, true)
   throw e
 })
 

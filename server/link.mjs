@@ -4,28 +4,11 @@
 // exchange per stream. Each stream is handed to the hub's own HTTP server as a
 // connection, so nothing behind it knows the difference. No domain, no TLS
 // certificate, no open port: the hub can sit behind NAT on a laptop.
-import { blake3 } from '@noble/hashes/blake3.js'
 import { Duplex } from 'node:stream'
+import { derive, relayFor } from './relay.mjs'
+export { newSeed } from './relay.mjs'
 
 const ALPN = [...Buffer.from('irweb/http/1')]
-// n0's relays, as irp derives them, minus the trailing dot irp's copy has:
-// Firefox cannot open wss:// to a dotted name. The link names its relay
-// (;r=), so browsers use this spelling rather than their built-in one.
-const RELAYS = ['https://use1-1.relay.n0.iroh.link/', 'https://usw1-1.relay.n0.iroh.link/',
-  'https://euc1-1.relay.n0.iroh.link/', 'https://aps1-1.relay.n0.iroh.link/']
-const B32 = 'abcdefghijklmnopqrstuvwxyz234567'
-const bytes = seed => { // 26 base32 chars <-> 16 bytes, as data-encoding does
-  let bits = 0, n = 0; const out = []
-  for (const c of seed) { n = (n << 5 | B32.indexOf(c)) & 0xfff; bits += 5; if (bits >= 8) out.push(n >> (bits -= 8) & 255) }
-  return Uint8Array.from(out)
-}
-export const newSeed = u8 => {
-  let bits = 0, n = 0, s = ''
-  for (const b of u8) { n = (n << 8 | b) & 0xffff; bits += 8; while (bits >= 5) s += B32[n >> (bits -= 5) & 31] }
-  return s + B32[n << (5 - bits) & 31]
-}
-const derive = (s, ctx) => blake3(bytes(s), { context: Buffer.from(ctx) })
-export const relayFor = seed => RELAYS[derive(seed, 'irweb v1 relay')[0] % RELAYS.length]
 
 export async function startLink({ server, seed, relay }) {
   const iroh = await import('@number0/iroh')

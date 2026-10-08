@@ -32,21 +32,21 @@ just
 ## Share it: a link, nothing to install
 
 `just` prints a link (and **Settings > Share** shows it):
-`https://cab-ucf.github.io/tydig/app/#<code>`. A collaborator opens it in any
+`https://cxn.pub/app/#<code>`. A collaborator opens it in any
 browser, creates an account with the address you shared a project to, and is
 editing. The page is the editor itself, served statically; it reaches your hub
 over [iroh](https://iroh.computer) through irp's wasm client, end-to-end
 encrypted, through NAT, so the hub can be a laptop with no open port, domain or
 certificate. The code is the hub's address and is unguessable; sign-in and
 invitations still decide who gets in. A new code: delete `data/link-seed` and
-restart.
+restart. Firefox is refused by n0's relays (its ECH GREASE): use another
+browser, or set `security.tls.ech.grease_probability` to 0 in `about:config`.
 
 The static site deploys from this repo (`.github/workflows/pages.yml`; Settings
 > Pages > Source: GitHub Actions). Give it a custom domain of its own: the
 editor keeps sign-ins and offline drafts in the browser, so it must not share
 an origin with sites run by others (irp's pages at `cab-ucf.github.io`).
-GitHub redirects the `github.io` address there, code intact; set `TYDIG_PAGE`
-to print the custom one.
+This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own.
 
 ## Production
 
