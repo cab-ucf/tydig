@@ -66,7 +66,10 @@ to print the custom one.
   `TYDIG_MAX_BUILDS` at once (2). `TYDIG_BUILD_NET=0` cuts their network;
   do that on cloud hosts.
 - **Backups.** Everything lives in `data/`. Give each project a git remote
-  (Settings > Git remote) and it is pushed when idle and on shutdown;
+  (Settings > Git remote) and it is pushed when idle and on shutdown. An
+  `https://` URL can carry a token; a `git@` URL uses the SSH keys in your
+  `~/.ssh` (mounted read-only into the hub; `TYDIG_SSH` picks another
+  directory), which need no passphrase, so a deploy key is ideal;
   accounts are `data/auth.db`, copied while the hub is down.
 - **Updates.** `git pull && just serve`.
 

@@ -57,6 +57,14 @@ services:
       # sandboxes as siblings rather than nesting containers. Start it with
       #   systemctl --user enable --now podman.socket
       - "${TYDIG_PODMAN_SOCK:-/run/user/1000/podman/podman.sock}:/run/podman/podman.sock"
+      # Your SSH keys, read-only, for git@ remotes (Settings > Git remote):
+      # git in the hub uses them as you would. Only this container sees
+      # them; builds run in separate sandboxes that do not. Keys must have
+      # no passphrase (nothing can type it); a deploy key is ideal.
+      - "${TYDIG_SSH:-/dev/null}:/root/.ssh:ro"
+    # No SELinux relabel of ~/.ssh (that would break sshd's own use of it);
+    # this container already holds the podman socket, so labels add nothing.
+    security_opt: [label=disable]
     # Federation over iroh needs no published port: hubs reach each other by
     # public key through NAT (hole punching, relays as fallback). For the best
     # chance of direct connections instead of relayed ones, uncomment:

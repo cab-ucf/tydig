@@ -125,11 +125,13 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
 
         // 3. push, with provenance and comment notes under this hub's own
         //    namespace (one writer per ref, like the CRDT files)
+        let why = ''
         const pushed = await git(p, 'push', c.url, branch, `refs/notes/*:refs/notes/${hubId()}/*`)
           .then(() => true)
-          .catch(async e => { log(`gitsync: push to ${redact(c.url)} failed (${e.message})`); return false })
+          .catch(async e => { why = redact(String(e.stderr || e.message).trim().split('\n').pop()); log(`gitsync: push to ${redact(c.url)} failed (${why})`); return false })
         c.lastSync = new Date().toISOString()
-        c.lastError = pushed ? null : 'push failed (check credentials and that the branch is not protected)'
+        // git's own words ("Permission denied (publickey)", "protected branch")
+        c.lastError = pushed ? null : `push failed: ${why}`
         await saveCfg(p, c)
         dirty.delete(p)
         log(`gitsync: "${p}" ${pushed ? 'pushed' : 'push FAILED'}${pulled ? `, absorbed ${pulled} peer state(s)` : ''} (${reason})`)
