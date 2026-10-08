@@ -128,7 +128,7 @@ help:
 
 # The sandbox image that recipe builds run inside (typst, just, python stack).
 sandbox:
-    podman build -t tydig-build sandbox/
+    podman build -t tydig-build -f sandbox/Containerfile .
 
 # The app server image (client build + Node runtime).
 image:

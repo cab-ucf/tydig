@@ -189,10 +189,26 @@ const watchers = new Map()
 function watchProject(name, document) {
   if (watchers.has(name)) return
   let t
+  const seen = new Set()
   const w = watch(proj(name), { recursive: true }, (_ev, fname) => {
     if (!fname || fname.startsWith('.git') || mirroring.has(name)) return
+    seen.add(fname.replaceAll('\\', '/'))
     clearTimeout(t)
-    t = setTimeout(() => document.getMap('meta').set('diskRev', Date.now()), 400)
+    t = setTimeout(async () => {
+      // A new text file (copied in, pulled, written by a script) becomes
+      // editable at once. Files already in the CRDT are left to it: the
+      // editors may be ahead of what is on disk.
+      const files = document.getMap('files'), add = []
+      for (const rel of seen) {
+        if (files.has(rel) || !okPath(rel) || GENERATED.test(rel)) continue
+        const b = await safe(name, rel).then(f => readFile(f)).catch(() => null)
+        const text = b && textOf(b)
+        if (text != null) add.push([rel, text])
+      }
+      seen.clear()
+      document.transact(() => { for (const [rel, text] of add) files.has(rel) || files.set(rel, new Y.Text(text)) })
+      document.getMap('meta').set('diskRev', Date.now())
+    }, 400)
   })
   watchers.set(name, w)
 }
@@ -542,7 +558,7 @@ p.delete('/members/:id', async (req, res) => {
 const sandboxHint = e => {
   const msg = (e.stderr || e.message || '')
   if (/initializing source|image not known|pinging container registry/.test(msg))
-    return 'sandbox image missing: run `podman build -t tydig-build sandbox/` on the server'
+    return 'sandbox image missing: run `just sandbox` on the server'
   if (/podman.*ENOENT/.test(msg) || e.code === 'ENOENT')
     return 'podman not found on server (or set TYDIG_UNSAFE_BUILDS=1 to run on host, trusted setups only)'
   return msg.slice(0, 400) || 'build sandbox unavailable'

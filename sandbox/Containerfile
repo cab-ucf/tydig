@@ -1,6 +1,6 @@
 # Build sandbox for tydig recipes: one container per build, then gone.
 # Builds have network by default (packages, datasets); TYDIG_BUILD_NET=0 cuts it.
-#   podman build -t tydig-build sandbox/
+#   podman build -t tydig-build -f sandbox/Containerfile .   (from the repo root)
 # Add julia, R, LaTeX, etc. here as your justfiles need them.
 FROM docker.io/library/python:3.12-slim
 
@@ -38,4 +38,8 @@ RUN mkdir -p /opt/typst-packages \
  && chmod -R a+rX /opt/typst-packages
 
 # non-root inside the sandbox; rootless podman maps this to your user anyway
+# The preview's fonts (fonts/ at the repo root): built PDFs set type exactly
+# like the preview, and Inter, Libertinus Sans etc. work in both.
+COPY fonts/ /usr/local/share/fonts/tydig/
+
 USER 1000:1000

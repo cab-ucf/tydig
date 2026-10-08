@@ -288,6 +288,8 @@ async function openDisk(p) {
   if (!r.ok) return alert(`${p}: ${r.status}`)
   const blob = await r.blob(), text = isImg(p) ? null : await asText(blob)
   if (my !== opening) return
+  // text that reached the disk some other way (a shell, git, an older hub) joins the CRDT
+  if (text != null && okPath(p) && !GEN.test(p)) { filesMap.set(p, new Y.Text(text)); return openFile(p) }
   if (/\.pdf$/i.test(p) || (!isImg(p) && text == null)) return saveAs(blob, p, /\.pdf$/i.test(p) ? 'application/pdf' : 'application/octet-stream')
   const lang = text != null && await langFor(p)
   if (my !== opening) return
@@ -528,7 +530,9 @@ $('upload-input').onchange = async e => {
 // ---------- typst preview (live 'typst watch' in-browser) ----------
 // Typst's own fonts (what the CLI embeds), bundled: the preview needs no
 // network and sets type exactly like the built PDF.
-const fonts = Object.values(import.meta.glob('./fonts/*.{otf,ttf}', { query: '?url', import: 'default', eager: true }))
+// fonts/ at the repo root: the build sandbox installs the same files, so the
+// preview and the built PDF set type alike.
+const fonts = Object.values(import.meta.glob('../../fonts/*.{otf,ttf}', { query: '?url', import: 'default', eager: true }))
 $typst.setCompilerInitOptions({ getModule: () => compilerWasm, beforeBuild: [preloadRemoteFonts(fonts, { assets: false })] })
 $typst.setRendererInitOptions({ getModule: () => rendererWasm })
 
