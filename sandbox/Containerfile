@@ -1,5 +1,5 @@
 # Build sandbox for tydig recipes: one container per build, then gone.
-# Network-less by default at runtime (TYDIG_BUILD_NET=1 turns it on).
+# Builds have network by default (packages, datasets); TYDIG_BUILD_NET=0 cuts it.
 #   podman build -t tydig-build sandbox/
 # Add julia, R, LaTeX, etc. here as your justfiles need them.
 FROM docker.io/library/python:3.12-slim
