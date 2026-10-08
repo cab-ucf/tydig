@@ -106,8 +106,12 @@ const okRecipe = r => /^[\w-]{1,64}$/.test(r)
 const proj = n => path.join(DATA, n)
 const inProj = (n, p) => path.join(proj(n), p)
 const gitQ = new Map()
+// Never wait on a person (a credential prompt) or forever (a stalled remote):
+// the queue below is per project, so one stuck call would stop its autosaves.
+const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0',
+  GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' }
 const git = (n, ...a) => {
-  const r = (gitQ.get(n) || Promise.resolve()).then(() => run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28 }))
+  const r = (gitQ.get(n) || Promise.resolve()).then(() => run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28, timeout: 600_000, env: GIT_ENV }))
   gitQ.set(n, r.catch(() => {}))
   return r.then(r => r.stdout)
 }
@@ -354,7 +358,8 @@ app.all('/api/auth/*splat', (req, res, next) => {
 
 // Cookies are SameSite=Lax, which still lets a sibling subdomain (any page
 // on *.your-university.edu) forge requests. Refuse untrusted origins.
-app.use('/api', (req, res, next) => req.method === 'GET' || originOk(req.headers.origin) ? next() : res.status(403).json({ error: 'untrusted origin' }))
+// GET is exempt, except the bridge: opening one starts a sync or LSP session.
+app.use('/api', (req, res, next) => (req.method === 'GET' && req.path !== '/bridge') || originOk(req.headers.origin) ? next() : res.status(403).json({ error: 'untrusted origin' }))
 app.use(express.json())
 
 // Public: tells the login screen whether an institutional SSO is configured.
@@ -395,7 +400,8 @@ app.get('/api/bridge', (req, res) => {
   if (!/^\/(sync|lsp)\b/.test(to) || !/^\w{16,64}$/.test(id) || bridges.has(id)) return res.sendStatus(400)
   const ws = new WebSocket(`ws://127.0.0.1:${PORT}${to}`, { headers: { cookie: req.headers.cookie || '', origin: TRUSTED[0] } })
   bridges.set(id, { ws, user: req.user.id })
-  const frame = (type, d) => { const h = Buffer.alloc(5); h[0] = type; h.writeUInt32BE(d.length, 1); res.write(Buffer.concat([h, d])) }
+  const frame = (type, d) => { if (res.writableEnded) return; const h = Buffer.alloc(5); h[0] = type; h.writeUInt32BE(d.length, 1); res.write(Buffer.concat([h, d])) }
+  res.on('error', () => ws.terminate())
   ws.on('open', () => res.writeHead(200, { 'content-type': 'application/octet-stream' }).flushHeaders())
   ws.on('message', (d, binary) => frame(binary ? 2 : 1, Buffer.from(d)))
   ws.on('error', () => res.headersSent || res.sendStatus(502))
@@ -431,7 +437,8 @@ app.get('/api/projects', async (req, res) => {
 
 app.post('/api/projects/:name', async (req, res) => {
   const n = req.params.name
-  if (!okName(n)) return res.status(400).json({ error: 'bad project name' })
+  // gitsync/ and federation/ beside the projects hold the hub's own settings
+  if (!okName(n) || /^(gitsync|federation)$/i.test(n)) return res.status(400).json({ error: 'bad project name' })
   if (existsSync(proj(n))) return res.status(409).json({ error: 'a project with that name exists' })
   // Create the owning organization first; if the slug is taken globally, bail.
   const org = await auth.api.createOrganization({
@@ -449,7 +456,11 @@ app.post('/api/projects/:name', async (req, res) => {
     // Restore or join a project whose durable copy lives on a git host. This
     // is the path that needs no peer online at all.
     try { await gitsync.adopt(n, gitUrl, req.body?.branch) }
-    catch (e) { return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}` }) }
+    catch (e) { // leave nothing behind, so a corrected URL can be tried under the same name
+      await rm(proj(n), { recursive: true, force: true })
+      await auth.api.deleteOrganization({ headers: req.authHeaders, body: { organizationId: org.id } }).catch(() => {})
+      return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}` })
+    }
     return res.json({ ok: true, adopted: true })
   }
   if (!invite) {
@@ -749,6 +760,7 @@ const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8)
 let lsps = 0
 const syncWss = new WebSocketServer({ noServer: true })
 httpServer.on('upgrade', async (req, sock, head) => {
+  sock.on('error', () => {}) // a client reset while we await the session must not crash the hub
   const u = new URL(req.url, 'http://x')
   if (u.pathname === '/sync' || u.pathname.startsWith('/sync/')) {
     return syncWss.handleUpgrade(req, sock, head, ws => hocuspocus.handleConnection(ws, req))
@@ -770,7 +782,9 @@ httpServer.on('upgrade', async (req, sock, head) => {
     lsps++
     lsp.on('close', () => lsps--)
     lsp.on('error', () => ws.close(1011, 'tinymist unavailable'))
+    lsp.stdin.on('error', () => ws.close()) // the process died: EPIPE, not a crash
     ws.on('message', m => {
+      if (!lsp.stdin.writable) return
       const body = Buffer.from(m)
       lsp.stdin.write(`Content-Length: ${body.length}\r\n\r\n`)
       lsp.stdin.write(body)
@@ -781,8 +795,8 @@ httpServer.on('upgrade', async (req, sock, head) => {
       for (;;) {
         const sep = buf.indexOf('\r\n\r\n')
         if (sep < 0) return
-        const len = parseInt(/content-length: *(\d+)/i.exec(buf.subarray(0, sep))?.[1])
-        if (!len || buf.length < sep + 4 + len) return
+        const len = Number(/content-length: *(\d+)/i.exec(buf.subarray(0, sep))?.[1] ?? 0)
+        if (buf.length < sep + 4 + len) return
         ws.send(buf.subarray(sep + 4, sep + 4 + len).toString())
         buf = buf.subarray(sep + 4 + len)
       }

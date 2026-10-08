@@ -113,10 +113,6 @@ const { runMigrations } = await getMigrations(auth.options)
 await runMigrations()
 
 // ---- helpers used by the main server ----
-export async function getSession(req) {
-  return auth.api.getSession({ headers: req.headers })
-}
-
 // Resolve which projects (orgs) a user may access, by slug == project dir name.
 // listOrganizations omits the caller's role, so we join it from the member table.
 export async function userProjects(headers) {
@@ -137,4 +133,4 @@ export async function authorizeProject(headers, slug) {
   return orgs.get(slug) || null
 }
 
-export { SECRET, db }
+export { db }
