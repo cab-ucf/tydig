@@ -196,17 +196,25 @@ function watchProject(name, document) {
     clearTimeout(t)
     t = setTimeout(async () => {
       // A new text file (copied in, pulled, written by a script) becomes
-      // editable at once. Files already in the CRDT are left to it: the
+      // editable at once; one deleted (rm, rm -r of its folder) leaves the
+      // CRDT. Files already in the CRDT are otherwise left to it: the
       // editors may be ahead of what is on disk.
-      const files = document.getMap('files'), add = []
+      const files = document.getMap('files'), add = [], gone = []
       for (const rel of seen) {
+        if (!existsSync(inProj(name, rel))) {
+          gone.push(...[...files.keys()].filter(k => k === rel || k.startsWith(rel + '/')))
+          continue
+        }
         if (files.has(rel) || !okPath(rel) || GENERATED.test(rel)) continue
         const b = await safe(name, rel).then(f => readFile(f)).catch(() => null)
         const text = b && textOf(b)
         if (text != null) add.push([rel, text])
       }
       seen.clear()
-      document.transact(() => { for (const [rel, text] of add) files.has(rel) || files.set(rel, new Y.Text(text)) })
+      document.transact(() => {
+        for (const [rel, text] of add) files.has(rel) || files.set(rel, new Y.Text(text))
+        for (const rel of gone) files.delete(rel)
+      })
       document.getMap('meta').set('diskRev', Date.now())
     }, 400)
   })
@@ -534,6 +542,11 @@ p.put('/raw/*rel', express.raw({ type: () => true, limit: '50mb' }), async (req,
   const rel = wild(req)
   await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
   await writeFile(await safe(req.params.proj, rel), req.body ?? '', { flag: NOFOLLOW })
+  res.json({ ok: true })
+})
+
+p.delete('/raw/*rel', async (req, res) => {
+  await rm(await safe(req.params.proj, wild(req)))
   res.json({ ok: true })
 })
 

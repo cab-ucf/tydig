@@ -19,9 +19,10 @@ const api = (p, opt = {}) => fetch(B_URL + '/api' + p,
 // create the demo project (= organization) as this user
 await api('/projects/demo', { method: 'POST' })
 // any text file is editable, whatever its name; binaries are not
-const { writeFileSync: put } = await import('node:fs')
+const { writeFileSync: put, mkdirSync, rmSync, existsSync: ex } = await import('node:fs')
 put('data/demo/Containerfile', 'FROM scratch\n'); put('data/demo/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>\n')
 put('data/demo/blob.bin', Buffer.from([0x50, 0x00, 0x4b]))
+mkdirSync('data/demo/old'); put('data/demo/old/a.typ', 'a\n'); put('data/demo/old/b.txt', 'b\n')
 
 const mk = () => {
   const doc = new Y.Doc()
@@ -38,6 +39,12 @@ const fA = A.getMap('files'), fB = B.getMap('files')
 check('template loaded into Y map', fA.has('main.typ') && fA.has('scripts/analysis.py') && fA.has('Makefile'))
 check('any text file is in the CRDT (Containerfile, .svg), a binary is not',
   fA.has('Containerfile') && fA.has('logo.svg') && !fA.has('blob.bin'))
+// a folder removed on the hub's disk (rm -r) leaves every editor
+const had = fB.has('old/a.typ') && fB.has('old/b.txt')
+rmSync('data/demo/old', { recursive: true }); await sleep(1500)
+check('rm -r on disk removes the folder from the CRDT', had && ![...fB.keys()].some(p => p.startsWith('old/')))
+check('deleting a disk-only file from the editor works',
+  (await api('/p/demo/raw/blob.bin', { method: 'DELETE' })).ok && !ex('data/demo/blob.bin'))
 check('generated build/ excluded from CRDT (disk-only)', ![...fA.keys()].some(p => p.startsWith('build/')))
 
 // multi-file edit sync

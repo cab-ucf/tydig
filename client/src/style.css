@@ -86,6 +86,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 .tnode { display: flex; align-items: center; gap: .35rem; padding: .18rem .5rem; cursor: pointer; }
 .tnode:hover { background: var(--ink-2); }
 .tnode.active { background: var(--ink-3); }
+.tnode.picked { background: var(--ink-3); box-shadow: inset 2px 0 var(--teal); }
 .tnode.bin .fname { color: var(--fg-dim); font-style: italic; }
 .tnode .fname { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .tnode .dots { display: flex; gap: 2px; }

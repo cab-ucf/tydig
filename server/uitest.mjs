@@ -20,7 +20,8 @@ page.on('console', m => { if (m.type() === 'error') errors.push('[console] ' + m
 page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
 const external = []
 page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && new URL(r.url()).origin !== new URL(B).origin) external.push(r.url()) })
-page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(d.defaultValue() || 'first signed checkpoint'); else await d.dismiss() })
+page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(d.defaultValue() || 'first signed checkpoint'); else if (d.type() === 'confirm' && yes) await d.accept(); else await d.dismiss() })
+let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden, title: document.getElementById('side-title').textContent, body: document.getElementById('side-body').innerText.slice(0, 300) }))
 
@@ -62,6 +63,16 @@ await chooser.accept([`${tmp}/ui-logo.png`, `${tmp}/ui-raw.dat`]); await sleep(2
 const shown = await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')].map(e => e.title))
 check('uploads land in the chosen folder and show in the tree', ['figures/ui-logo.png', 'figures/ui-raw.dat'].every(p => shown.includes(p)))
 
+// Ctrl-click picks several files; one x deletes them all
+const row = p => `#tree .tnode[title="${p}"]`
+await page.keyboard.down('Control')
+for (const p of ['figures/ui-logo.png', 'figures/ui-raw.dat']) await page.click(row(p) + ' .fname')
+await page.keyboard.up('Control'); yes = true
+await page.$eval(row('figures/ui-raw.dat') + ' .del', b => b.click()); await sleep(1500)
+check('ctrl-click several files, delete them at once', await page.evaluate(() =>
+  !document.querySelector('#tree .tnode[title^="figures/ui-"]')))
+yes = false
+
 // 1. Comments pane via the View menu action
 await page.evaluate(() => document.querySelector('[data-action="comments"], button[data-act="comments"]')?.click())
 let s = await side(); if (s.hidden) { await page.keyboard.down('Alt'); await page.keyboard.press('c'); await page.keyboard.up('Alt'); await sleep(500); s = await side() }
@@ -76,6 +87,9 @@ const build = await page.evaluate(() => document.querySelector('.buildlog')?.tex
 check('make all ran from the build pane', /typst compile main.typ/.test(build || ''))
 const files = await page.evaluate(async () => (await (await fetch('/api/p/demo/files')).json()).map(f => f.path).filter(p => p.startsWith('out/')))
 check('both PDFs produced', files.includes('out/report.pdf') && files.includes('out/summary.pdf'))
+yes = true; await page.$eval('#tree .tnode.dir[title="out"] .del', b => b.click()); await sleep(1500); yes = false
+check('a folder deletes with everything in it', !(await page.evaluate(async () =>
+  (await (await fetch('/api/p/demo/files')).json()).some(f => f.path.startsWith('out/')))))
 
 // 4. Signed checkpoint via Ctrl-S then history pane
 await page.keyboard.down('Control'); await page.keyboard.press('s'); await page.keyboard.up('Control'); await sleep(4000)

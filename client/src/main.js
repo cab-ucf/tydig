@@ -412,7 +412,7 @@ function renderTree() {
   const rows = []
   const fileRow = (p, depth) => {
     const el = document.createElement('div')
-    el.className = 'tnode' + (p === currentPath ? ' active' : '') + (yPaths.has(p) ? ' text' : ' bin')
+    el.className = 'tnode' + (p === currentPath ? ' active' : '') + (picked.has(p) ? ' picked' : '') + (yPaths.has(p) ? ' text' : ' bin')
     el.style.paddingLeft = `${0.5 + depth * 0.85}rem`
     el.innerHTML = `<span class="fname"></span><span class="dots"></span><span class="ops"><button class="rn" title="rename">~</button><button class="del" title="delete">x</button></span>`
     el.querySelector('.fname').textContent = p.split('/').pop()
@@ -420,14 +420,13 @@ function renderTree() {
     el.querySelector('.dots').replaceChildren(...(peersByFile[p] ?? []).map(u => {
       const d = document.createElement('i'); d.className = 'dot'; d.style.background = u.color; d.title = u.name; return d
     }))
-    el.querySelector('.fname').onclick = () =>
-      yPaths.has(p) ? openFile(p) : openDisk(p)
-    el.querySelector('.rn').onclick = () => renameFile(p)
-    el.querySelector('.del').onclick = async () => {
-      if (!confirm(`Delete ${p}?`)) return
-      if (yPaths.has(p)) filesMap.delete(p)
-      else { await api(P('/raw/' + p), { method: 'DELETE' }); refreshDisk() }
+    // Ctrl/Cmd-click picks several; x then deletes them all
+    el.querySelector('.fname').onclick = e => {
+      if (e.ctrlKey || e.metaKey) { picked.has(p) ? picked.delete(p) : picked.add(p); return renderTree() }
+      picked.clear(); yPaths.has(p) ? openFile(p) : openDisk(p)
     }
+    el.querySelector('.rn').onclick = () => renameFile(p)
+    el.querySelector('.del').onclick = () => remove(picked.has(p) ? [...picked] : [p])
     return el
   }
   const dirRow = (name, full, depth) => {
@@ -435,7 +434,7 @@ function renderTree() {
     const el = document.createElement('div')
     el.className = 'tnode dir'
     el.style.paddingLeft = `${0.5 + depth * 0.85}rem`
-    el.innerHTML = `<span class="tw">${open ? '&#9662;' : '&#9656;'}</span><span class="fname"></span><span class="ops"><button class="addf" title="new file here">+</button><button class="upd" title="upload here">up</button></span>`
+    el.innerHTML = `<span class="tw">${open ? '&#9662;' : '&#9656;'}</span><span class="fname"></span><span class="ops"><button class="addf" title="new file here">+</button><button class="upd" title="upload here">up</button><button class="del" title="delete folder">x</button></span>`
     el.querySelector('.fname').textContent = name
     el.title = full
     const toggle = () => { open ? openDirs.delete(full) : openDirs.add(full); saveDirs(); renderTree() }
@@ -443,6 +442,7 @@ function renderTree() {
     el.querySelector('.fname').onclick = toggle
     el.querySelector('.addf').onclick = e => { e.stopPropagation(); newFile(full + '/') }
     el.querySelector('.upd').onclick = e => { e.stopPropagation(); uploadTo(full) }
+    el.querySelector('.del').onclick = e => { e.stopPropagation(); remove(all.filter(p => p.startsWith(full + '/'))) }
     el.ondragover = e => { e.preventDefault(); el.classList.add('dropping') }
     el.ondragleave = () => el.classList.remove('dropping')
     el.ondrop = e => { e.preventDefault(); e.stopPropagation(); el.classList.remove('dropping'); dropUpload(e.dataTransfer.files, full) }
@@ -459,6 +459,15 @@ function renderTree() {
   emit(root, '', 0)
   $('tree').replaceChildren(...rows)
 }
+const picked = new Set()
+async function remove(paths) {
+  if (!paths.length || !confirm(paths.length > 1 ? `Delete these ${paths.length} files?\n${paths.join('\n')}` : `Delete ${paths[0]}?`)) return
+  const disk = paths.filter(p => !filesMap.has(p))
+  ydoc.transact(() => paths.forEach(p => filesMap.delete(p)))
+  await Promise.all(disk.map(p => api(P('/raw/' + p), { method: 'DELETE' }).catch(() => {})))
+  picked.clear(); refreshDisk(); renderTree()
+}
+$('tree').onkeydown = e => e.key === 'Delete' && picked.size && remove([...picked])
 $('tree').ondragover = e => e.preventDefault()
 $('tree').ondrop = e => { e.preventDefault(); dropUpload(e.dataTransfer.files, '') }
 
