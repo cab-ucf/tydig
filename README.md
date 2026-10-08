@@ -48,6 +48,25 @@ editor keeps sign-ins and offline drafts in the browser, so it must not share
 an origin with sites run by others (irp's pages at `cab-ucf.github.io`).
 This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own.
 
+## Templates
+
+A new project starts from one (Projects > the menu beside the name):
+
+- `report`: a pre-registered report whose numbers come from its analysis.
+- `nih-r21`, `nih-r03`: an NIH application. Names, aims, effort, budget and
+  letters live once in `grant.yaml`; every attachment reads them. `main.typ`
+  holds Specific Aims, Research Strategy and References (so citations
+  resolve), each flagged in red over its page limit; `make` cuts it into
+  NIH's separate PDFs, beside the summary, narrative, budget, resources and
+  letters, in `out/`.
+
+Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
+
+A relative path in Typst starts from the file that names it, not from the
+document: `image("figure/sig.svg")` in `lib/letter.typ` reads
+`lib/figure/sig.svg`. Write `/figure/sig.svg` to start at the project root,
+which is the root for every build.
+
 ## Production
 
 `just` gives a working hub on localhost. Beyond it:

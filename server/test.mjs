@@ -31,6 +31,14 @@ const mk = () => {
 }
 let pass = true
 const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL'), name); pass &&= cond }
+const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ template: t }) }), (await api(`/p/${t}/files`)).map(f => f.path))
+const [r21, r03] = [await nih('nih-r21'), await nih('nih-r03')]
+const { readFileSync: get } = await import('node:fs')
+check('templates are listed, report first', (await api('/templates'))[0] === 'report')
+check('an NIH template is its shared layer plus its own grant.yaml',
+  ['main.typ', 'lib/nih.typ', 'letters.typ', 'grant.yaml'].every(f => r21.includes(f) && r03.includes(f)) &&
+  /code: R21/.test(get('data/nih-r21/grant.yaml', 'utf8')) && /code: R03/.test(get('data/nih-r03/grant.yaml', 'utf8')))
 
 const A = mk(), B = mk()
 await sleep(1500)

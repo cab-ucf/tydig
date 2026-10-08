@@ -8,7 +8,7 @@ import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
-import { existsSync, readFileSync, writeFileSync, constants as FS } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync, constants as FS } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 
@@ -45,6 +45,8 @@ const sandboxArgs = (dir, secs, ...extra) => ['run', '--rm', ...NET, `--timeout=
   '--cap-drop=ALL', '--security-opt', 'no-new-privileges',
   '--read-only', '--tmpfs', '/tmp:rw,size=512m',
   '-e', 'HOME=/tmp', '-e', 'MPLCONFIGDIR=/tmp/mpl', '-e', 'TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages',
+  // the project is the root: a file in a subfolder may still import ../lib/x.typ
+  '-e', 'TYPST_ROOT=/work',
   // .git read-only: hooks or config written by a build would run on the host at the next commit
   '-v', `${dir}:/work:rw,z`, '-v', `${dir}/.git:/work/.git:ro,z`, '-w', '/work', IMAGE]
 const building = new Set() // one build at a time per project
@@ -58,7 +60,7 @@ const runner = (name, args, timeout = 180_000) => {
   const tool = runnerTool(name)
   const argv = tool === 'make' ? ['-C', '/work', ...args] : args
   return UNSAFE
-    ? run(tool, args, { cwd: proj(name), timeout, maxBuffer: 8e6 })
+    ? run(tool, args, { cwd: proj(name), env: { ...process.env, TYPST_ROOT: proj(name) }, timeout, maxBuffer: 8e6 })
     : run('podman', [...sandboxArgs(proj(name), timeout / 1000), tool, ...argv], { timeout: timeout + 10_000, maxBuffer: 8e6 })
 }
 const runnerTool = name => {
@@ -308,12 +310,19 @@ const gitsync = createGitSync({
 const SYNC_PORT = process.env.TYDIG_SYNC_PORT === '0' ? null : 1234
 if (SYNC_PORT) hocuspocus.listen()
 
-// ---------- project template ----------
-// New projects are scaffolded from server/template/: a pre-registered report
-// whose every number and conclusion is computed from build/results.json.
+// ---------- project templates ----------
+// server/templates/<name>/. A name is built in layers: nih-r21 is nih/ and
+// then nih-r21/ on top, so what NIH mechanisms share is written once. Only
+// names that are no other's layer are offered.
 import { cp } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-const TEMPLATE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'template')
+const TEMPLATES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'templates')
+const LAYERS = readdirSync(TEMPLATES).sort()
+const TEMPLATE_NAMES = ['report', ...LAYERS.filter(t => t !== 'report' && !LAYERS.some(u => u.startsWith(t + '-')))]
+const scaffold = async (t, dir) => {
+  for (const l of LAYERS.filter(l => t === l || t.startsWith(l + '-')))
+    await cp(path.join(TEMPLATES, l), dir, { recursive: true })
+}
 
 // ---------- REST ----------
 import { toNodeHandler } from 'better-auth/node'
@@ -458,6 +467,7 @@ app.get('/api/keys', (req, res) => res.json(keyStore.listFor(req.user.id)))
 app.get('/api/federation', async (req, res) => res.json(await federation.status()))
 
 // Projects the signed-in user can access (their organizations, slug == dir).
+app.get('/api/templates', (req, res) => res.json(TEMPLATE_NAMES))
 app.get('/api/projects', async (req, res) => {
   const orgs = await userProjects(req.authHeaders)
   const names = (await readdir(DATA, { withFileTypes: true }).catch(() => []))
@@ -494,7 +504,7 @@ app.post('/api/projects/:name', async (req, res) => {
     return res.json({ ok: true, adopted: true })
   }
   if (!invite) {
-    await cp(TEMPLATE_DIR, proj(n), { recursive: true })
+    await scaffold(TEMPLATE_NAMES.includes(req.body?.template) ? req.body.template : 'report', proj(n))
     await git(n, 'add', '-A')
     await git(n, 'commit', '-q', '-m', 'checkpoint: project created')
   } else {

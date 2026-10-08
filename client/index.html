@@ -36,7 +36,7 @@
         <button data-act="max-preview">Preview only<kbd>Alt-4</kbd></button>
         <button data-act="fullscreen">Full screen<kbd>Alt-F</kbd></button>
         <hr/>
-        <button data-act="dark-preview" data-check="darkPreview">Dark preview</button>
+        <button data-act="theme">Dark / light<kbd>Alt-D</kbd></button>
         <hr/>
         <button data-act="comments">Comments<kbd>Alt-C</kbd></button>
         <button data-act="history">History<kbd>Alt-H</kbd></button>
@@ -68,6 +68,7 @@
     <span id="wordcount" title="words in current file"></span>
     <button id="tgl-tree" class="tgl" title="Toggle sidebar (Alt-1)">&#9707;</button>
     <button id="tgl-side" class="tgl" title="Toggle panel (Alt-2)">&#9706;</button>
+    <button id="tgl-theme" class="tgl" title="Dark / light (Alt-D)">&#9680;</button>
     <span id="status" data-state="connecting">connecting</span>
   </header>
   <main id="layout">
@@ -102,7 +103,7 @@
   <dialog id="picker">
     <h3>Projects</h3>
     <div id="proj-list"></div>
-    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w-]{1,64}" required /><button>create</button></form>
+    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w\-]{1,64}" required /><select id="proj-tpl" title="template"></select><button>create</button></form>
     <form method="dialog" id="proj-join"><input id="proj-invite" placeholder="or paste a federation invite from another hub" /><button>join</button></form>
     <form method="dialog" id="proj-git"><input id="proj-git-url" placeholder="or a git URL to open a project stored on GitHub / GitLab / Codeberg" /><button>open</button></form>
     <form method="dialog" class="dlg-close"><button>close</button></form>

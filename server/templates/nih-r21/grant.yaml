@@ -1,0 +1,56 @@
+# Everything the application says more than once lives here: edit it once,
+# and the aims, summary, budget and letters all follow.
+title: Exploratory study of a new approach to a hard problem
+nofo: PA-25-000            # the funding opportunity you are applying to
+years: 2
+
+mechanism:
+  code: R21
+  name: Exploratory/Developmental Research Grant
+  purpose: >-
+    early, high-risk, high-reward work; preliminary data are welcome but
+    not required.
+  budget_rule: >-
+    An R21 may request up to $275,000 in direct costs over two years, and no
+    more than $200,000 in any one year.
+
+limits: { aims: 1, strategy: 6 }   # pages
+budget: { modules: 5 }             # $25,000 modules of direct costs per year
+
+institution:
+  name: University of Central Florida
+  department: Department of Example Sciences
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. months: calendar months of effort per year.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: Principal Investigator
+    email: ada.lovelace@example.edu
+    commons: ALOVELACE     # eRA Commons ID
+    months: 2.4
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: Co-Investigator
+    months: 0.6
+
+aims:
+  - title: Establish feasibility of the core method
+    summary: We will build and validate the method on a well-characterised set.
+  - title: Test the central hypothesis in a pilot cohort
+    summary: We will measure the effect and estimate its size for a larger study.
+
+# Markup; #pi and #G (this file) can be used in the body.
+letters:
+  - name: Mary Somerville
+    title: Director, Core Facility
+    institution: Example Research Institute
+    date: January 5, 2026
+    signature: assets/signature.svg
+    body: |
+      I am pleased to support your #G.mechanism.code application, "#G.title".
+      Our core will provide instrument time and staff support for Aim 1 at no
+      cost to the project.

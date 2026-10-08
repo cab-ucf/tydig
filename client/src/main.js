@@ -25,9 +25,13 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, darkPreview: true, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
+// theme: dark or light, the system's until toggled (Alt-D)
+const system = matchMedia('(prefers-color-scheme: light)')
+const theme = () => settings.theme ?? (system.matches ? 'light' : 'dark')
+document.documentElement.dataset.theme = theme()
 
 // ---------- auth: session cookie carried automatically by fetch + ws ----------
 const me = await requireUser()
@@ -48,9 +52,11 @@ async function openPicker() {
     if (n === projName) a.className = 'current'
     return a
   }))
+  $('proj-tpl').replaceChildren(...(await api('/templates')).map(t => new Option(t)))
   $('proj-new').onsubmit = async () => {
     const n = $('proj-name').value
-    const r = await api(`/projects/${n}`, { method: 'POST' })
+    const r = await api(`/projects/${n}`, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ template: $('proj-tpl').value }) })
     if (r.error) return alert(r.error)
     location.search = `?proj=${n}`
   }
@@ -221,6 +227,7 @@ const darkHighlight = Prec.high(syntaxHighlighting(HighlightStyle.define([
   { tag: [t.processingInstruction, t.macroName], color: '#7fd1de' },
 ])))
 const darkChrome = EditorView.theme({}, { dark: true })
+const themeComp = new Compartment(), themeExt = () => theme() === 'dark' ? [darkHighlight, darkChrome] : []
 
 // ---------- editor ----------
 const commentsChanged = Annotation.define()
@@ -256,7 +263,7 @@ async function openFile(p) {
       extensions: [
         vimComp.of(settings.vim ? vim() : []),
         basicSetup,
-        darkHighlight, darkChrome,
+        themeComp.of(themeExt()),
         keymap.of([indentWithTab]),
         langComp.of(lang),
         lspComp.of(lsp),
@@ -302,7 +309,7 @@ async function openDisk(p) {
   } else {
     $('editor').replaceChildren()
     view = new EditorView({ parent: $('editor'), state: EditorState.create({ doc: text, extensions: [
-      basicSetup, darkHighlight, darkChrome, lang, EditorView.lineWrapping, EditorState.readOnly.of(true)] }) })
+      basicSetup, themeComp.of(themeExt()), lang, EditorView.lineWrapping, EditorState.readOnly.of(true)] }) })
   }
   updateWordCount(); renderTree()
 }
@@ -611,34 +618,34 @@ async function loadVfs(withPins) {
 
 // The WASM compiler reports any file absent from its virtual filesystem as
 // "access denied ... outside of project root", which sends people hunting for
-// a --root flag that does not exist here. Work out which referenced files are
-// actually missing and say so.
+// a --root flag that does not exist here. Say which file is missing, and that
+// Typst resolves a relative path from the file that names it, not from the
+// document being compiled: image("figure/sig.svg") in lib/letter.typ reads
+// lib/figure/sig.svg. "/figure/sig.svg" starts at the project root.
+const normPath = p => p.split('/').reduce((a, s) => s === '..' ? a.slice(0, -1) : s && s !== '.' ? [...a, s] : a, []).join('/')
 function missingReferences() {
-  const present = new Set([...filesMap.keys(), ...diskFiles.map(f => f.path)])
-  const missing = new Set()
+  const present = new Set([...filesMap.keys(), ...diskFiles.map(f => f.path)]), out = new Map()
   for (const [p, t] of filesMap) {
     if (!p.endsWith('.typ')) continue
-    const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : ''
-    for (const m of t.toString().matchAll(/\b(?:image|json|csv|yaml|toml|xml|read|include|import)\(\s*"([^"]+)"/g)) {
-      const ref = m[1]
-      if (ref.startsWith('@')) continue // package
-      const abs = ref.startsWith('/') ? ref.slice(1) : dir + ref
-      if (!present.has(abs)) missing.add(abs)
+    const dir = p.slice(0, p.lastIndexOf('/') + 1)
+    for (const [, ref] of t.toString().matchAll(/\b(?:image|json|csv|yaml|toml|xml|read|include|import)\(\s*"([^"@][^"]*)"/g)) {
+      const abs = normPath(ref.startsWith('/') ? ref : dir + ref)
+      if (present.has(abs) || out.has(abs)) continue
+      const r = normPath(ref), fix = !ref.startsWith('/') && (present.has(r) ? r : [...present].find(q => q.endsWith('/' + r)))
+      out.set(abs, `${p} reads "${ref}", which is ${abs}` + (fix ? `; from the project root, write "/${fix}"` : ''))
     }
   }
-  return [...missing]
+  return [...out]
 }
 function explainCompileError(e) {
   const raw = String(e?.message || e)
-  if (!/access denied|outside of project root/.test(raw)) return raw
-  const missing = missingReferences()
-  const gen = missing.filter(p => /^(build|figures|out)\//.test(p))
-  let msg = missing.length
-    ? `The document reads ${missing.length === 1 ? 'a file that does not exist yet' : 'files that do not exist yet'}: ${missing.join(', ')}.`
+  if (!/access denied|outside of project root|not found/.test(raw)) return raw
+  const missing = missingReferences(), gen = missing.filter(([p]) => /^(build|figures|out)\//.test(p))
+  let msg = missing.length ? 'Missing:\n' + missing.map(([, why]) => '  ' + why).join('\n')
     : 'The document reads a file that does not exist in the project.'
-  if (gen.length) msg += ` ${gen.length === 1 ? 'It is' : 'They are'} produced by the build: open the build panel and run "all".`
-  msg += '\n\n(The compiler phrases this as "access denied / outside of project root"; there is no --root to set in the preview, the file is simply absent.)'
-  return msg
+  if (gen.length) msg += '\nFiles under build/, figures/ or out/ come from the build: open the build panel and run "all".'
+  return msg + '\n\nA relative path starts from the file that names it, not from the document; ' +
+    'a path starting with / starts at the project root.'
 }
 
 let timer, compiling = false, dirty = false, seq = 0
@@ -881,7 +888,9 @@ function applyLayout() {
   // has to be released here or no pane can ever appear.
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
-  document.body.classList.toggle('dark-preview', settings.darkPreview)
+  document.documentElement.dataset.theme = theme()
+  document.body.classList.toggle('dark-preview', theme() === 'dark')
+  view?.dispatch({ effects: themeComp.reconfigure(themeExt()) })
   document.body.classList.toggle('sect-projects-closed', !settings.projectsOpen)
   document.body.classList.toggle('sect-files-closed', !settings.filesOpen)
   // null fits the pane (and follows the divider); a zoom is a width, not a
@@ -912,13 +921,7 @@ async function renderProjects() {
     return a
   }))
 }
-$('proj-new-btn').onclick = async () => {
-  const n = prompt('New project name ([\\w-]):')
-  if (!n) return
-  const r = await api(`/projects/${n}`, { method: 'POST' })
-  if (r.error) return alert(r.error)
-  location.search = `?proj=${n}`
-}
+$('proj-new-btn').onclick = openPicker
 
 const zoom = z => {
   const now = $('page').offsetWidth / 820
@@ -1108,7 +1111,7 @@ const actions = {
   'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
-  'dark-preview': () => { settings.darkPreview = !settings.darkPreview; applyLayout() },
+  theme: () => { settings.theme = theme() === 'dark' ? 'light' : 'dark'; applyLayout() },
   comments: () => openSidebar('comments'),
   history: () => openSidebar('history'),
   build: () => openSidebar('build'),
@@ -1141,6 +1144,7 @@ Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
 Alt-C     comments   Alt-H  history   Alt-B  build
+Alt-D     dark / light
 
 Vim mode: Settings > Vim (then vim keys apply inside the editor)`),
 }
@@ -1165,7 +1169,7 @@ const KEYMAP = {
   'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments',
-  'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf',
+  'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
   'C-KeyP': 'quick-open', 'C-KeyS': 'checkpoint', 'C-A-KeyM': 'comment',
 }
 document.addEventListener('keydown', e => {
@@ -1180,6 +1184,8 @@ $('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
 $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()
+$('tgl-theme').onclick = () => actions.theme()
+system.onchange = applyLayout
 
 // quick-open (Ctrl-P): subsequence filter over all project files
 function quickOpen() {
