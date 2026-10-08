@@ -45,7 +45,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 .cm-comment-anchor { background: #239dad33; border-bottom: 1.5px solid var(--teal); cursor: pointer; }
 
 #preview { flex: 1 1 50%; min-width: 0; background: var(--paper-bg); overflow: auto; padding: 1.5rem; }
-#page { background: var(--paper); box-shadow: 0 2px 14px #0003; margin: 0 auto; max-width: 820px; min-height: 90%; }
+#page { background: var(--paper); box-shadow: 0 2px 14px #0003; margin: 0 auto; max-width: none; min-height: 90%; }
 #page svg { display: block; width: 100%; height: auto; }
 #diag {
   position: sticky; bottom: 0; margin: 1rem auto 0; max-width: 820px;
@@ -294,3 +294,9 @@ button.danger { color: #e0574f; border-color: #e0574f66; margin-top: 6px; align-
 #git { width: min(640px, 92vw); }
 #git label { display: block; margin: 10px 0 4px; font-size: 12px; color: var(--fg-dim); }
 .git-err { color: #e0574f; }
+
+/* editor | preview divider, and one-pane modes (Alt-3 / Alt-4) */
+#split { flex: none; width: 6px; cursor: col-resize; background: var(--ink-3); touch-action: none; }
+#split:hover { background: var(--teal); }
+body.max-editor #preview, body.max-editor #split, body.max-preview #editor, body.max-preview #split { display: none; }
+@media (max-width: 800px) { #split { display: none; } }

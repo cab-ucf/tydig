@@ -25,7 +25,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, darkPreview: true, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: 1 },
+  { vim: false, lsp: true, darkPreview: true, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 
@@ -875,7 +875,11 @@ function applyLayout() {
   document.body.classList.toggle('dark-preview', settings.darkPreview)
   document.body.classList.toggle('sect-projects-closed', !settings.projectsOpen)
   document.body.classList.toggle('sect-files-closed', !settings.filesOpen)
-  $('page').style.maxWidth = `${Math.round(820 * settings.zoom)}px`
+  // null fits the pane (and follows the divider); a zoom is a width, not a
+  // cap, so zooming in past the pane scrolls it sideways
+  $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
+  $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
+  for (const m of ['editor', 'preview']) document.body.classList.toggle('max-' + m, settings.max === m)
   document.querySelectorAll('[data-check]').forEach(b =>
     b.classList.toggle('checked', !!settings[b.dataset.check]))
   saveSettings()
@@ -907,13 +911,24 @@ $('proj-new-btn').onclick = async () => {
   location.search = `?proj=${n}`
 }
 
-$('zoomctl').addEventListener('click', e => {
-  const z = e.target.dataset.z
-  if (!z) return
-  if (z === 'fit') settings.zoom = ($('preview').clientWidth - 48) / 820
-  else settings.zoom = Math.min(3, Math.max(0.3, settings.zoom + (z === '+' ? 0.1 : -0.1)))
+const zoom = z => {
+  const now = $('page').offsetWidth / 820
+  settings.zoom = z === 'fit' ? null : Math.min(4, Math.max(0.25, now * (z === '+' ? 1.15 : 1 / 1.15)))
   applyLayout()
-})
+}
+$('zoomctl').addEventListener('click', e => e.target.dataset.z && zoom(e.target.dataset.z))
+// Ctrl/Cmd + wheel over the preview zooms the page, not the whole app
+$('preview').addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(e.deltaY < 0 ? '+' : '-') } }, { passive: false })
+
+// The editor|preview divider: drag it; double-click to even it out.
+$('split').onpointerdown = e => {
+  const left = $('editor').getBoundingClientRect().left
+  const total = $('editor').offsetWidth + $('preview').offsetWidth
+  $('split').setPointerCapture(e.pointerId)
+  $('split').onpointermove = m => { settings.split = Math.min(0.9, Math.max(0.1, (m.clientX - left) / total)); applyLayout() }
+  $('split').onpointerup = () => { $('split').onpointermove = null }
+}
+$('split').ondblclick = () => { settings.split = 0.5; applyLayout() }
 
 // Git remote: the project's durable home on a git host you control. The hub
 // pushes when it goes idle and when it shuts down, so no machine here has to
@@ -1080,6 +1095,10 @@ const actions = {
   'toggle-tree': () => { settings.treeOpen = !settings.treeOpen; applyLayout() },
   'toggle-side': () => { settings.sideOpen = !settings.sideOpen; if (settings.sideOpen && !sidebarMode) sidebarMode = 'comments', renderComments(); applyLayout() },
   focus: () => { settings.focus = !settings.focus; applyLayout() },
+  'max-editor': () => { settings.max = settings.max === 'editor' ? null : 'editor'; applyLayout() },
+  'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
+  fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
+  'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
   'dark-preview': () => { settings.darkPreview = !settings.darkPreview; applyLayout() },
   comments: () => openSidebar('comments'),
   history: () => openSidebar('history'),
@@ -1109,6 +1128,9 @@ Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
 Alt-1     file tree
 Alt-2     side panel
 Alt-0     focus mode (toggle works while typing)
+Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
+Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
+drag the bar between editor and preview; double-click it to even out
 Alt-C     comments   Alt-H  history   Alt-B  build
 
 Vim mode: Settings > Vim (then vim keys apply inside the editor)`),
@@ -1131,6 +1153,8 @@ document.addEventListener('click', () => document.querySelectorAll('#menubar .dr
 // while typing in the editor (essential for exiting focus mode).
 const KEYMAP = {
   'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus',
+  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
+  'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf',
   'C-KeyP': 'quick-open', 'C-KeyS': 'checkpoint', 'C-A-KeyM': 'comment',

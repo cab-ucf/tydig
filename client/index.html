@@ -32,6 +32,9 @@
         <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Alt-1</kbd></button>
         <button data-act="toggle-side" data-check="sideOpen">Panel<kbd>Alt-2</kbd></button>
         <button data-act="focus" data-check="focus">Focus mode<kbd>Alt-0</kbd></button>
+        <button data-act="max-editor">Editor only<kbd>Alt-3</kbd></button>
+        <button data-act="max-preview">Preview only<kbd>Alt-4</kbd></button>
+        <button data-act="fullscreen">Full screen<kbd>Alt-F</kbd></button>
         <hr/>
         <button data-act="dark-preview" data-check="darkPreview">Dark preview</button>
         <hr/>
@@ -83,6 +86,7 @@
       <input id="upload-input" type="file" hidden multiple />
     </nav>
     <section id="editor"></section>
+    <div id="split" title="drag to resize; double-click to even out"></div>
     <section id="preview">
       <div id="zoomctl"><button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button></div>
       <div id="page"></div><pre id="diag" hidden></pre>
