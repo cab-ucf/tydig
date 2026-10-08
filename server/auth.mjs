@@ -79,7 +79,9 @@ export const auth = betterAuth({
     before: createAuthMiddleware(async ctx => {
       if (ctx.path === '/sign-up/email' && !OPEN && db.prepare('SELECT 1 FROM user').get() &&
         !invitesFor(ctx.body?.email).length) throw new APIError('FORBIDDEN', {
-        message: 'This hub is invite-only: ask a project owner to share a project with this address.' })
+        message: 'This hub already has accounts and is invite-only. If one is yours, use Sign in ' +
+          '(forgotten password: run `just passwd` on the hub). Otherwise ask a project owner ' +
+          'to share a project with this address.' })
     }),
   },
   databaseHooks: { user: { create: { after: async u => {

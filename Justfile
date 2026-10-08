@@ -157,8 +157,9 @@ logs:
 link:
     @cat "{{TYDIG_DATA}}/link"
 
-# Give an account a fresh password and print it (no mail to reset by).
-passwd email:
+# Give an account a fresh password and print it (no mail to reset by);
+# with no address, list the accounts.
+passwd email='':
     podman compose exec app node server/passwd.mjs {{email}}
 
 # Shell inside the running server (inspect data/, git history, run git notes).

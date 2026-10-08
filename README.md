@@ -60,7 +60,7 @@ This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own.
 - **Accounts.** Invite-only: the first account is free, after that sharing a
   project with an address is what lets it sign up (`TYDIG_SIGNUP=open` for a
   trusted LAN). Institutional sign-in: `just sso`. Set `just secret` in
-  `.env` before the first sign-up. Forgotten password: `just passwd EMAIL`.
+  `.env` before the first sign-up. Forgotten password: `just passwd EMAIL`; `just passwd` lists the accounts.
 - **Builds** run in the rootless podman sandbox (enable the socket:
   `systemctl --user enable --now podman.socket`): 2 CPUs, 2 GB, 180 s each,
   `TYDIG_MAX_BUILDS` at once (2). `TYDIG_BUILD_NET=0` cuts their network;

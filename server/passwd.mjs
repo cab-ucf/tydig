@@ -1,7 +1,12 @@
 // Give an account a fresh random password and print it: there is no mail to
 // reset by. Signs the account out everywhere.   just passwd ada@example.edu
+// With no address, lists the accounts.
 import { randomBytes } from 'node:crypto'
 import { auth, db } from './auth.mjs'
+if (!process.argv[2]) {
+  for (const { email } of db.prepare('SELECT email FROM user ORDER BY createdAt').all()) console.log(email)
+  process.exit(0)
+}
 const u = db.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(process.argv[2] ?? '')
 if (!u) { console.error(`no account for ${process.argv[2]}`); process.exit(1) }
 const ctx = await auth.$context, pw = randomBytes(12).toString('base64url')
