@@ -40,7 +40,15 @@ function explain(error, email) {
 }
 
 async function loginScreen() {
-  const cfg = await fetch('/api/auth-config').then(r => r.json()).catch(() => ({}))
+  const cfg = await fetch('/api/auth-config').then(r => r.json()).catch(() => null)
+  // tydig's static site with no hub code in the address: nothing to sign in to
+  if (!cfg) { // in link mode, link.js already says why the hub is unreachable
+    if (!link) document.body.insertAdjacentHTML('beforeend', `<div id="auth-gate"><div class="auth-card">
+      <div class="auth-brand">tydig</div><p>This page needs a hub's link: the full address
+      ending in <code>#</code> and a code, which the hub prints (<code>just link</code>) and
+      shows under Settings &gt; Share. Ask whoever runs the hub for it.</p></div></div>`)
+    return new Promise(() => {})
+  }
   // SSO returns to the hub's own address, which a link visitor cannot hold a session for
   if (link) delete cfg.sso
   return new Promise(resolve => {

@@ -38,7 +38,7 @@ export async function startLink({ server, seed, relay }) {
         for (;;) serve(server, await conn.acceptBi())
       })().catch(() => {})
   })()
-  return { close: () => ep.close().catch(() => {}) }
+  return { close: () => ep.close().catch(() => {}), online: () => ep.online() }
 }
 
 function serve(server, { send, recv }) {

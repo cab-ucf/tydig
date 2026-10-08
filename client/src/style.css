@@ -300,3 +300,9 @@ button.danger { color: #e0574f; border-color: #e0574f66; margin-top: 6px; align-
 #split:hover { background: var(--teal); }
 body.max-editor #preview, body.max-editor #split, body.max-preview #editor, body.max-preview #split { display: none; }
 @media (max-width: 800px) { #split { display: none; } }
+
+#link-status { position: fixed; left: 50%; top: 40%; transform: translateX(-50%); z-index: 100; max-width: 28rem;
+  padding: 1rem 1.2rem; border-radius: 8px; background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3);
+  font: .9rem/1.5 var(--sans); box-shadow: 0 6px 30px #0006; }
+#link-status.fail { border-color: #d66; }
+#link-status button { margin-left: .4rem; }

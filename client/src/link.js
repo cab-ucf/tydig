@@ -6,14 +6,28 @@
 const m = /^#([a-z2-7]{26})(?:;r=(\S+))?$/.exec(location.hash)
 export const link = m && { seed: m[1], relay: m[2] && decodeURIComponent(m[2]), id: m[1].slice(0, 8) }
 
+// What the visitor sees until the hub answers: never a silent, frozen page.
+const say = (html, fail) => {
+  const el = document.getElementById('link-status') ?? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'link-status' }))
+  el.className = fail ? 'fail' : ''; el.innerHTML = html
+  el.querySelector('button')?.addEventListener('click', () => location.reload())
+}
 let client
 const connect = () => client ??= new Promise((ok, no) => {
+  say('Connecting to the hub&hellip;')
   const at = f => new URL('irweb/' + f, document.baseURI).href
   const s = Object.assign(document.createElement('script'), { src: at('irweb_web.js'), onerror: no })
   s.onload = () => wasm_bindgen({ module_or_path: at('irweb_web_bg.wasm') })
     .then(() => wasm_bindgen.Client.connect(link.seed, link.relay)).then(ok, no)
+  setTimeout(() => no(new Error('no answer in 30 s')), 30_000)
   document.head.append(s)
-}).catch(e => { client = null; throw e })
+}).then(c => { document.getElementById('link-status')?.remove(); return c }, e => {
+  client = null
+  say(`<b>Could not reach the hub</b> (${String(e?.message || e).replace(/[<&]/g, '')}).<br>
+    The hub must be running and online, and this link must be its current one
+    (<code>just link</code> prints it). <button>try again</button>`, true)
+  throw e
+})
 
 // The hub's cookies: a page cannot hold another origin's, so it keeps its own jar.
 const JAR = link && `tydig.jar:${link.id}`

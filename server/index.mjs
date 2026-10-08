@@ -397,6 +397,7 @@ app.get('/api/auth-config', (req, res) => res.json({
   yourOrigin: req.headers.origin || null,
   originOk: originOk(req.headers.origin),
   startedAt: STARTED_AT,
+  linkOnline,
 }))
 
 // Everything else under /api requires a valid session.
@@ -410,7 +411,7 @@ app.use('/api', async (req, res, next) => {
 })
 
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
-app.get('/api/link', (req, res) => res.json({ link: LINK }))
+app.get('/api/link', (req, res) => res.json({ link: LINK, online: linkOnline }))
 
 // Websockets for link visitors, whose page reaches the hub only by request and
 // response (link.mjs): a GET opens the socket here and streams its messages down
@@ -743,6 +744,7 @@ const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'ht
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
+let linkOnline = false
 const LINK = PAGE && `${PAGE}#${LINK_SEED}${process.env.TYDIG_LINK_RELAY ? `;r=${process.env.TYDIG_LINK_RELAY}` : ''}`
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n')
 const httpServer = app.listen(PORT, e => {
@@ -753,7 +755,13 @@ const httpServer = app.listen(PORT, e => {
   console.log(`open the app at: ${TRUSTED.join('  or  ')}`)
   if (LINK) {
     console.log(`collaborators, from any browser: ${LINK}`)
+    // Say whether the link works: it needs the hub to reach its relay over HTTPS.
     startLink({ server: httpServer, seed: LINK_SEED, relay: process.env.TYDIG_LINK_RELAY })
+      .then(l => {
+        const late = setTimeout(() => console.warn('link: no relay reachable yet, so the link will not connect. ' +
+          'The hub needs outbound HTTPS (port 443) to *.relay.n0.iroh.link.'), 20_000)
+        return l.online().then(() => { clearTimeout(late); linkOnline = true; console.log('link: online; collaborators can connect') })
+      })
       .catch(e => console.warn('link: failed to start:', e.message))
   }
   federation.start().catch(e => console.warn('federation: failed to start:', e.message))
