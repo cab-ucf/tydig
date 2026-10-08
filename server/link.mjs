@@ -8,8 +8,11 @@ import { blake3 } from '@noble/hashes/blake3.js'
 import { Duplex } from 'node:stream'
 
 const ALPN = [...Buffer.from('irweb/http/1')]
-const RELAYS = ['https://use1-1.relay.n0.iroh.link./', 'https://usw1-1.relay.n0.iroh.link./',
-  'https://euc1-1.relay.n0.iroh.link./', 'https://aps1-1.relay.n0.iroh.link./']
+// n0's relays, as irp derives them, minus the trailing dot irp's copy has:
+// Firefox cannot open wss:// to a dotted name. The link names its relay
+// (;r=), so browsers use this spelling rather than their built-in one.
+const RELAYS = ['https://use1-1.relay.n0.iroh.link/', 'https://usw1-1.relay.n0.iroh.link/',
+  'https://euc1-1.relay.n0.iroh.link/', 'https://aps1-1.relay.n0.iroh.link/']
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567'
 const bytes = seed => { // 26 base32 chars <-> 16 bytes, as data-encoding does
   let bits = 0, n = 0; const out = []
@@ -22,13 +25,14 @@ export const newSeed = u8 => {
   return s + B32[n << (5 - bits) & 31]
 }
 const derive = (s, ctx) => blake3(bytes(s), { context: Buffer.from(ctx) })
+export const relayFor = seed => RELAYS[derive(seed, 'irweb v1 relay')[0] % RELAYS.length]
 
 export async function startLink({ server, seed, relay }) {
   const iroh = await import('@number0/iroh')
   const b = iroh.Endpoint.builder()
   b.applyMinimal()
   b.secretKey([...derive(seed, 'irweb v1 endpoint identity')])
-  b.relayMode(iroh.RelayMode.customFromUrls([relay || RELAYS[derive(seed, 'irweb v1 relay')[0] % RELAYS.length]]))
+  b.relayMode(iroh.RelayMode.customFromUrls([relay || relayFor(seed)]))
   b.alpns([ALPN])
   const ep = await b.bind()
   ;(async () => {

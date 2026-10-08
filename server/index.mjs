@@ -739,13 +739,13 @@ app.use((e, req, res, next) => {
 const PORT = Number(process.env.PORT || 3000)
 // The hub's link: tydig's static page plus a seed only this hub holds (link.mjs).
 // Pages redirects the github.io address to the custom domain, fragment intact.
-import { startLink, newSeed } from './link.mjs'
+import { startLink, newSeed, relayFor } from './link.mjs'
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cab-ucf.github.io/tydig/app/'
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
 let linkOnline = false
-const LINK = PAGE && `${PAGE}#${LINK_SEED}${process.env.TYDIG_LINK_RELAY ? `;r=${process.env.TYDIG_LINK_RELAY}` : ''}`
+const LINK = PAGE && `${PAGE}#${LINK_SEED};r=${process.env.TYDIG_LINK_RELAY || relayFor(LINK_SEED)}`
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n')
 const httpServer = app.listen(PORT, e => {
   if (e) throw e
