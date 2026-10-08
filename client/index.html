@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- The static site sends no CSP header (a hub does): no inline script, no
+       javascript: URLs in the preview, on either. -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'" />
   <title>tydig</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>

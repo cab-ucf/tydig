@@ -51,6 +51,7 @@ class HubSocket extends EventTarget {
     try {
       const r = await fetch(`/api/bridge?id=${this.#id}&path=${encodeURIComponent(u.pathname + u.search)}`)
       if (!r.ok) throw new Error(r.status)
+      if (this.readyState) { r.body?.cancel(); this.readyState = 3; return this.#emit('close', { code: 1000 }) } // closed while connecting
       this.#reader = r.body.getReader(); this.readyState = 1; this.#emit('open')
       for (let buf = new Uint8Array(0); ;) {
         const { value, done } = await this.#reader.read()

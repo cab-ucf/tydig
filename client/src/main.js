@@ -78,9 +78,15 @@ $('projname').textContent = projName
 const P = p => `/p/${projName}${p}`
 const rawUrl = rel => `/api${P('/raw/' + rel)}`
 // A link visitor's tab cannot load the hub's URLs itself: fetch, then show.
-const openRaw = async p => link
-  ? window.open(URL.createObjectURL(await (await fetch(rawUrl(p))).blob()), '_blank')
-  : window.open(rawUrl(p), '_blank')
+// Anything but a PDF is downloaded: opened from a blob: URL it would run in
+// this page's origin, outside the sandbox the hub serves raw files under.
+const openRaw = async p => {
+  if (!link) return window.open(rawUrl(p), '_blank')
+  const pdf = /\.pdf$/i.test(p), a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([await (await fetch(rawUrl(p))).arrayBuffer()], { type: pdf ? 'application/pdf' : 'application/octet-stream' }))
+  pdf ? a.target = '_blank' : a.download = p.split('/').pop()
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
+}
 
 // ---------- identity (from account; color stays a local preference) ----------
 const userName = me.name || me.email
@@ -131,9 +137,12 @@ const provider = new HocuspocusProvider({
   onAuthenticationFailed: () => { alert('Lost access to this project.'); location.search = '' },
 })
 provider.setAwarenessField('user', { name: userName, color: userColor, colorLight: userColor })
+// redraw the tree only when someone opens another file, not on every cursor move
+let whereabouts = ''
 provider.awareness.on('change', () => {
-  $('peers').textContent = `${provider.awareness.getStates().size} online`
-  renderTree()
+  const states = provider.awareness.getStates(), w = [...states].map(([id, s]) => `${id}:${s.file}`).join()
+  $('peers').textContent = `${states.size} online`
+  if (w !== whereabouts) { whereabouts = w; renderTree() }
 })
 
 // ---------- comment anchors (assoc 0 start, -1 end: no range creep) ----------
@@ -163,20 +172,23 @@ let lspClient = null, lspRoot = null, lspDead = false
 async function lspExts(filePath) {
   if (!settings.lsp || lspDead || !filePath.endsWith('.typ')) return []
   try {
-    if (!lspClient) {
-      lspRoot = (await api(P('/info'))).root
+    // a promise, so files opened together share one server; a closed one is
+    // dropped, and the next file opened (or the LSP toggle) starts afresh
+    const gone = () => { lspDead = true; lspClient = null }
+    lspClient ??= api(P('/info')).then(({ root }) => {
+      lspRoot = root
       const transport = new WebSocketTransport(
         `${wsProto}://${location.host}/lsp?proj=${projName}&t=${encodeURIComponent(sessionToken())}`)
-      lspClient = new LanguageServerClient({
+      return new LanguageServerClient({
         transport, autoClose: false,
         rootUri: `file://${lspRoot}`,
         workspaceFolders: [{ name: projName, uri: `file://${lspRoot}` }],
         documentUri: `file://${lspRoot}/${filePath}`, languageId: 'typst',
-        onError: () => { lspDead = true }, onClose: () => { lspDead = true },
+        onError: gone, onClose: gone,
       })
-    }
+    })
     return languageServerWithTransport({
-      client: lspClient, rootUri: `file://${lspRoot}`,
+      client: await lspClient, rootUri: `file://${lspRoot}`,
       workspaceFolders: [{ name: projName, uri: `file://${lspRoot}` }],
       documentUri: `file://${lspRoot}/${filePath}`, languageId: 'typst',
     })
@@ -219,9 +231,12 @@ const commentHighlights = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations })
 
+let opening = 0
 async function openFile(p) {
   const yt = filesMap.get(p)
   if (!yt) return
+  const my = ++opening, lsp = await lspExts(p)
+  if (my !== opening) return // another file was opened meanwhile
   currentPath = p
   if (!undoManagers.has(p)) undoManagers.set(p, new Y.UndoManager(yt))
   const isTyp = p.endsWith('.typ')
@@ -235,7 +250,7 @@ async function openFile(p) {
         darkHighlight, darkChrome,
         keymap.of([indentWithTab]),
         langComp.of(isTyp ? typst() : []),
-        lspComp.of(await lspExts(p)),
+        lspComp.of(lsp),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
         commentHighlights,
@@ -455,7 +470,8 @@ function renameFile(p) {
 }
 
 filesMap.observeDeep(evs => {
-  renderTree(); renderMainSel(); scheduleCompile()
+  if (evs.some(e => e.target === filesMap)) { renderTree(); renderMainSel() } // files added or removed
+  scheduleCompile()
   if (evs.some(e => (e.target === filesMap ? [...e.keysChanged] : e.path.slice(0, 1)).some(p => /^(data|scripts)\//.test(p)))) maybeWatchBuild()
 })
 
@@ -526,11 +542,14 @@ function pinnedSource(file, src) {
 }
 
 const binCache = new Map()
-async function fetchBin(f) {
-  const k = `${f.path}:${f.size}:${f.mtime}`
-  if (!binCache.has(k))
-    binCache.set(k, new Uint8Array(await (await fetch(rawUrl(f.path))).arrayBuffer()))
-  return binCache.get(k)
+async function fetchBin(f) { // one entry per path: a rebuilt figure replaces the old one
+  const k = `${f.size}:${f.mtime}`, c = binCache.get(f.path)
+  if (c?.k === k) return c.bytes
+  const r = await fetch(rawUrl(f.path))
+  if (!r.ok) throw new Error(`${f.path}: ${r.status}`)
+  const bytes = new Uint8Array(await r.arrayBuffer())
+  binCache.set(f.path, { k, bytes })
+  return bytes
 }
 
 async function loadVfs(withPins) {
@@ -577,6 +596,9 @@ function explainCompileError(e) {
 }
 
 let timer, compiling = false, dirty = false, seq = 0
+// one virtual filesystem: a compile and a PDF export must not refill it at once
+let vfsQ = Promise.resolve()
+const serial = f => (vfsQ = vfsQ.then(f, f))
 function scheduleCompile() { clearTimeout(timer); timer = setTimeout(compile, 300) }
 async function compile() {
   const main = $('main-sel').value
@@ -585,10 +607,15 @@ async function compile() {
   compiling = true
   const my = ++seq
   try {
-    let svg
-    try { await loadVfs(true); svg = await $typst.svg({ mainFilePath: '/' + main }) }
-    catch { await loadVfs(false); svg = await $typst.svg({ mainFilePath: '/' + main }) }
-    if (my === seq) { $('page').innerHTML = svg; $('page').querySelector('script')?.remove(); $('diag').hidden = true }
+    const svg = await serial(async () => {
+      try { await loadVfs(true); return await $typst.svg({ mainFilePath: '/' + main }) }
+      catch { await loadVfs(false); return await $typst.svg({ mainFilePath: '/' + main }) }
+    })
+    if (my === seq) {
+      $('page').innerHTML = svg
+      $('page').querySelectorAll('a[href^="javascript:" i], a[href^="data:" i]').forEach(a => a.removeAttribute('href'))
+      $('diag').hidden = true
+    }
   } catch (e) {
     if (my === seq) { $('diag').textContent = explainCompileError(e); $('diag').hidden = false }
   }
@@ -599,8 +626,7 @@ async function compile() {
 async function exportPdf() {
   const main = $('main-sel').value
   if (!main) return
-  await loadVfs(false) // never export pins
-  const bytes = await $typst.pdf({ mainFilePath: '/' + main })
+  const bytes = await serial(async () => { await loadVfs(false); return $typst.pdf({ mainFilePath: '/' + main }) }) // never export pins
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
   a.download = main.replace(/\.typ$/, '.pdf')
@@ -661,6 +687,7 @@ function renderComments() {
 
 async function renderHistory() {
   const log = await api(P('/history'))
+  if (sidebarMode !== 'history') return // another panel was opened meanwhile
   sideBody.replaceChildren(...log.map(({ hash, date, message, provenance }) => {
     const el = document.createElement('div')
     el.className = 'commit' + (message.startsWith('checkpoint') ? ' checkpoint' : '')
@@ -682,6 +709,7 @@ async function renderHistory() {
 
 async function renderBuild() {
   const recipes = await api(P('/recipes'))
+  if (sidebarMode !== 'build') return
   sideBody.innerHTML = ''
   if (recipes.error) {
     sideBody.innerHTML = `<p class="empty">${esc(recipes.error)}</p><p class="empty">The live preview does not need builds; recipes are for figures, scripts, and final PDFs.</p>`
@@ -717,7 +745,15 @@ async function renderBuild() {
 // ---------- change review (offline merge awareness) ----------
 // Line-level LCS diff: returns [{type:'same'|'add'|'del', text}] ops.
 function lineDiff(a, b) {
-  const A = a.split('\n'), B = b.split('\n')
+  let A = a.split('\n'), B = b.split('\n'), head = [], tail = []
+  while (A.length && B.length && A[0] === B[0]) head.push({ type: 'same', text: (B.shift(), A.shift()) })
+  while (A.length && B.length && A.at(-1) === B.at(-1)) tail.unshift({ type: 'same', text: (B.pop(), A.pop()) })
+  // the LCS table is n*m: past a few million cells, show the change as a whole
+  if (A.length * B.length > 4e6)
+    return [...head, ...A.map(text => ({ type: 'del', text })), ...B.map(text => ({ type: 'add', text })), ...tail]
+  return [...head, ...lcs(A, B), ...tail]
+}
+function lcs(A, B) {
   const n = A.length, m = B.length
   const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1))
   for (let i = n - 1; i >= 0; i--)
@@ -941,7 +977,9 @@ async function showFederation() {
     }
   }
   await render()
-  const t = setInterval(() => { if (dlg.open) render(); else clearInterval(t) }, 5000)
+  // one refresher per dialog, and none while an invite is being pasted
+  clearInterval(dlg.timer)
+  dlg.timer = setInterval(() => dlg.open ? $('fed-paste')?.value || render() : clearInterval(dlg.timer), 5000)
 }
 
 async function showShare() {
@@ -1011,7 +1049,7 @@ const actions = {
   build: () => openSidebar('build'),
   review: () => openSidebar('review'),
   vim: () => { settings.vim = !settings.vim; applyLayout(); view?.dispatch({ effects: vimComp.reconfigure(settings.vim ? vim() : []) }) },
-  lsp: () => { settings.lsp = !settings.lsp; lspDead = false; applyLayout(); if (currentPath) openFile(currentPath) },
+  lsp: () => { settings.lsp = !settings.lsp; lspDead = false; lspClient = null; applyLayout(); if (currentPath) openFile(currentPath) },
   share: showShare,
   federation: showFederation,
   gitremote: showGitRemote,

@@ -81,8 +81,9 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
       check(c.url, c.branch || 'main')
       const { ydoc, close } = await doc(p)
       try {
+        // The URL may carry a token, so it is never stored in .git/config,
+        // which every build can read: each fetch and push names it instead.
         await git(p, 'remote', 'remove', 'origin').catch(() => {})
-        await git(p, 'remote', 'add', 'origin', c.url)
         const branch = c.branch || 'main'
         // rename, not re-point HEAD: re-pointing orphans the history on the old branch
         await git(p, 'branch', '-M', branch).catch(() => {})
@@ -96,13 +97,13 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
         // 2. fetch and merge. -X ours keeps our working tree on conflict; the
         //    CRDT files never conflict (one writer each) and are what matters.
         let pulled = 0
-        const fetched = await git(p, 'fetch', 'origin', branch).then(() => true).catch(() => false)
+        const fetched = await git(p, 'fetch', c.url, branch).then(() => true).catch(() => false)
         if (fetched) {
           // Deliberately NOT --allow-unrelated-histories: pointing a project
           // at a remote that holds a different project should fail loudly,
           // not merge two unrelated trees into a mess. Use "adopt" (create a
           // project from a git URL) to take a remote's history on purpose.
-          const merged = await git(p, 'merge', '--no-edit', '-X', 'ours', `origin/${branch}`)
+          const merged = await git(p, 'merge', '--no-edit', '-X', 'ours', 'FETCH_HEAD')
             .then(() => true)
             .catch(async e => {
               const unrelated = /unrelated histories|refusing to merge/i.test(e.message)
@@ -124,7 +125,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
 
         // 3. push, with provenance and comment notes under this hub's own
         //    namespace (one writer per ref, like the CRDT files)
-        const pushed = await git(p, 'push', '-u', 'origin', branch, `refs/notes/*:refs/notes/${hubId()}/*`)
+        const pushed = await git(p, 'push', c.url, branch, `refs/notes/*:refs/notes/${hubId()}/*`)
           .then(() => true)
           .catch(async e => { log(`gitsync: push to ${redact(c.url)} failed (${e.message})`); return false })
         c.lastSync = new Date().toISOString()
@@ -142,19 +143,17 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
   // First contact: pull an existing project down from a remote.
   async function adopt(p, url, branch) {
     check(url, branch ?? 'main')
-    await git(p, 'remote', 'remove', 'origin').catch(() => {})
-    await git(p, 'remote', 'add', 'origin', url)
-    branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(p, 'ls-remote', '--symref', 'origin', 'HEAD').catch(() => ''))?.[1] || 'main'
+    branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(p, 'ls-remote', '--symref', url, 'HEAD').catch(() => ''))?.[1] || 'main'
     check(url, branch)
     await saveCfg(p, { url, branch })
-    await git(p, 'fetch', 'origin', branch)
+    await git(p, 'fetch', url, branch)
     // Adopt means take the remote's history wholesale, not merge against a
     // local one. Merging unrelated histories makes git treat every file as
     // added-on-both-sides, so -X ours would silently keep our empty/stale
     // copies and later modifications from peers would never land -- new files
     // would appear while edits vanished. Checking the remote branch out makes
     // this hub a descendant of it, so every later merge is a real merge.
-    await git(p, 'checkout', '-B', branch, `origin/${branch}`)
+    await git(p, 'checkout', '-B', branch, 'FETCH_HEAD')
     // Loading the document absorbs the remote's CRDT states and any text
     // they lack (a repo written by hand, or by git alone).
     const { ydoc, close } = await doc(p)

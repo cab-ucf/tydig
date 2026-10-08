@@ -14,7 +14,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY client/package.json client/
 COPY server/package.json server/
-RUN npm ci
+RUN npm ci -w client
 COPY client/ client/
 RUN npm run build
 
@@ -27,11 +27,12 @@ FROM docker.io/library/node:22-slim
 ARG PODMAN_VERSION=5.8.0
 ARG PODMAN_SHA256_amd64=95f348126f708e2f18c85341a3630849055d72a3d22d3e102146331277588637
 ARG PODMAN_SHA256_arm64=ad3e00885b27034b34f508c21265d43dd62f3d11b69fa822390800bfc17fe3f7
-# git: project history. tini: signal handling. curl: the download + healthcheck.
+# git (+ ssh for git@ remotes): project history. tini: signal handling.
+# curl: the download + healthcheck.
 # The find below is deliberate: across releases this archive has carried the
 # binary both at bin/ and at the archive root.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git tini ca-certificates curl \
+      git openssh-client tini ca-certificates curl \
  && rm -rf /var/lib/apt/lists/* \
  && arch="$(dpkg --print-architecture)" \
  && case "$arch" in \
@@ -53,7 +54,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 # better-sqlite3 needs a native build; --omit=dev keeps the client toolchain out
-RUN npm ci --omit=dev -w server || npm install --omit=dev -w server
+RUN npm ci --omit=dev -w server
 COPY server/ server/
 COPY --from=client /app/client/dist/ client/dist/
 

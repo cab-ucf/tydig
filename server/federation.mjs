@@ -36,11 +36,11 @@ const frame = (type, payload) => {
   out.set(payload, 5)
   return Array.from(out)
 }
-async function readFrame(recv) {
+async function readFrame(recv, max = MAX_FRAME) {
   const head = new Uint8Array(await recv.readExact(5))
   const type = head[0]
   const len = new DataView(head.buffer).getUint32(1)
-  if (len > MAX_FRAME) throw new Error('frame too large')
+  if (len > max) throw new Error('frame too large')
   const payload = len ? new Uint8Array(await recv.readExact(len)) : new Uint8Array()
   return { type, payload }
 }
@@ -59,7 +59,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
   }
   async function saveCfg(proj, c) {
     await mkdir(fedDir, { recursive: true })
-    await writeFile(cfgPath(proj), JSON.stringify(c, null, 1))
+    await writeFile(cfgPath(proj), JSON.stringify(c, null, 1), { mode: 0o600 }) // the token is commit access
   }
   async function ensureCfg(proj) {
     let c = await cfg(proj)
@@ -68,8 +68,9 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
   }
 
   async function doc(proj) {
-    if (!docs.has(proj)) docs.set(proj, await hocuspocus.openDirectConnection(proj, { federation: true }))
-    return docs.get(proj).document
+    // the promise, not the result: two sessions starting at once share one connection
+    if (!docs.has(proj)) docs.set(proj, hocuspocus.openDirectConnection(proj, { federation: true }))
+    return (await docs.get(proj)).document
   }
 
   // ---- the sync session, symmetric once the handshake is done ----
@@ -99,6 +100,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
       alive = false
       ydoc.off('update', onUpdate)
       peers.delete(key)
+      conn.close(0n, []) // else the dialer reconnects beside a connection left open
     }
   }
 
@@ -112,11 +114,13 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
         try {
           const conn = await (await incoming.accept()).connect()
           const bi = await conn.acceptBi()
-          const hello = await readFrame(bi.recv)
+          // before any token is checked: small, and soon, or the peer is dropped
+          const hello = await Promise.race([readFrame(bi.recv, 4096),
+            new Promise((_, no) => setTimeout(() => no(new Error('no hello')), 10_000))])
           if (hello.type !== MSG.HELLO) return conn.close(1n, Array.from(enc.encode('expected hello')))
           const { proj, token } = JSON.parse(dec.decode(hello.payload))
           const c = okName(proj) ? await cfg(proj) : null
-          if (!c || c.token !== token || !existsSync(path.join(dataDir, proj))) {
+          if (!c || typeof token !== 'string' || c.token !== token || !existsSync(path.join(dataDir, proj))) {
             await bi.send.writeAll(frame(MSG.REJECT, enc.encode('unknown project or bad token')))
             log(`federation: refused ${conn.remoteId().toString().slice(0, 10)}… for "${proj}"`)
             return conn.close(2n, Array.from(enc.encode('refused')))
@@ -158,7 +162,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
   async function dialAll() {
     if (!existsSync(fedDir)) return
     for (const f of await readdir(fedDir)) {
-      if (!f.endsWith('.json') || f === 'hub.json') continue
+      if (!f.endsWith('.json')) continue
       const proj = f.slice(0, -5)
       const c = await cfg(proj)
       for (const p of c?.peers || []) dial(proj, p)
@@ -188,7 +192,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
       endpoint = await b.bind()
       const refreshTicket = () => {
         try { ticket = iroh.EndpointTicket.fromAddr(endpoint.addr()).toString() } catch {}
-        writeFile(path.join(fedDir, 'hub.json'), JSON.stringify({ id: endpoint.id().toString(), ticket, relay: mode, updatedAt: new Date().toISOString() }, null, 1)).catch(() => {})
+        writeFile(path.join(dataDir, 'iroh.json'), JSON.stringify({ id: endpoint.id().toString(), ticket, relay: mode, updatedAt: new Date().toISOString() }, null, 1)).catch(() => {})
       }
       refreshTicket()
       // NB: endpoint.watchAddr() panics in @number0/iroh 1.1.0 ("no reactor
@@ -249,7 +253,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
     async stop() {
       closed = true
       for (const d of dialers.values()) d.stop()
-      for (const dc of docs.values()) await dc.disconnect().catch(() => {})
+      for (const dc of docs.values()) await (await dc).disconnect().catch(() => {})
       await endpoint?.close().catch(() => {})
     },
   }

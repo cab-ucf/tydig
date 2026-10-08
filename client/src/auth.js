@@ -2,6 +2,7 @@
 // blocks the app until there is a session. Sessions are cookie-based, so
 // ordinary fetch (credentials: same-origin) and the websocket upgrade both
 // carry them automatically.
+import { link } from './link.js'
 import { createAuthClient } from 'better-auth/client'
 import { organizationClient, genericOAuthClient } from 'better-auth/client/plugins'
 
@@ -40,6 +41,8 @@ function explain(error, email) {
 
 async function loginScreen() {
   const cfg = await fetch('/api/auth-config').then(r => r.json()).catch(() => ({}))
+  // SSO returns to the hub's own address, which a link visitor cannot hold a session for
+  if (link) delete cfg.sso
   return new Promise(resolve => {
     const root = document.createElement('div')
     root.id = 'auth-gate'

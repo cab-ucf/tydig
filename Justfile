@@ -82,7 +82,7 @@ doctor:
     fi
     echo "$cfg" | python3 -m json.tool 2>/dev/null || echo "$cfg"
     echo
-    if echo "$cfg" | grep -q '"originOk": true'; then
+    if echo "$cfg" | grep -q '"originOk": *true'; then
         echo "origin check: OK for {{TYDIG_URL}}"
     else
         echo "origin check: FAILED. Open the app at one of the trustedOrigins above,"
@@ -181,24 +181,26 @@ test:
     set -euo pipefail
     npm install >/dev/null
     npm run build >/dev/null
+    repo=$PWD
     for suite in test authtest offlinetest provtest singleporttest signuptest; do
-        rm -rf data
+        # each suite in a scratch dir of its own: never the real data/
+        t=$(mktemp -d); cd "$t"
         echo "--- $suite"
         # The suites talk to :3000 directly, so the trusted origin must match
         # that, not the containerised port exported above. Legacy :1234 stays
         # on: the older suites connect to it (singleporttest uses /sync).
         # signuptest checks the invite-only default; the rest sign up freely
-        env -u TYDIG_DATA \
+        env TYDIG_DATA="$t/data" TYDIG_LINK=0 \
             TYDIG_SIGNUP=$([ $suite = signuptest ] || echo open) \
             TYDIG_URL=http://localhost:3000 \
             TYDIG_ORIGINS=http://localhost:3000 \
             TYDIG_UNSAFE_BUILDS=1 \
-            node server/index.mjs >/tmp/tc-$suite.log 2>&1 &
+            node "$repo/server/index.mjs" >/tmp/tc-$suite.log 2>&1 &
         srv=$!
         sleep 5
-        node "server/$suite.mjs" || { echo "FAILED: $suite (log: /tmp/tc-$suite.log)"; kill $srv; exit 1; }
+        node "$repo/server/$suite.mjs" || { echo "FAILED: $suite (log: /tmp/tc-$suite.log)"; kill $srv; exit 1; }
         kill $srv 2>/dev/null || true
-        sleep 1
+        sleep 1; cd "$repo"; rm -rf "$t"
     done
     echo
     echo "all suites passed"
@@ -211,7 +213,7 @@ test-fed:
     #!/usr/bin/env bash
     set -uo pipefail
     rm -rf /tmp/tydig-hubA /tmp/tydig-hubB
-    common="TYDIG_SIGNUP=open TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH_RELAY=local TYDIG_IROH_BIND=127.0.0.1:0"
+    common="TYDIG_SIGNUP=open TYDIG_LINK=0 TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH_RELAY=local TYDIG_IROH_BIND=127.0.0.1:0"
     env -u TYDIG_DATA $common PORT=3100 TYDIG_DATA=/tmp/tydig-hubA \
         TYDIG_URL=http://localhost:3100 TYDIG_ORIGINS=http://localhost:3100 \
         node server/index.mjs >/tmp/tc-hubA.log 2>&1 &
@@ -236,7 +238,7 @@ test-git:
     rm -rf /tmp/tydig-hubA /tmp/tydig-hubB /tmp/tydig-remote.git /tmp/plainclone
     git init -q --bare /tmp/tydig-remote.git
     git -C /tmp/tydig-remote.git symbolic-ref HEAD refs/heads/main
-    common="TYDIG_SIGNUP=open TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0 TYDIG_GIT_LOCAL=1"
+    common="TYDIG_SIGNUP=open TYDIG_LINK=0 TYDIG_UNSAFE_BUILDS=1 TYDIG_SYNC_PORT=0 TYDIG_IROH=0 TYDIG_GIT_LOCAL=1"
     env -u TYDIG_DATA $common PORT=3100 TYDIG_DATA=/tmp/tydig-hubA \
         TYDIG_URL=http://localhost:3100 TYDIG_ORIGINS=http://localhost:3100 \
         node server/index.mjs >/tmp/tc-gitA.log 2>&1 &
@@ -261,8 +263,7 @@ test-ui:
     npm run build >/dev/null
     mkdir -p .uitest && cd .uitest && { test -f package.json || echo '{"private":true}' > package.json; } \
         && { test -d node_modules/puppeteer || npm i puppeteer --no-audit --no-fund >/dev/null; } && cd ..
-    rm -rf data
-    env -u TYDIG_DATA TYDIG_URL=http://localhost:3000 TYDIG_ORIGINS=http://localhost:3000 \
+    env TYDIG_DATA="$(mktemp -d)" TYDIG_LINK=0 TYDIG_URL=http://localhost:3000 TYDIG_ORIGINS=http://localhost:3000 \
         TYDIG_UNSAFE_BUILDS=1 node server/index.mjs >/tmp/tc-ui.log 2>&1 &
     srv=$!
     sleep 6
