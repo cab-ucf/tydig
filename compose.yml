@@ -106,6 +106,8 @@ services:
     restart: unless-stopped
 
 networks:
+  # the hub's and egress's way out (podman-compose wants it named)
+  default: {}
   # hub <-> sandbox, nothing else on it
   ctl: { internal: true }
   # builds <-> egress; the name is what sandbox.mjs attaches builds to

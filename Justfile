@@ -73,9 +73,17 @@ account:
     set -euo pipefail
     u="{{TYDIG_USER}}" h="{{home}}"
     [ -n "$u" ] || exit 0
+    # NixOS keeps its accounts (and their subuids) in its configuration
+    nix="users.users.$u = { isNormalUser = true; home = \"$h\"; createHome = true; homeMode = \"700\";
+      linger = true; autoSubUidGidRange = true; shell = \"/run/current-system/sw/bin/nologin\"; };
+    virtualisation.podman.enable = true;"
     if ! id "$u" >/dev/null 2>&1; then
+        if [ -e /etc/NIXOS ]; then
+            printf 'tydig runs as its own account. Add to configuration.nix, nixos-rebuild switch, then just:\n\n%s\n' "$nix"
+            exit 1
+        fi
         echo "making the account $u (sudo, once): tydig runs as it, apart from you"
-        sudo useradd --create-home --home-dir "$h" --shell /usr/sbin/nologin --comment 'tydig hub' "$u"
+        sudo useradd --create-home --home-dir "$h" --shell "$(command -v nologin || echo /usr/sbin/nologin)" --comment 'tydig hub' "$u"
     fi
     sudo chmod 700 "$h"
     # rootless podman maps containers to ids of the account's own
@@ -85,24 +93,29 @@ account:
     # its podman runs with nobody logged in as it, and again after a reboot
     uid=$(id -u "$u") sock=/run/user/$(id -u "$u")/podman/podman.sock
     sudo loginctl enable-linger "$u" 2>/dev/null || true
-    for i in $(seq 20); do [ -d /run/user/$uid ] && break; sleep 0.5; done
     sudo -u "$u" sh -c "rm -rf '$h/src' && mkdir '$h/src'"
-    {{as}} systemctl --user enable --now podman.socket podman-restart.service >/dev/null 2>&1 || true
-    if [ ! -S $sock ]; then
-        echo "note: no systemd for $u, so its podman lasts until a reboot (then: just)"
+    if [ -d /run/systemd/system ]; then
+        # linger starts the account's own systemd: wait for its bus, then start its podman
+        for i in $(seq 40); do [ -S /run/user/$uid/bus ] && break; sleep 0.5; done
+        {{as}} systemctl --user enable --now podman.socket podman-restart.service ||
+            echo "note: $u's systemd could not start podman.socket; podman runs by hand until a reboot"
+    else
+        echo "note: no systemd, so $u's podman lasts until a reboot (then: just)"
         sudo install -d -o "$u" -m 700 /run/user/$uid
         printf '[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' |
             sudo -u "$u" sh -c "mkdir -p '$h/.config/containers' && cat > '$h/.config/containers/containers.conf'"
+    fi
+    if [ ! -S $sock ]; then
         {{as}} sh -c 'nohup podman system service --time=0 >/dev/null 2>&1 &'
         for i in $(seq 20); do [ -S $sock ] && break; sleep 0.5; done
     fi
-    {{as}} podman info >/dev/null 2>&1 || { echo "podman does not work for $u (try: {{as}} podman info)"; exit 1; }
+    {{as}} podman info >/dev/null 2>&1 || { echo "podman does not work for $u (try: {{as}} podman info)"
+        [ -e /etc/NIXOS ] && printf '\nOn NixOS, declare the account in configuration.nix:\n\n%s\n' "$nix"; exit 1; }
     {{as}} podman compose version >/dev/null 2>&1 ||
         { echo "podman compose needs a provider: install podman-compose system-wide"; exit 1; }
     # the tydig you ran as yourself, before: stopped, its data copied over once
-    if [ -n "$(podman ps -q --filter ancestor=localhost/tydig 2>/dev/null)" ]; then
-        echo "stopping the tydig you ran as yourself"; podman compose down
-    fi
+    old=$(podman ps -q --filter ancestor=localhost/tydig 2>/dev/null || true)
+    [ -z "$old" ] || { echo "stopping the tydig you ran as yourself"; podman rm -f $old >/dev/null; }
     if [ -f data/.auth-secret ] && ! sudo test -e "$h/data/.auth-secret"; then
         echo "copying data/ into $u's account (your data/ is left as it was)"
         sudo -u "$u" mkdir -p "$h/data"
