@@ -53,6 +53,8 @@ const pvAnchor = await page.evaluate(() => {
   return { line: i + 1, text: lines[i]?.querySelector('.cm-comment-anchor').textContent }
 })
 check('comment from a preview selection lands on the right source text', pvBtn && pvAnchor.text === 'decision rule' && pvAnchor.line === 23)
+await page.hover('.cm-comment-anchor'); await sleep(900)
+check('hovering commented text shows the comment', !!(await page.$eval('.cm-comment-tip', e => e.textContent).catch(() => '')))
 
 // Uploads: into figures/ (the prompt's default), which opens to show them.
 // The .dat has no MIME type, so the browser sends no Content-Type.

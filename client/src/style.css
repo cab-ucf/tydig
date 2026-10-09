@@ -178,6 +178,8 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
 
 /* cm tooltips/autocomplete on dark */
 .cm-tooltip { background: var(--ink) !important; border: 1px solid var(--ink-3) !important; color: var(--fg); }
+.cm-comment-tip { max-width: 28rem; padding: .3rem .6rem; font: .8rem var(--sans); white-space: pre-wrap; }
+.cm-comment-tip p { margin: .2rem 0; }
 .cm-tooltip-autocomplete ul li[aria-selected] { background: var(--ink-3) !important; color: var(--hi); }
 .cm-diagnostic { font: .75rem var(--sans); }
 

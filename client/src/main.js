@@ -1,6 +1,6 @@
 import { link } from './link.js' // first: patches fetch and WebSocket in link mode
 import { basicSetup } from 'codemirror'
-import { EditorView, keymap, Decoration, ViewPlugin } from '@codemirror/view'
+import { EditorView, keymap, Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
 import { EditorState, Annotation, Compartment, Prec } from '@codemirror/state'
 import { HighlightStyle, syntaxHighlighting, LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
@@ -254,6 +254,15 @@ let view = null, currentPath = null
 const undoManagers = new Map()
 const vimComp = new Compartment(), langComp = new Compartment(), lspComp = new Compartment()
 
+// Hovering commented text shows its comments
+const commentHover = hoverTooltip((v, pos) => {
+  const cs = fileComments(currentPath).filter(c => c.from <= pos && pos <= c.to)
+  return cs.length && { pos: cs[0].from, end: cs[0].to, above: true, create: () => {
+    const dom = document.createElement('div'); dom.className = 'cm-comment-tip'
+    dom.replaceChildren(...cs.map(c => Object.assign(document.createElement('p'), { textContent: `${c.author}: ${c.text}` })))
+    return { dom }
+  } }
+})
 const commentHighlights = ViewPlugin.fromClass(class {
   constructor() { this.decorations = this.build() }
   update(u) {
@@ -288,7 +297,7 @@ async function openFile(p) {
         lspComp.of(lsp),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
-        commentHighlights,
+        commentHighlights, commentHover,
         EditorView.lineWrapping,
         EditorView.updateListener.of(u => { if (u.docChanged) { scheduleCompile(); updateWordCount() } }),
       ],
