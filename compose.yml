@@ -1,11 +1,18 @@
-# tydig, containerised. `just up` (or `podman compose up`) then open
-# http://localhost:8080 -- one port serves the client, REST, auth, sync, LSP.
+# tydig, containerised. `just` (or `just up`) then open http://localhost:8080
+# -- one port serves the client, REST, auth, sync and LSP.
 #
-# The one subtlety: recipe builds run in a *separate* sandbox container, and
-# the server asks the host's podman to start it. The host mounts the project
-# directory by the path the server names, so that path must mean the same
-# thing on both sides. Hence TYDIG_DATA is mounted at itself, and must be
-# absolute. `just` sets it to <repo>/data for you.
+# Three containers, each holding only what it needs:
+#   app      the hub. Your projects and accounts; no podman, no host keys.
+#   sandbox  holds podman's socket and starts one thing: the build sandbox,
+#            on one project, with fixed flags (server/sandbox.mjs).
+#   egress   the build network's only way out: public HTTPS only.
+# On Linux `just` runs all of it as its own account (`tydig`), so even a way
+# out of a container lands in an account that holds nothing but tydig.
+#
+# The host mounts a project by the path the sandbox names, so TYDIG_DATA is
+# mounted at itself, and must be absolute. `just` sets it for you.
+
+name: tydig
 
 services:
   app:
@@ -29,6 +36,7 @@ services:
       # rate limits key on (1 for one proxy), or 'loopback' / its address.
       TYDIG_TRUST_PROXY: "${TYDIG_TRUST_PROXY:-}"
       TYDIG_MAX_BUILDS: "${TYDIG_MAX_BUILDS:-2}"
+      TYDIG_SANDBOX: sandbox:7000
       # The link collaborators open (`just link`): tydig's static site plus a
       # seed this hub keeps in data/. Reached over iroh, so no domain or open
       # port is needed. TYDIG_LINK=0 turns it off.
@@ -36,10 +44,6 @@ services:
       TYDIG_LINK: "${TYDIG_LINK:-1}"
       # Same absolute path inside and outside the container (see above).
       TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
-      # Where to find the host's podman, mounted below.
-      CONTAINER_HOST: "unix:///run/podman/podman.sock"
-      TYDIG_IMAGE: "${TYDIG_IMAGE:-localhost/tydig-build}"
-      TYDIG_BUILD_NET: "${TYDIG_BUILD_NET:-1}"
       # Hub-to-hub federation over iroh. n0 = free public relays + discovery
       # (default), off = direct only, local = LAN/tests. TYDIG_IROH=0 disables.
       TYDIG_IROH: "${TYDIG_IROH:-1}"
@@ -53,19 +57,56 @@ services:
     volumes:
       # Projects, accounts, keys, git history. Identical path both sides.
       - "${TYDIG_DATA:-/var/lib/tydig/data}:${TYDIG_DATA:-/var/lib/tydig/data}:z"
-      # The host's rootless podman socket: lets the server start build
-      # sandboxes as siblings rather than nesting containers. Start it with
-      #   systemctl --user enable --now podman.socket
-      - "${TYDIG_PODMAN_SOCK:-/run/user/1000/podman/podman.sock}:/run/podman/podman.sock"
-      # Optional SSH keys, read-only. git@ remotes normally use the deploy
-      # key the hub makes per project (Settings > Git remote); set TYDIG_SSH
-      # to lend it yours, and every project member can reach what they reach.
-      - "${TYDIG_SSH:-/dev/null}:/root/.ssh:ro"
-    # No SELinux relabel of ~/.ssh (that would break sshd's own use of it);
-    # this container already holds the podman socket, so labels add nothing.
-    security_opt: [label=disable]
+    networks: [default, ctl]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    # level s0: the hub reads what builds write (both share it), while SELinux
+    # still keeps either from the host's files
+    security_opt: [no-new-privileges, "label=level:s0"]
     # Federation over iroh needs no published port: hubs reach each other by
     # public key through NAT (hole punching, relays as fallback). For the best
     # chance of direct connections instead of relayed ones, uncomment:
     # network_mode: host
     restart: unless-stopped
+
+  sandbox:
+    image: localhost/tydig
+    command: [node, server/sandbox.mjs]
+    environment:
+      TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
+      TYDIG_SANDBOX: "0.0.0.0:7000"
+      TYDIG_IMAGE: "${TYDIG_IMAGE:-localhost/tydig-build}"
+      # 1: public HTTPS through egress (packages, data). 0: no network at all.
+      TYDIG_BUILD_NET: "${TYDIG_BUILD_NET:-1}"
+      CONTAINER_HOST: "unix:///run/podman/podman.sock"
+    volumes:
+      # read-only: only to pin which folder a sandbox gets
+      - "${TYDIG_DATA:-/var/lib/tydig/data}:${TYDIG_DATA:-/var/lib/tydig/data}:ro"
+      # rootless podman of the account tydig runs as:
+      #   systemctl --user enable --now podman.socket
+      - "${TYDIG_PODMAN_SOCK:-/run/user/1000/podman/podman.sock}:/run/podman/podman.sock"
+    networks: [ctl]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    # a socket from the host cannot be relabelled, so no SELinux label here
+    security_opt: [no-new-privileges, label=disable]
+    healthcheck: { disable: true }
+    restart: unless-stopped
+
+  egress:
+    image: localhost/tydig
+    command: [node, server/egress.mjs]
+    networks: [default, build]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    healthcheck: { disable: true }
+    restart: unless-stopped
+
+networks:
+  # hub <-> sandbox, nothing else on it
+  ctl: { internal: true }
+  # builds <-> egress; the name is what sandbox.mjs attaches builds to
+  build: { internal: true, name: tydig-build }

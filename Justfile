@@ -4,24 +4,31 @@
 # installed -- not even Node. Settings (TYDIG_URL, ...) come from .env.
 set dotenv-load
 
+# On Linux the hub runs as its own account, `tydig` (made once, with sudo),
+# with its own rootless podman: a way out of any container lands in an account
+# that holds nothing but tydig -- not yours, with everything else you keep.
+# TYDIG_USER= (empty) runs it as you: no sudo, macOS, or a machine of its own.
+export TYDIG_USER := env_var_or_default("TYDIG_USER", if os() == "linux" { "tydig" } else { "" })
+home := if TYDIG_USER == "" { justfile_directory() } else { "/var/lib/" + TYDIG_USER }
+src := if TYDIG_USER == "" { justfile_directory() } else { home / "src" }
+# a command, as that account, in its copy of this repository
+as := if TYDIG_USER == "" { "" } else { "sudo -u " + TYDIG_USER + " env HOME=" + home + \
+  " XDG_RUNTIME_DIR=/run/user/$(id -u " + TYDIG_USER + ") sh -c 'cd " + src + " && exec \"$@\"' -" }
+
 # Projects, accounts and git history live here. Absolute, and mounted at the
-# same path inside the container so the server and the host's podman agree on
-# what a project path means (see compose.yml).
-export TYDIG_DATA := justfile_directory() / "data"
+# same path inside the containers so the hub and podman agree on what a
+# project path means (see compose.yml).
+export TYDIG_DATA := home / "data"
 export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
-# git@ remotes use a deploy key the hub makes per project. TYDIG_SSH=~/.ssh
-# lends the hub your own keys instead, and with them every repo they reach.
-export TYDIG_SSH := env_var_or_default("TYDIG_SSH", `mkdir -p data/.ssh && echo "$PWD/data/.ssh"`)
-export TYDIG_PODMAN_SOCK := env_var_or_default("TYDIG_PODMAN_SOCK", "/run/user/" + `id -u` + "/podman/podman.sock")
 
 # Do everything: build both images, start the server, wait for it, open sesame.
 # This is what plain `just` runs.
 default: serve
 
 # Build both images, start the server, wait for it, print the URL.
-serve: preflight sandbox image up
+serve: preflight account sandbox image up
     #!/usr/bin/env bash
     set -uo pipefail
     printf 'waiting for the server'
@@ -30,7 +37,7 @@ serve: preflight sandbox image up
             echo
             echo "  tydig is up:  {{TYDIG_URL}}"
             echo "  collaborators, from any browser, nothing to install:"
-            echo "                $(cat "{{TYDIG_DATA}}/link" 2>/dev/null || echo '(link off)')"
+            echo "                $({{as}} cat "{{TYDIG_DATA}}/link" 2>/dev/null || echo '(link off)')"
             echo
             echo "  Create an account, then create a project. It scaffolds a"
             echo "  pre-registered report: every number and conclusion is computed"
@@ -53,17 +60,59 @@ preflight:
     #!/usr/bin/env bash
     set -uo pipefail
     command -v podman >/dev/null || { echo "podman is not installed. It is the only prerequisite."; exit 1; }
-    if ! podman info >/dev/null 2>&1; then
+    if [ -z "{{TYDIG_USER}}" ] && ! podman info >/dev/null 2>&1; then
         echo "podman is installed but not working for this user (try: podman info)."
         exit 1
     fi
-    if [ ! -S "{{TYDIG_PODMAN_SOCK}}" ]; then
-        echo "note: no podman socket at {{TYDIG_PODMAN_SOCK}}"
-        echo "      Editing, live preview, comments and checkpoints will work;"
-        echo "      recipe builds will not, since there is nothing to run them in."
-        echo "      Fix with:  systemctl --user enable --now podman.socket"
-        echo
+
+# The account tydig runs as, its rootless podman, and its own copy of this
+# repository (images are built from that: it never reads your home).
+[private]
+account:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    u="{{TYDIG_USER}}" h="{{home}}"
+    [ -n "$u" ] || exit 0
+    if ! id "$u" >/dev/null 2>&1; then
+        echo "making the account $u (sudo, once): tydig runs as it, apart from you"
+        sudo useradd --create-home --home-dir "$h" --shell /usr/sbin/nologin --comment 'tydig hub' "$u"
     fi
+    sudo chmod 700 "$h"
+    # rootless podman maps containers to ids of the account's own
+    next() { awk -F: '{e=$2+$3} e>m{m=e} END{print (m>100000?m:100000)}' "$1"; }
+    grep -q "^$u:" /etc/subuid || { s=$(next /etc/subuid); sudo usermod --add-subuids "$s-$((s+65535))" "$u"; }
+    grep -q "^$u:" /etc/subgid || { s=$(next /etc/subgid); sudo usermod --add-subgids "$s-$((s+65535))" "$u"; }
+    # its podman runs with nobody logged in as it, and again after a reboot
+    uid=$(id -u "$u") sock=/run/user/$(id -u "$u")/podman/podman.sock
+    sudo loginctl enable-linger "$u" 2>/dev/null || true
+    for i in $(seq 20); do [ -d /run/user/$uid ] && break; sleep 0.5; done
+    sudo -u "$u" sh -c "rm -rf '$h/src' && mkdir '$h/src'"
+    {{as}} systemctl --user enable --now podman.socket podman-restart.service >/dev/null 2>&1 || true
+    if [ ! -S $sock ]; then
+        echo "note: no systemd for $u, so its podman lasts until a reboot (then: just)"
+        sudo install -d -o "$u" -m 700 /run/user/$uid
+        printf '[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' |
+            sudo -u "$u" sh -c "mkdir -p '$h/.config/containers' && cat > '$h/.config/containers/containers.conf'"
+        {{as}} sh -c 'nohup podman system service --time=0 >/dev/null 2>&1 &'
+        for i in $(seq 20); do [ -S $sock ] && break; sleep 0.5; done
+    fi
+    {{as}} podman info >/dev/null 2>&1 || { echo "podman does not work for $u (try: {{as}} podman info)"; exit 1; }
+    {{as}} podman compose version >/dev/null 2>&1 ||
+        { echo "podman compose needs a provider: install podman-compose system-wide"; exit 1; }
+    # the tydig you ran as yourself, before: stopped, its data copied over once
+    if [ -n "$(podman ps -q --filter ancestor=localhost/tydig 2>/dev/null)" ]; then
+        echo "stopping the tydig you ran as yourself"; podman compose down
+    fi
+    if [ -f data/.auth-secret ] && ! sudo test -e "$h/data/.auth-secret"; then
+        echo "copying data/ into $u's account (your data/ is left as it was)"
+        sudo -u "$u" mkdir -p "$h/data"
+        tar -C data --exclude=./.ssh -cf - . | sudo -u "$u" tar -xf - -C "$h/data"
+    fi
+    # what you have here, committed or not; settings from your environment
+    git ls-files -z -co --exclude-standard | tar --null -T - --ignore-failed-read -cf - |
+        sudo -u "$u" tar -xf - -C "$h/src"
+    { env | grep '^TYDIG_' | grep -v '^TYDIG_USER=\|^TYDIG_PODMAN_SOCK='; echo "TYDIG_PODMAN_SOCK=$sock"; } |
+        sudo -u "$u" sh -c "umask 077; cat > '$h/src/.env'"
 
 # Report what the *running* server actually believes, which is the fastest way
 # to settle an "Invalid origin" or "cannot sign in" problem.
@@ -72,10 +121,12 @@ doctor:
     set -uo pipefail
     echo "expected url : {{TYDIG_URL}}"
     echo "data dir     : {{TYDIG_DATA}}"
-    echo "podman sock  : {{TYDIG_PODMAN_SOCK}} $(test -S "{{TYDIG_PODMAN_SOCK}}" && echo '(present)' || echo '(MISSING: builds will fail)')"
+    echo "runs as     : ${TYDIG_USER:-you}"
+    sock=/run/user/$(id -u {{TYDIG_USER}})/podman/podman.sock
+    echo "podman sock  : $sock $({{as}} test -S $sock && echo '(present)' || echo '(MISSING: builds will fail)')"
     echo
-    echo "--- container"
-    podman compose ps 2>/dev/null || echo "compose not running"
+    echo "--- containers"
+    {{as}} podman compose ps 2>/dev/null || echo "compose not running"
     echo
     echo "--- what the running server reports"
     cfg=$(curl -s -m 5 -H "origin: {{TYDIG_URL}}" "{{TYDIG_URL}}/api/auth-config" || true)
@@ -125,38 +176,39 @@ help:
     @echo "  just test           all API suites, two-hub federation, git remotes"
     @echo "  just test-ui        drive the real UI in headless Chrome"
     @echo "  just test-link      open a hub by its link, via a local iroh-relay"
+    @echo "  just test-sandbox   the build sandbox, with real podman"
     @echo
+    @echo "runs as  : ${TYDIG_USER:-you}"
     @echo "data dir : {{TYDIG_DATA}}"
     @echo "url      : {{TYDIG_URL}}"
 
 # The sandbox image that recipe builds run inside (typst, just, python stack).
 sandbox:
-    podman build -t tydig-build -f sandbox/Containerfile .
+    {{as}} podman build -t tydig-build -f sandbox/Containerfile .
 
 # The app server image (client build + Node runtime).
 image:
-    podman build --format docker -t tydig -f Containerfile.server .
+    {{as}} podman build --format docker -t tydig -f Containerfile.server .
 
-# Start the server. Needs the host's podman socket for sandboxed builds:
-#   systemctl --user enable --now podman.socket
+# Start the hub, its sandbox service and the build network's egress.
 # --force-recreate matters: with the same image tag, compose will happily
 # leave the old container running, so a rebuilt image never takes effect and
 # you debug code that isn't deployed.
-up:
-    @mkdir -p "{{TYDIG_DATA}}"
-    podman compose up -d --force-recreate
+up: account
+    {{as}} mkdir -p "{{TYDIG_DATA}}"
+    TYDIG_PODMAN_SOCK=${TYDIG_PODMAN_SOCK:-/run/user/$(id -u)/podman/podman.sock} {{as}} podman compose up -d --force-recreate
 
 down:
-    podman compose down
+    {{as}} podman compose down
 
 restart: down up
 
 logs:
-    podman compose logs -f app
+    {{as}} podman compose logs -f app
 
 # The link collaborators open in any browser (also in Settings > Share).
 link:
-    @cat "{{TYDIG_DATA}}/link"
+    @{{as}} cat "{{TYDIG_DATA}}/link"
 
 # Run an agent member of PROJECT (Share > Agents gives its token):
 #   TYDIG_AGENT_TOKEN=tyd_... just agent paper
@@ -167,11 +219,11 @@ agent project:
 # Give an account a fresh password and print it (no mail to reset by);
 # with no address, list the accounts.
 passwd email='':
-    podman compose exec app node server/passwd.mjs {{email}}
+    {{as}} podman compose exec app node server/passwd.mjs {{email}}
 
 # Shell inside the running server (inspect data/, git history, run git notes).
 shell:
-    podman compose exec app bash
+    {{as}} podman compose exec app bash
 
 # Host dev loop: client on :5173 with hot reload, server on :3000.
 # The origins above describe the *containerised* server on :8080; in dev the
@@ -181,9 +233,11 @@ dev:
     #!/usr/bin/env bash
     npm install
     trap 'kill 0' EXIT
+    mkdir -p data
     export TYDIG_URL=http://localhost:5173 \
-        TYDIG_ORIGINS=http://localhost:5173,http://localhost:3000
-    npm -w server start & npm -w client run dev
+        TYDIG_ORIGINS=http://localhost:5173,http://localhost:3000 \
+        TYDIG_DATA=$PWD/data TYDIG_SANDBOX=$PWD/data/sandbox.sock TYDIG_BUILD_NET=0
+    node server/sandbox.mjs & npm -w server start & npm -w client run dev
 
 # Full test suite. Each suite gets a fresh server and a fresh data dir.
 test:
@@ -192,7 +246,7 @@ test:
     npm install >/dev/null
     npm run build >/dev/null
     repo=$PWD
-    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest; do
+    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest; do
         # each suite in a scratch dir of its own: never the real data/
         t=$(mktemp -d); cd "$t"
         echo "--- $suite"
@@ -215,6 +269,11 @@ test:
     echo
     echo "all suites passed"
     just test-fed
+
+# The sandbox service with real rootless podman, as the account tydig runs
+# as: what a build can touch, and what the hub can ask for.
+test-sandbox: account
+    {{as}} node server/sandboxtest.mjs
 
 # Two independent hubs (own ports, data dirs, iroh identities) federating one
 # project over iroh on the loopback: join by invite, edits both ways, refusal
@@ -302,13 +361,12 @@ test-link:
 # Run a project's build graph in the sandbox, without the app.
 #   just paper my-project all
 paper project target="all":
-    podman run --rm --userns=keep-id:uid=1000,gid=1000 \
+    {{as}} podman run --rm --network=none --userns=keep-id:uid=1000,gid=1000 \
         --memory=2g --pids-limit=512 --cpus=2 \
         --cap-drop=ALL --security-opt no-new-privileges \
-        --read-only --tmpfs /tmp:rw,size=512m \
-        -e HOME=/tmp -e MPLCONFIGDIR=/tmp/mpl \
-        -e TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages \
-        -v "{{TYDIG_DATA}}/{{project}}:/work:rw,z" -v "{{TYDIG_DATA}}/{{project}}/.git:/work/.git:ro,z" -w /work \
+        --read-only --tmpfs /tmp:rw,size=512m --tmpfs /work/.git:ro,size=4k,notmpcopyup \
+        -e HOME=/tmp -e MPLCONFIGDIR=/tmp/mpl -e TYPST_ROOT=/work \
+        -v "{{TYDIG_DATA}}/{{project}}:/work:rw,z" -w /work \
         localhost/tydig-build make {{target}}
 
 # Generate a stable session secret (put it in .env before first sign-up).
@@ -329,8 +387,8 @@ sso:
     @echo "  {{TYDIG_URL}}/api/auth/oauth2/callback/sso"
     @echo "scopes: openid profile email (authorization code + PKCE)"
 
-# Remove containers and images. Project data in data/ is left alone.
+# Remove containers and images. Project data is left alone.
 clean:
-    -podman compose down
-    -podman rmi localhost/tydig localhost/tydig-build
+    -{{as}} podman compose down
+    -{{as}} podman rmi localhost/tydig localhost/tydig-build
     rm -rf client/dist

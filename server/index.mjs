@@ -13,10 +13,12 @@ import { tmpdir } from 'node:os'
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, constants as FS } from 'node:fs'
 import { randomBytes, createHash } from 'node:crypto'
 import path from 'node:path'
+import net from 'node:net'
+import { at } from './sandbox.mjs'
 
 const run = promisify(execFile)
 // Project store. TYDIG_DATA must be an absolute path when the server runs
-// in a container and delegates builds to the host's podman: the host mounts
+// in a container and builds go to the sandbox service: the host mounts
 // the project dir by the path the server names, so both sides must agree.
 const DATA = path.resolve(process.env.TYDIG_DATA || 'data')
 
@@ -30,27 +32,24 @@ console.log('auth ready (email/password + project sharing via organizations)')
 
 
 // ---------- sandboxed builds ----------
-const IMAGE = process.env.TYDIG_IMAGE || 'localhost/tydig-build'
 const UNSAFE = process.env.TYDIG_UNSAFE_BUILDS === '1'
-// Network is ON by default: collaborators already run arbitrary computation
-// (Typst is turing-complete) and have full project access; the sandbox's job
-// is protecting the host. TYDIG_BUILD_NET=0 restores --network=none
-// (recommended on cloud hosts where the metadata service is reachable).
-const NET = process.env.TYDIG_BUILD_NET === '0' ? ['--network=none'] : []
+// Builds and the LSP run in the build sandbox, started by sandbox.mjs: the
+// hub never holds the podman socket, only a line to ask for a sandbox.
 // just is never run on the host unless UNSAFE: even `just --summary`
 // evaluates backtick assignments in the justfile (code execution).
-// keep-id: the hub's user is uid 1000 inside, so a build can write the
-// project that user owns (rootless podman otherwise maps 1000 to a subuid).
-// --timeout: conmon kills the container even if the podman client dies.
-const sandboxArgs = (dir, secs, ...extra) => ['run', '--rm', ...NET, `--timeout=${secs}`, ...extra,
-  '--userns=keep-id:uid=1000,gid=1000', '--memory=2g', '--pids-limit=512', '--cpus=2',
-  '--cap-drop=ALL', '--security-opt', 'no-new-privileges',
-  '--read-only', '--tmpfs', '/tmp:rw,size=512m',
-  '-e', 'HOME=/tmp', '-e', 'MPLCONFIGDIR=/tmp/mpl', '-e', 'TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages',
-  // the project is the root: a file in a subfolder may still import ../lib/x.typ
-  '-e', 'TYPST_ROOT=/work',
-  // .git read-only: hooks or config written by a build would run on the host at the next commit
-  '-v', `${dir}:/work:rw,z`, '-v', `${dir}/.git:/work/.git:ro,z`, '-w', '/work', IMAGE]
+const SANDBOX = at(process.env.TYDIG_SANDBOX || 'sandbox:7000')
+const sandbox = (proj, cmd, secs, i) => {
+  const s = net.connect(...SANDBOX)
+  s.write(JSON.stringify({ proj, cmd, secs, i }) + '\n')
+  return s
+}
+const inSandbox = (name, cmd, secs) => new Promise((ok, no) => {
+  let out = ''
+  sandbox(name, cmd, secs).on('data', d => out += d).on('error', no).on('end', () => {
+    const r = /^\{/.test(out) ? JSON.parse(out) : { code: -1, stdout: '', stderr: 'the build sandbox did not answer' }
+    r.code === 0 ? ok(r) : no(Object.assign(new Error(r.stderr), r))
+  })
+})
 const building = new Set() // one build at a time per project
 const MAX_BUILDS = Number(process.env.TYDIG_MAX_BUILDS || 2)
 // Recipes run in the sandbox: `make <target>` when the project has a
@@ -63,7 +62,7 @@ const runner = (name, args, timeout = 180_000) => {
   const argv = tool === 'make' ? ['-C', '/work', ...args] : args
   return (UNSAFE
     ? run(tool, args, { cwd: proj(name), env: { ...process.env, TYPST_ROOT: proj(name) }, timeout, maxBuffer: 8e6 })
-    : run('podman', [...sandboxArgs(proj(name), timeout / 1000), tool, ...argv], { timeout: timeout + 10_000, maxBuffer: 8e6 })
+    : inSandbox(name, [tool, ...argv], timeout / 1000)
   ).finally(() => scrub(name))
 }
 // What a build may leave that the hub would trust: nested git repos (their
@@ -137,8 +136,9 @@ mkdirSync(KEYS, { recursive: true, mode: 0o700 })
 if (!existsSync(KNOWN)) writeFileSync(KNOWN,
   'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n')
 const keyOf = n => path.join(KEYS, n)
-const ssh = n => `ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile='${KNOWN}'` +
-  (existsSync(keyOf(n)) ? ` -i '${keyOf(n)}' -o IdentitiesOnly=yes` : '')
+// the project's deploy key and nothing else: no ~/.ssh keys, config or agent
+const ssh = n => `ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile='${KNOWN}'` +
+  ` -o IdentitiesOnly=yes -o IdentityAgent=none -i '${keyOf(n)}'`
 const deployKey = async n => {
   if (!existsSync(keyOf(n))) await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', `tydig:${n}`, '-f', keyOf(n)])
   return (await readFile(keyOf(n) + '.pub', 'utf8')).trim()
@@ -790,8 +790,8 @@ const sandboxHint = e => {
   const msg = (e.stderr || e.message || '')
   if (/initializing source|image not known|pinging container registry/.test(msg))
     return 'sandbox image missing: run `just sandbox` on the server'
-  if (/podman.*ENOENT/.test(msg) || e.code === 'ENOENT')
-    return 'podman not found on server (or set TYDIG_UNSAFE_BUILDS=1 to run on host, trusted setups only)'
+  if (typeof e.code === 'string')
+    return 'the build sandbox is not running: `just up` starts it (or TYDIG_UNSAFE_BUILDS=1 runs builds on this machine, trusted setups only)'
   return msg.slice(0, 400) || 'build sandbox unavailable'
 }
 
@@ -810,7 +810,7 @@ p.post('/build/:recipe', async (req, res) => {
     const r = await runner(req.params.proj, [req.params.recipe])
     res.json({ ok: true, output: r.stdout + r.stderr })
   } catch (e) {
-    const spawnFail = e.code === 'ENOENT' || /initializing source|image not known/.test(e.stderr || '')
+    const spawnFail = typeof e.code === 'string' || /initializing source|image not known/.test(e.stderr || '')
     res.json({ ok: false, output: spawnFail ? sandboxHint(e) : (e.stdout || '') + (e.stderr || e.message) })
   } finally { building.delete(req.params.proj) }
 })
@@ -1140,7 +1140,7 @@ httpServer.on('upgrade', async (req, sock, head) => {
     // tinymist runs in the build sandbox, like any other project code: its
     // commands write files, so on the host it would be a way out of the project.
     const lsp = UNSAFE ? spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })
-      : spawn('podman', [...sandboxArgs(proj(name), 86400, '-i'), 'tinymist', 'lsp'], { stdio: ['pipe', 'pipe', 'ignore'] })
+      : (s => ({ stdin: s, stdout: s, on: s.on.bind(s), kill: () => s.destroy() }))(sandbox(name, ['tinymist', 'lsp'], 86400, true))
     const who = sess.user.id
     lsps++; lspsOf.set(who, (lspsOf.get(who) || 0) + 1)
     lsp.on('close', () => { lsps--; lspsOf.set(who, lspsOf.get(who) - 1) })
@@ -1165,6 +1165,6 @@ httpServer.on('upgrade', async (req, sock, head) => {
       }
     })
     const bye = () => { try { lsp.kill() } catch {} }
-    ws.on('close', bye); lsp.on('exit', () => ws.close())
+    ws.on('close', bye); lsp.on('close', () => ws.close())
   })
 })

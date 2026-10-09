@@ -18,8 +18,7 @@
 // it. A conflict in the working tree is therefore never fatal -- we resolve
 // it by regenerating from the merged CRDT.
 import { existsSync } from 'node:fs'
-import { lookup } from 'node:dns/promises'
-import { BlockList, isIP } from 'node:net'
+import { publicOnly } from './public.mjs'
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import * as Y from 'yjs'
@@ -51,20 +50,13 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
   // A remote on this hub's own network (loopback, private, link-local, cloud
   // metadata) is refused unless TYDIG_GIT_PRIVATE=1: otherwise anyone who may
   // set a remote could make the hub probe hosts only it can reach.
-  const PRIVATE = new BlockList()
-  for (const [a, n] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
-    ['172.16.0.0', 12], ['192.168.0.0', 16]]) PRIVATE.addSubnet(a, n, 'ipv4')
-  for (const [a, n] of [['::', 127], ['fc00::', 7], ['fe80::', 10]]) PRIVATE.addSubnet(a, n, 'ipv6')
   const hostOf = url => (/^[\w.-]+@([^:/]+):/.exec(url) || /^\w+:\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)/.exec(url))?.[1]?.replace(/^\[|\]$/g, '')
   async function reachable(url) {
     const host = hostOf(url)
     if (!host || process.env.TYDIG_GIT_PRIVATE === '1') return
-    const ips = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true }).catch(() => [])
-    for (const { address, family } of ips) {
-      const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(address)?.[1]
-      if (PRIVATE.check(v4 || address, v4 || family === 4 ? 'ipv4' : 'ipv6'))
-        throw new Error(`${host} is on this hub's own network; set TYDIG_GIT_PRIVATE=1 on the hub to allow that`)
-    }
+    await publicOnly(host).catch(e => {
+      throw new Error(`${e.message}; set TYDIG_GIT_PRIVATE=1 on the hub to allow that`)
+    })
   }
 
   async function doc(p) {

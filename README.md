@@ -29,6 +29,12 @@ when in contact with ambient air (#R.T_ambient degC).
 just
 ```
 
+On Linux this makes an account of its own, `tydig` (sudo, once), and runs
+everything as it with rootless podman. Your projects and its accounts live in
+`/var/lib/tydig/data` (one tydig run as you before is copied there). Nothing
+of yours is in reach of it: not your files, not your SSH keys.
+`TYDIG_USER=` runs it as you instead (macOS, or no sudo).
+
 ## Share it: a link, nothing to install
 
 `just` prints a link (and **Settings > Share** shows it):
@@ -39,7 +45,7 @@ alone cannot sign up, so nobody can claim an invitation by guessing it. The page
 over [iroh](https://iroh.computer) through irp's wasm client, end-to-end
 encrypted, through NAT, so the hub can be a laptop with no open port, domain or
 certificate. The code is the hub's address and is unguessable; sign-in and
-invitations still decide who gets in. A new code: delete `data/link-seed` and
+invitations still decide who gets in. A new code: delete `link-seed` in the data folder and
 restart. Links go through n0's US-East relay (`use1-1`), which networks that
 block other countries still reach; `TYDIG_LINK_RELAY` picks another region or
 your own relay, and the link then names it (`;r=...`). Firefox
@@ -137,15 +143,21 @@ An agent can also work like any collaborator, on its own copy:
 - **Through the git remote**: it clones the project's repo, commits, and
   pushes; the hub pulls on every save (Ctrl-S), on "push now", and every
   5 minutes (`TYDIG_GIT_PUSH_MINUTES`).
-- **On the hub's own disk**: run it in `data/<project>/`; each file it writes
+- **On the hub's own disk**: run it in `<data folder>/<project>/`, as the
+  account the hub runs as (`sudo -u tydig`); each file it writes
   is merged into the live text as it lands (files only, never git there).
 
 Where an agent and a person change the same lines, the person's text wins.
 
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.
-Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b`, then start it
-with `OLLAMA_ORIGINS=<the page's address>` so the page may ask it.
+Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b` (any model
+works: thinking ones like qwen3 are asked not to think). Ollama answers only
+pages it is told to: put `OLLAMA_ORIGINS=<the page's address>` (the page says
+which) in Ollama's own environment -- `systemctl edit ollama` and
+`Environment="OLLAMA_ORIGINS=..."` for the Linux service, `launchctl setenv`
+on a Mac -- and restart it. Typed before `ollama serve` in a shell, it misses
+the Ollama already running as a service.
 
 ## Production
 
@@ -160,17 +172,25 @@ with `OLLAMA_ORIGINS=<the page's address>` so the page may ask it.
   project with an address is what lets it sign up (`TYDIG_SIGNUP=open` for a
   trusted LAN). Institutional sign-in: `just sso`. Set `just secret` in
   `.env` before the first sign-up. Forgotten password: `just passwd EMAIL`; `just passwd` lists the accounts.
-- **Builds** run in the rootless podman sandbox (enable the socket:
-  `systemctl --user enable --now podman.socket`): 2 CPUs, 2 GB, 180 s each,
-  `TYDIG_MAX_BUILDS` at once (2). `TYDIG_BUILD_NET=0` cuts their network;
-  do that on cloud hosts.
-- **Backups.** Everything lives in `data/`. Give each project a git remote
+- **Builds** run in the build sandbox: 2 CPUs, 2 GB, 180 s each,
+  `TYDIG_MAX_BUILDS` at once (2), no capabilities, a read-only system, the
+  project folder and nothing else (not even its `.git`). Their network is
+  public HTTPS only, through a proxy that refuses the host, the LAN, the
+  campus network and cloud metadata; `TYDIG_BUILD_NET=0` cuts it entirely.
+- **Isolation.** Three containers, as the `tydig` account: the hub (your
+  data; read-only system, no capabilities, SELinux on), the sandbox service
+  (the only holder of podman's socket; it starts the build sandbox on one
+  project with fixed flags, so a hub broken into still cannot start anything
+  else) and the egress proxy. A way out of any container lands in `tydig`,
+  which holds nothing else. Git over SSH uses the project's deploy key and
+  never yours. `just test-sandbox` checks the sandbox with real podman.
+- **Backups.** Everything lives in the data folder (`just doctor` says where). Give each project a git remote
   (Settings > Git remote) and it is pushed on every save (Ctrl-S), when
   idle and on shutdown. For a private repo, give the `git@` URL: the hub
   makes a key for that project alone and shows it, with a link to add it
   to the repo as a deploy key (tick write access). The private half stays
-  in `data/gitsync/keys/`, out of every build's reach. Accounts are
-  `data/auth.db`, copied while the hub is down.
+  in `gitsync/keys/` there, out of every build's reach. Accounts are
+  `auth.db`, copied while the hub is down.
 - **Limits.** Each project may hold `TYDIG_QUOTA_MB` (1000) of files. Git
   remotes on the hub's own network (private, loopback, link-local) are
   refused unless `TYDIG_GIT_PRIVATE=1`, e.g. for a campus GitLab.

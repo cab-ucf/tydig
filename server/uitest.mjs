@@ -16,8 +16,10 @@ await page.setViewport({ width: 1400, height: 900 })
 const errors = []
 page.on('pageerror', e => errors.push('[pageerror] ' + e.message))
 page.on('error', e => errors.push('[CRASH] ' + e.message))
-page.on('console', m => { if (m.type() === 'error') errors.push('[console] ' + m.text()) })
-page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
+// the stand-in Ollama below refuses on purpose
+const ours = s => /:11434\//.test(s)
+page.on('console', m => { if (m.type() === 'error' && !ours(m.text() + m.location()?.url)) errors.push('[console] ' + m.text()) })
+page.on('response', r => { if (r.status() >= 400 && !ours(r.url())) errors.push(`[http ${r.status()}] ${r.url()}`) })
 const external = []
 // the local model (ghost suggestions) is this machine, asked for by the person
 page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && ![new URL(B).origin, 'http://localhost:11434'].includes(new URL(r.url()).origin)) external.push(r.url()) })
@@ -109,11 +111,15 @@ await page.evaluate(() => document.querySelector('[data-act="share"]').click());
 await page.type('#share-email', 'newcomer@example.com'); await page.click('#share-add button'); await sleep(1500)
 check('sharing with a new address lists it as invited', await page.evaluate(() =>
   /newcomer@example\.com\s*invited/.test(document.getElementById('share-body').innerText)))
-// ghost suggestions, from a stand-in for Ollama on this machine
+// ghost suggestions, from a stand-in for Ollama on this machine: like qwen3,
+// a thinking model that cannot fill in the middle
+let refuse = false
 const ollama = (await import('node:http')).createServer((q, r) => {
   let b = ''; q.on('data', d => b += d); q.on('end', () => {
-    r.writeHead(200, { 'access-control-allow-origin': '*', 'content-type': 'application/json' })
-    r.end(JSON.stringify({ response: /"model":"qwen/.test(b) ? ' GHOSTED' : '' }))
+    const j = JSON.parse(b), h = { 'access-control-allow-origin': '*', 'content-type': 'application/json' }
+    if (refuse) return r.writeHead(403).end() // as Ollama does: no CORS header, so a network error here
+    if (j.suffix) return r.writeHead(400, h).end(JSON.stringify({ error: `${j.model} does not support insert` }))
+    r.writeHead(200, h).end(JSON.stringify({ response: /^qwen/.test(j.model) && j.think === false ? ' GHOSTED' : '' }))
   })
 }).listen(11434)
 await page.evaluate(() => document.querySelectorAll('dialog[open]').forEach(d => d.close()))
@@ -121,8 +127,12 @@ await page.evaluate(() => document.querySelector('[data-act="ghost"]').click());
 await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.type(' x'); await sleep(1500)
 const ghost = await page.$eval('.cm-ghost', e => e.textContent).catch(() => null)
 await page.keyboard.press('Tab'); await sleep(300)
-check('a local model suggests in grey, and Tab takes it', ghost === ' GHOSTED' &&
+check('a local model suggests in grey (a thinking one, with no fill-in-the-middle, too), and Tab takes it', ghost === ' GHOSTED' &&
   await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('x GHOSTED')))
+refuse = true
+await page.keyboard.type(' y'); await sleep(1500)
+check('Ollama refusing the page says how to let it in', await page.evaluate(() =>
+  document.getElementById('toast')?.textContent.includes(`OLLAMA_ORIGINS=${location.origin}`)))
 ollama.close()
 
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
