@@ -1,17 +1,18 @@
 /* Identity: ink (editor, dark) writes onto paper (preview, a lit page).
    Accent: typst teal. One signature, everything else quiet. */
 :root {
-  --ink: #16191d; --ink-2: #1e2228; --ink-3: #2a3038;
+  /* dark is black: the editor, panels and page on #000, high-contrast text */
+  --ink: #000; --ink-2: #111; --ink-3: #333; --editor: #000;
   --paper-bg: #c9ccd1; --paper: #ffffff;
-  --teal: #239dad; --fg: #d7dce2; --fg-dim: #8b94a0;
+  --teal: #2fc1d3; --fg: #f2f2f2; --fg-dim: #a6a6a6;
   --mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
   --sans: system-ui, 'Inter', sans-serif;
-  --hi: #fff; --line: #ffffff08; --bad-bg: #3b1f1f; --bad-fg: #f0b9af; --good-bg: #1d3326; --good-fg: #a5d6a7;
+  --hi: #fff; --line: #ffffff14; --bad-bg: #3b1f1f; --bad-fg: #f0b9af; --good-bg: #1d3326; --good-fg: #a5d6a7;
   color-scheme: dark;
 }
 /* light: paper chrome; the editor uses CodeMirror's own light highlighting */
 :root[data-theme="light"] {
-  --ink: #eef0f3; --ink-2: #fbfbfc; --ink-3: #d3d8de; --paper-bg: #d5d8dd;
+  --ink: #eef0f3; --ink-2: #fbfbfc; --ink-3: #d3d8de; --editor: #fbfbfc; --paper-bg: #d5d8dd;
   --teal: #1a7f8c; --fg: #1f252c; --fg-dim: #5f6873;
   --hi: #000; --line: #0000000a; --bad-bg: #fbe3df; --bad-fg: #8e2a1c; --good-bg: #e0f2e3; --good-fg: #1d6a2b;
   color-scheme: light;
@@ -39,9 +40,9 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 #status[data-state="disconnected"] { color: #e06c5b; }
 
 #layout { display: flex; height: calc(100% - 44px); }
-#editor { flex: 1 1 50%; min-width: 0; background: var(--ink-2); overflow: auto; }
+#editor { flex: 1 1 50%; min-width: 0; background: var(--editor); overflow: auto; }
 .disk-img { display: block; max-width: 100%; margin: 1rem auto; background: #fff; }
-.cm-editor { height: 100%; font-family: var(--mono); font-size: 14px; background: var(--ink-2); color: var(--fg); }
+.cm-editor { height: 100%; font-family: var(--mono); font-size: 14px; background: var(--editor); color: var(--fg); }
 .cm-editor .cm-gutters { background: var(--ink); color: var(--fg-dim); border-right: 1px solid var(--ink-3); }
 .cm-editor .cm-activeLine { background: var(--line); }
 .cm-editor .cm-cursor { border-left-color: var(--teal); }
@@ -162,8 +163,8 @@ body.focus #preview { padding: 0; }
 body.focus #page { box-shadow: none; min-height: 100%; }
 
 /* dark theme: dim the rendered page too (inverted, hues kept), not just the chrome */
-body.dark-preview #preview { background: #15171a; }
-body.dark-preview #page { filter: invert(0.93) hue-rotate(180deg); box-shadow: 0 2px 14px #000a; }
+body.dark-preview #preview { background: #000; }
+body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 0 1px #ccc; } /* inverted with the page: #333 */
 
 .recipe label { font-size: .78rem; color: var(--fg-dim); display: flex; gap: .35rem; align-items: center; }
 .recipe select { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 3px; font: .72rem var(--mono); }
