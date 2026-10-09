@@ -7,7 +7,8 @@ import express from 'express'
 import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, constants as FS } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
@@ -179,23 +180,39 @@ async function* walk(dir, base = dir) {
 }
 
 const written = new Map() // proj -> Set of text paths we mirror (for deletions)
-const mirroring = new Set()
+const mirrored = new Map() // proj -> Map path -> the text we last wrote: the base an outside edit is merged from
+
+// An edit from outside (an agent, a shell, a git pull) merged into the live
+// text, three ways, by git merge-file: what changed from base to theirs
+// lands in ours, and where both sides changed the same lines the live
+// text (what people are typing) wins.
+async function merge3(base, ours, theirs) {
+  if (theirs === base || theirs === ours) return ours
+  if (ours === base) return theirs
+  const d = await mkdtemp(path.join(tmpdir(), 'tydig-'))
+  try {
+    const f = ['ours', 'base', 'theirs'].map(n => path.join(d, n))
+    await Promise.all([ours, base, theirs].map((t, i) => writeFile(f[i], t)))
+    return (await run('git', ['merge-file', '-p', '--ours', ...f]).catch(e => e)).stdout
+  } finally { rm(d, { recursive: true, force: true }) }
+}
 
 async function mirror(name, document) {
-  mirroring.add(name)
-  try {
-    await ensureRepo(name)
-    const cur = new Set()
-    for (const [rel, t] of document.getMap('files')) {
-      if (!okPath(rel) || GENERATED.test(rel)) continue
-      await mkdir(path.dirname(inProj(name, rel)), { recursive: true })
-      await safe(name, rel).then(f => writeFile(f, t.toString(), { flag: NOFOLLOW })).catch(e => console.warn(`mirror: skipped ${rel} (${e.message})`))
-      cur.add(rel)
-    }
-    for (const old of written.get(name) ?? [])
-      if (!cur.has(old) && okPath(old) && !GENERATED.test(old)) await safe(name, old).then(f => rm(f, { force: true })).catch(() => {})
-    written.set(name, cur)
-  } finally { setTimeout(() => mirroring.delete(name), 300) }
+  await ensureRepo(name)
+  const cur = new Set(), last = mirrored.get(name) ?? mirrored.set(name, new Map()).get(name)
+  for (const [rel, t] of document.getMap('files')) {
+    if (!okPath(rel) || GENERATED.test(rel)) continue
+    cur.add(rel)
+    // unchanged text is not rewritten: an outside edit waiting to be merged stays
+    const text = t.toString()
+    if (last.get(rel) === text && existsSync(inProj(name, rel))) continue
+    await mkdir(path.dirname(inProj(name, rel)), { recursive: true })
+    await safe(name, rel).then(f => writeFile(f, text, { flag: NOFOLLOW })).then(() => last.set(rel, text))
+      .catch(e => console.warn(`mirror: skipped ${rel} (${e.message})`))
+  }
+  for (const old of written.get(name) ?? [])
+    if (!cur.has(old) && okPath(old) && !GENERATED.test(old)) await safe(name, old).then(f => rm(f, { force: true })).catch(() => {})
+  written.set(name, cur)
 }
 
 // 'typst watch' for the whole project: when anything on disk changes (a build
@@ -208,31 +225,37 @@ function watchProject(name, document) {
   let t
   const seen = new Set()
   const w = watch(proj(name), { recursive: true }, (_ev, fname) => {
-    if (!fname || fname.startsWith('.git') || mirroring.has(name)) return
+    // events from our own writes too: they match what we wrote, so merge to nothing
+    if (!fname || fname.startsWith('.git')) return
     seen.add(fname.replaceAll('\\', '/'))
     clearTimeout(t)
     t = setTimeout(async () => {
       // A new text file (copied in, pulled, written by a script) becomes
       // editable at once; one deleted (rm, rm -r of its folder) leaves the
-      // CRDT. Files already in the CRDT are otherwise left to it: the
-      // editors may be ahead of what is on disk.
-      const files = document.getMap('files'), add = [], gone = []
+      // CRDT; one edited on disk (an agent, a shell) is merged into the live
+      // text from what the hub last wrote, so typing since is kept.
+      const files = document.getMap('files'), add = [], gone = [], edit = []
       for (const rel of seen) {
         if (!existsSync(inProj(name, rel))) {
           gone.push(...[...files.keys()].filter(k => k === rel || k.startsWith(rel + '/')))
           continue
         }
-        if (files.has(rel) || !okPath(rel) || GENERATED.test(rel)) continue
+        if (!okPath(rel) || GENERATED.test(rel)) continue
         const b = await safe(name, rel).then(f => readFile(f)).catch(() => null)
-        const text = b && textOf(b)
-        if (text != null) add.push([rel, text])
+        const text = b && textOf(b), base = mirrored.get(name)?.get(rel)
+        if (text == null) continue
+        if (!files.has(rel)) add.push([rel, text])
+        else if (base != null && text !== base) edit.push([rel, await merge3(base, files.get(rel).toString(), text)])
       }
+      // previews refresh for anything but the hub writing back what is typed
+      const fresh = add.length || edit.length || gone.length || [...seen].some(rel => !files.has(rel))
       seen.clear()
       document.transact(() => {
         for (const [rel, text] of add) files.has(rel) || files.set(rel, new Y.Text(text))
+        for (const [rel, text] of edit) files.has(rel) && setText(files.get(rel), text)
         for (const rel of gone) files.delete(rel)
       })
-      document.getMap('meta').set('diskRev', Date.now())
+      if (fresh) document.getMap('meta').set('diskRev', Date.now())
     }, 400)
   })
   watchers.set(name, w)
@@ -278,6 +301,7 @@ const hocuspocus = Server.configure({
     }
     document.transact(() => { for (const [rel, c] of texts) files.has(rel) ? setText(files.get(rel), c) : files.set(rel, new Y.Text(c)) })
     written.set(name, new Set(files.keys()))
+    mirrored.set(name, new Map()) // nothing known written yet: the first save writes all
     watchProject(name, document)
     return document
   },
@@ -298,7 +322,6 @@ async function store(name, document) {
   await mirror(name, document)
   await git(name, 'add', '-A')
   await git(name, 'commit', '-q', '-m', 'autosave').catch(() => {})
-  gitsync.markDirty(name)
 }
 // Hub-to-hub sync over iroh (see federation.mjs). Off with TYDIG_IROH=0.
 import { createFederation } from './federation.mjs'
@@ -313,8 +336,28 @@ import { createGitSync } from './gitsync.mjs'
 const hubIdFile = path.join(DATA, 'hub-id')
 if (!existsSync(hubIdFile)) writeFileSync(hubIdFile, randomBytes(8).toString('hex') + '\n')
 const localHubId = readFileSync(hubIdFile, 'utf8').trim()
+// Commits on the remote that no hub wrote (an agent's push, an edit on
+// GitHub) reach the CRDT here: each text file they changed, merged three
+// ways from the merge base. A hub's own commits merge as no-ops, since its
+// CRDT state, absorbed first, already holds them.
+async function outside(p, ydoc, head) {
+  const mb = (await git(p, 'merge-base', head, 'FETCH_HEAD')).trim()
+  const show = (c, f) => git(p, 'show', `${c}:${f}`).catch(() => null)
+  const files = ydoc.getMap('files'), out = []
+  for (const rel of (await git(p, 'diff', '--name-only', '-z', mb, 'FETCH_HEAD')).split('\0')) {
+    if (!rel || !okPath(rel) || GENERATED.test(rel) || rel.startsWith('.collab/')) continue
+    const [base, theirs] = await Promise.all([show(mb, rel), show('FETCH_HEAD', rel)])
+    if (theirs?.includes('\0')) continue // binary
+    const t = files.get(rel)
+    out.push([rel, theirs == null ? null : t ? await merge3(base ?? '', t.toString(), theirs) : theirs])
+  }
+  ydoc.transact(() => {
+    for (const [rel, text] of out)
+      text == null ? files.delete(rel) : files.has(rel) ? setText(files.get(rel), text) : files.set(rel, new Y.Text(text))
+  })
+}
 const gitsync = createGitSync({
-  hocuspocus, dataDir: DATA, proj, git, mirror, okName,
+  hocuspocus, dataDir: DATA, proj, git, mirror, okName, outside,
   hubId: () => localHubId,
 })
 

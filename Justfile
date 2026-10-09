@@ -229,7 +229,7 @@ test-fed:
     sleep 7
     echo "--- fedtest (two hubs)"
     node server/fedtest.mjs; rc=$?
-    kill $a $b 2>/dev/null || true
+    kill $a $b 2>/dev/null; wait $a $b 2>/dev/null
     [ $rc -eq 0 ] || { echo "FAILED: fedtest (logs: /tmp/tc-hubA.log /tmp/tc-hubB.log)"; exit 1; }
     just test-git
 
@@ -254,7 +254,7 @@ test-git:
     sleep 6
     echo "--- gitsynctest (two hubs, one git remote)"
     node server/gitsynctest.mjs; rc=$?
-    kill $a $b 2>/dev/null || true
+    kill $a $b 2>/dev/null; wait $a $b 2>/dev/null
     [ $rc -eq 0 ] || { echo "FAILED: gitsynctest (logs: /tmp/tc-gitA.log /tmp/tc-gitB.log)"; exit 1; }
 
 # Browser-level test in headless Chrome: preview compiles, panes open, a

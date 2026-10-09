@@ -92,5 +92,24 @@ const cloned = await readFile('/tmp/plainclone/main.typ', 'utf8')
 check('a plain git clone yields the working project', cloned.includes(MA) && cloned.includes('#let R = json'))
 check('no merge-conflict markers anywhere', !cloned.includes('<<<<<<<'))
 
+// An agent (Claude Code, a script) works on a clone and pushes, while someone
+// types in the same file: after the hub syncs, the editor holds both.
+const { appendFile } = await import('node:fs/promises')
+const g = (...a) => run('git', ['-C', '/tmp/plainclone', '-c', 'user.name=agent', '-c', 'user.email=agent@x', ...a])
+await appendFile('/tmp/plainclone/summary.typ', '\nAGENT WAS HERE\n')
+await g('commit', '-qam', 'agent: one line'); await g('push', '-q', 'origin', 'main')
+docA.getMap('files').get('summary.typ').insert(0, '// LIVE TYPING\n')
+await sleep(2500)
+await a.post(`/p/${PROJ}/gitremote/sync`)
+const live = () => docA.getMap('files').get('summary.typ').toString()
+check('an agent\'s pushed edit reaches the live editor', await until(async () => live().includes('AGENT WAS HERE')))
+check('and typing done meanwhile survives it', live().includes('// LIVE TYPING'))
+
+// An agent editing the hub's own files on disk: merged into the live text
+await appendFile(`${DATA_A}/${PROJ}/main.typ`, '\nDISK EDIT\n')
+const mainA = () => docA.getMap('files').get('main.typ').toString()
+check('an edit on the hub\'s disk reaches the live editor', await until(async () => mainA().includes('DISK EDIT')))
+check('without losing what was there', mainA().includes(MA))
+
 console.log(pass ? '\nGITSYNC ALL PASS' : '\nGITSYNC FAILURES')
 process.exit(pass ? 0 : 1)

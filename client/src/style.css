@@ -154,9 +154,12 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 
 /* collapsible layout */
 body.no-tree #tree-pane { display: none; }
-body.focus #menubar, body.focus #tree-pane, body.focus #side, body.focus #main-label, body.focus #peers { display: none; }
-body.focus #bar { height: 30px; opacity: .75; }
-body.focus #layout { height: calc(100% - 30px); }
+/* focus: nothing but the text and the page; Alt-0 (or the corner) leaves */
+body.focus #bar, body.focus #tree-pane, body.focus #side, body.focus #zoomctl, body.focus .cm-gutters { display: none; }
+body.focus #layout { height: 100%; }
+body.focus #split { width: 2px; }
+body.focus #preview { padding: 0; }
+body.focus #page { box-shadow: none; min-height: 100%; }
 
 /* dark theme: dim the rendered page too (inverted, hues kept), not just the chrome */
 body.dark-preview #preview { background: #15171a; }
@@ -175,7 +178,8 @@ body.dark-preview #page { filter: invert(0.93) hue-rotate(180deg); box-shadow: 0
   background: var(--ink); color: var(--fg-dim); border: 1px solid var(--ink-3); border-radius: 999px;
   font: .72rem var(--sans); padding: .35rem .75rem; cursor: pointer; opacity: .55; }
 #focus-exit:hover { opacity: 1; color: var(--hi); border-color: var(--teal); }
-body.focus #focus-exit { display: block; }
+body.focus #focus-exit { display: block; opacity: 0; }
+body.focus #focus-exit:hover, body.focus #focus-exit:focus-visible { opacity: 1; }
 #qo { background: var(--ink); border: 1px solid var(--ink-3); border-radius: 8px; padding: .5rem; min-width: 420px; margin-top: 8vh; }
 #qo::backdrop { background: #0006; }
 #qo-input { width: 100%; box-sizing: border-box; background: var(--ink-2); border: 1px solid var(--ink-3);
@@ -189,7 +193,6 @@ body.focus #focus-exit { display: block; }
 /* v4: layout fix ([hidden] was overridden by id display rules), sections, tree v2, zoom */
 #side[hidden] { display: none !important; }
 body.no-side #side { display: none; }
-body.focus #bar-comment, body.focus #bar-build, body.focus #wordcount, body.focus .tgl { display: none; }
 
 #bar button#bar-comment, #bar button#bar-build { padding: .25rem .6rem; }
 .tgl { font-size: .9rem !important; padding: .2rem .45rem !important; }

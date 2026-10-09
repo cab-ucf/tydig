@@ -22,11 +22,10 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import * as Y from 'yjs'
 
-export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, hubId, log = console.log }) {
+export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, outside, hubId, log = console.log }) {
   const cfgDir = path.join(dataDir, 'gitsync')
   const cfgPath = p => path.join(cfgDir, `${p}.json`)
   const inFlight = new Map()          // proj -> Promise (one sync at a time)
-  const dirty = new Set()
   const CRDT_DIR = '.collab/crdt'
   const myFile = `${CRDT_DIR}/${hubId()}.bin`
   const intervalMs = Number(process.env.TYDIG_GIT_PUSH_MINUTES || 5) * 60_000
@@ -97,6 +96,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
         // 2. fetch and merge. -X ours keeps our working tree on conflict; the
         //    CRDT files never conflict (one writer each) and are what matters.
         let pulled = 0
+        const head = (await git(p, 'rev-parse', 'HEAD')).trim()
         const fetched = await git(p, 'fetch', c.url, branch).then(() => true).catch(() => false)
         if (fetched) {
           // Deliberately NOT --allow-unrelated-histories: pointing a project
@@ -116,6 +116,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
             })
           if (merged) {
             pulled = await absorb(p, ydoc)          // CRDT wins
+            await outside(p, ydoc, head)            // and edits no hub made join it
             await mirror(p, ydoc)                   // regenerate the working tree
             await writeState(p, ydoc)               // record the merged result
             await git(p, 'add', '-A')
@@ -137,7 +138,6 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
         // git's own words ("Permission denied (publickey)", "protected branch")
         c.lastError = pushed ? null : `push failed: ${why}`
         await saveCfg(p, c)
-        dirty.delete(p)
         log(`gitsync: "${p}" ${pushed ? 'pushed' : 'push FAILED'}${pulled ? `, absorbed ${pulled} peer state(s)` : ''} (${reason})`)
         return { ok: pushed, pulled, at: c.lastSync, error: c.lastError }
       } finally { close() }
@@ -184,12 +184,14 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     async clearRemote(p) { await saveCfg(p, {}); return { ok: true } },
     syncNow,
     adopt,
-    markDirty(p) { dirty.add(p) },
     // Push whatever changed, on a timer and on the way out. "Exiting saves
     // progress" is the property that makes a hub disposable.
     start() {
-      const t = setInterval(() => {
-        for (const p of [...dirty]) syncNow(p, { reason: 'periodic' }).catch(() => {})
+      // every project with a remote, not just edited ones: someone else's
+      // push (another hub, an agent) is pulled without anyone typing here
+      const t = setInterval(async () => {
+        const names = existsSync(cfgDir) ? (await readdir(cfgDir)).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)) : []
+        for (const p of names) if (existsSync(proj(p)) && (await cfg(p))?.url) await syncNow(p, { reason: 'periodic' }).catch(() => {})
       }, intervalMs)
       t.unref?.()
       return t
