@@ -1,0 +1,23 @@
+# The budget's inputs; lib/budget.typ computes everything else from them
+# (budget-report.typ shows it, budget.typ justifies it in Research.gov's
+# lines, `make budget` gives it as Excel). One entry per year where a list is
+# given; category: is the budget line (equipment, travel, participant,
+# materials, publication, consultant, computing, subaward, other).
+rates:
+  fringe: 0.30    # of salary, unless a person sets their own
+  fa: 0.50        # the institution's negotiated rate, on modified total direct costs
+  raise: 0.03
+personnel:        # base salary, calendar months of effort per year (senior: 2 at most)
+  - { name: Ada Lovelace, salary: 110000, months: [1, 1, 1] }
+  - { name: Charles Babbage, salary: 140000, months: [0.5, 0.5, 0.5] }
+  - { name: Postdoctoral researcher (TBN), salary: 60000, months: [12, 12, 12], fringe: 0.25 }
+  - { name: Graduate student (TBN), salary: 30000, months: [12, 12, 12], fringe: 0.05 }
+other:            # fa: false keeps one out of the F&A base
+  - { item: Instrument interface hardware, cost: [20000, 0, 0], category: equipment, fa: false }
+  - { item: Conference and integration travel, cost: [4000, 6000, 6000], category: travel }
+  - { item: Substrates and reagents, cost: [8000, 8000, 6000], category: materials }
+  - { item: Publication costs, cost: [0, 2000, 3000], category: publication }
+  # the first $25,000 of a subaward is in the F&A base, the rest is not
+  - { item: "Subaward, Example Instruments Inc. (first $25,000)", cost: [25000, 0, 0], category: subaward }
+  - { item: "Subaward, Example Instruments Inc.", cost: [15000, 30000, 30000], category: subaward, fa: false }
+  - { item: Graduate tuition, cost: [12000, 12000, 12000], category: other, fa: false }

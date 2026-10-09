@@ -84,8 +84,26 @@ A new project starts from one (Projects > the menu beside the name):
   The **checklist** button in the bar shows what is here and what is not,
   live, with an upload button where each missing file belongs. Any template
   with a `package.yaml` gets it, so another funder's is a list away.
+- `nih-r25-sepa`: an NIH SEPA (R25, PAR-27-077). The Research Education
+  Program Plan in the NOFO's eight required parts, its program (setting,
+  activities, participants, partners, website) in `grant.yaml`, objectives
+  that the Evaluation Plan measures, a detailed budget at 8% F&A, warned in
+  red over $250,000 a year or with the PD/PI under 2.0 months.
+- `nsf-cmi-goali`: an NSF GOALI to Chemical Measurement and Imaging (NSF
+  26-519), in PAPPG 24-1's format: the Project Description with the
+  instrument-development and university–industry sections CMI and GOALI
+  ask for, Results from Prior NSF Support from `grant.yaml`, the
+  GOALI-Industrial PI Confirmation Letter, NSF's one-sentence letters of
+  collaboration, a budget in Research.gov's lines, warned over 2 senior
+  months or a small-business subaward over a third.
 
-Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
+Grey `[prompts]` in the grant templates say what each passage must cover,
+from the funder's own instructions, until it is written. Check them against
+the current solicitation: they change.
+
+Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on
+top, and every `nih*` and `nsf*` stands on `grant/` (checklist, the whole
+application in one PDF, the budget).
 
 **Switching template** (Settings > Project template): an R21 becomes an R03,
 a report becomes a grant, a project gains UCF's branding. Each file is

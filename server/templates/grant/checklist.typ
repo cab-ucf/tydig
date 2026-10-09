@@ -1,11 +1,11 @@
 // The checklist: every component, where it comes from, and whether it is
 // here. `make full` opens the whole application with it, told what exists.
-#import "/lib/nih.typ": *
+#import "/lib/format.typ": *
 #import "/lib/package.typ": items
-#show: nih
+#show: format
 #let present = sys.inputs.at("present", default: none)
 #let present = if present != none { json(bytes(present)) }
-#let when = (always: [required], applicable: [if applicable], jit: [just-in-time], resubmission: [resubmissions])
+#let when = (always: [required], applicable: [if applicable], jit: [just-in-time], resubmission: [resubmissions], revision: [revisions])
 
 #section("checklist", [#G.mechanism.code application: checklist], limit: none)[
   #G.title \ #text(9pt)[#name(pi), #G.institution.name. #if present == none [Run `make full` to check what is here.]]

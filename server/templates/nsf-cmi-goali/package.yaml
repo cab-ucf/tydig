@@ -1,0 +1,39 @@
+# Everything a CMI GOALI proposal (NSF 26-519) needs, as Research.gov lists
+# it. The editor's Checklist panel, the checklist page and `make full` read this.
+#   file:  where it is (built here into out/, or uploaded into docs/); none = a form
+#   from:  where to get an uploaded one;  when: always (default), applicable;
+#   each: investigators = one per person
+# Talk to the CMI program officer (chem-cmi@nsf.gov) before submitting a GOALI.
+items:
+  - { id: cover, name: "Cover Sheet (proposal type GOALI; the industrial co-PI listed)", from: Research.gov }
+  - { id: summary, name: Project Summary, file: out/summary.pdf, limit: 1 page }
+  - { id: description, name: Project Description, file: out/description.pdf, limit: 15 pages }
+  - { id: references, name: References Cited, file: out/references.pdf }
+  - { id: budgetform, name: "Budget (with the subaward's own)", from: "Research.gov: the numbers in out/budget-report.pdf" }
+  - { id: budget, name: Budget Justification, file: out/budget.pdf, limit: 5 pages }
+  - { id: subaward, name: Subaward Budget Justification, file: out/subaward.pdf, limit: 5 pages }
+  - { id: facilities, name: "Facilities, Equipment and Other Resources", file: out/facilities.pdf }
+  - id: biosketch
+    name: Biographical Sketch (Common Form)
+    each: investigators
+    file: "docs/biosketch-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+  - id: support
+    name: Current and Pending (Other) Support (Common Form)
+    each: investigators
+    file: "docs/support-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+  - id: synergistic
+    name: Synergistic Activities
+    each: investigators
+    file: "docs/synergistic-{key}.pdf"
+    limit: 1 page
+  - id: coa
+    name: Collaborators & Other Affiliations
+    each: investigators
+    file: "docs/coa-{key}.xlsx"
+    from: https://www.nsf.gov/bfa/dias/policy/coa.jsp
+  - { id: dmsp, name: Data Management and Sharing Plan, from: "the DMSP tool in Research.gov (NSF 26-202)" }
+  - { id: mentoring, name: Mentoring Plan, file: out/mentoring.pdf, limit: 1 page, when: applicable }
+  - { id: goali, name: GOALI-Industrial PI Confirmation Letter, file: docs/goali-letter-signed.pdf, from: "out/goali-letter.pdf, on the company's letterhead, signed" }
+  - { id: letters, name: Letters of Collaboration, file: out/letters.pdf, when: applicable }

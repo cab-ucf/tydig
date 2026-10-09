@@ -1,9 +1,8 @@
 // The detailed budget, for your grants office: every number comes from
-// budget.yaml through lib/budget.typ. Not part of the NIH package (a modular
-// budget sends only modules); `make budget` gives the same as Excel.
-#import "/lib/nih.typ": *
+// budget.yaml through lib/budget.typ; `make budget` gives the same as Excel.
+#import "/lib/format.typ": *
 #import "/lib/budget.typ": *
-#show: nih
+#show: format
 
 #section("budget-report", [Detailed budget (internal)], limit: none)[
   #warn
@@ -14,5 +13,5 @@
     ..budget.personnel.map(p => (..row([#p.name (#p.months.map(str).join(", ") months)], p.salary), ..row([#h(1em) fringe], p.fringe))).flatten(),
     ..budget.other.map(o => row([#o.item#if not o.base [ (no F&A)]], o.cost)).flatten(),
     ..row([*Direct costs*], direct), ..row([F&A at #(B.rates.fa * 100)%], fa), ..row([*Total*], budget.total),
-    ..row([*Requested (#modules.map(str).join(", ") modules)*], requested))
+    ..row(if modular [*Requested (#modules.map(str).join(", ") modules)*] else [*Requested direct costs*], requested))
 ]

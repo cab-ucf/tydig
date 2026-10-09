@@ -1,0 +1,36 @@
+# Everything a SEPA (PAR-27-077) application needs, in the order NIH
+# assembles it. The editor's Checklist panel, the checklist page and `make
+# full` read this.
+#   file:  where it is (built here into out/, or uploaded into docs/); none = a form
+#   from:  where to get an uploaded one;  when: always (default), applicable,
+#   jit (just-in-time, after review), revision;  each: investigators = one per person
+# New and Revision applications only: no resubmissions or renewals.
+items:
+  - { id: sf424, name: "SF424 (R&R) cover, project/performance sites", from: "ASSIST or your grants office" }
+  - { id: summary, name: Project Summary/Abstract, file: out/summary.pdf, limit: 30 lines }
+  - { id: narrative, name: Project Narrative, file: out/narrative.pdf, limit: 3 sentences }
+  - { id: references, name: "Bibliography & References Cited", file: out/references.pdf }
+  - { id: resources, name: "Facilities & Other Resources", file: out/resources.pdf }
+  - { id: equipment, name: Equipment, file: out/equipment.pdf }
+  - { id: keyperson, name: Senior/Key Person Profile, from: ASSIST }
+  - id: biosketch
+    name: Biographical Sketch (Common Form)
+    each: investigators
+    file: "docs/biosketch-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+  - id: support
+    name: Current and Pending (Other) Support
+    each: investigators
+    file: "docs/support-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+    when: jit
+  - { id: rrbudget, name: "R&R Budget (detailed, with Participant/Trainee Support Costs)", from: "ASSIST: the numbers in out/budget-report.pdf" }
+  - { id: budget, name: Budget Justification, file: out/budget.pdf }
+  - { id: introduction, name: Introduction to Application, file: docs/introduction.pdf, when: revision, limit: 1 page }
+  - { id: aims, name: Specific Aims, file: out/aims.pdf, limit: 1 page }
+  - { id: strategy, name: "Research Education Program Plan (as the Research Strategy)", file: out/strategy.pdf, limit: 25 pages }
+  - { id: humansform, name: PHS Human Subjects and Clinical Trials Information, from: ASSIST }
+  - { id: humans, name: Protection of Human Subjects, file: out/humans.pdf, when: applicable }
+  - { id: leadership, name: Multiple PD/PI Leadership Plan, file: docs/leadership-plan.pdf, when: applicable }
+  - { id: sharing, name: Resource Sharing Plan (software), file: out/sharing.pdf, when: applicable }
+  - { id: letters, name: "Letters of Support (with the required letter of institutional commitment)", file: out/letters.pdf }

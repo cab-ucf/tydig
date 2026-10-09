@@ -415,9 +415,15 @@ import { fileURLToPath } from 'node:url'
 const TEMPLATES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'templates')
 const LAYERS = readdirSync(TEMPLATES).sort()
 const BRANDS = LAYERS.filter(l => l.startsWith('brand-')).map(l => l.slice(6))
+// and a family (nih/, nsf/) stands on grant/: the checklist, the whole
+// application in one PDF and the budget, which every funder's needs
+const BASE = { nih: 'grant', nsf: 'grant' }
 const TEMPLATE_NAMES = ['report', ...LAYERS.filter(t => t !== 'report' && !t.startsWith('brand-') &&
-  !LAYERS.some(u => u.startsWith(t + '-')))]
-const layersOf = (t, brand) => [...LAYERS.filter(l => t === l || t.startsWith(l + '-')), ...BRANDS.includes(brand) ? ['brand-' + brand] : []]
+  !Object.values(BASE).includes(t) && !LAYERS.some(u => u.startsWith(t + '-')))]
+const layersOf = (t, brand) => {
+  const ls = LAYERS.filter(l => t === l || t.startsWith(l + '-'))
+  return [...BASE[ls[0]] ? [BASE[ls[0]]] : [], ...ls, ...BRANDS.includes(brand) ? ['brand-' + brand] : []]
+}
 const scaffold = async (t, brand, dir) => {
   for (const l of layersOf(t, brand)) await cp(path.join(TEMPLATES, l), dir, { recursive: true })
   await mkdir(path.join(dir, '.collab'), { recursive: true })

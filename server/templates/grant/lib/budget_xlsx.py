@@ -61,6 +61,6 @@ last = ws.max_row
 ws.append(['Direct costs', *[f'=SUM({col(y)}{first}:{col(y)}{last})' for y in range(n + 1)]]); d = ws.max_row
 row('F&A', b['fa'])
 ws.append(['Total', *[f'={col(y)}{d}+{col(y)}{d + 1}' for y in range(n + 1)]])
-row('NIH modules ($25,000 of direct costs)', b['modules'])
+if b['modular']: row('NIH modules ($25,000 of direct costs)', b['modules'])
 ws.column_dimensions['A'].width = 42
 wb.save('out/budget.xlsx'); print('out/budget.xlsx')

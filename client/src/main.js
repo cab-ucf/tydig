@@ -894,7 +894,7 @@ function checklist() {
       .map(i => ({ ...i, when: i.when || 'always', have: i.file && files.filter(f => glob(i.file).test(f)) }))
   } catch (e) { return [{ name: `package.yaml or grant.yaml does not parse: ${e.message}`, when: 'always', have: [] }] }
 }
-const NEEDED = { always: 'required', applicable: 'if applicable', jit: 'just-in-time', resubmission: 'resubmissions' }
+const NEEDED = { always: 'required', applicable: 'if applicable', jit: 'just-in-time', resubmission: 'resubmissions', revision: 'revisions' }
 function renderChecklist() {
   const items = checklist() || []
   sideBody.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint',

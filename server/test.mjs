@@ -33,13 +33,22 @@ let pass = true
 const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL'), name); pass &&= cond }
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
-const [r21, r03] = [await nih('nih-r21'), await nih('nih-r03')]
+const [r21, r03, sepa, goali] = [await nih('nih-r21'), await nih('nih-r03'), await nih('nih-r25-sepa'), await nih('nsf-cmi-goali')]
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
 check('an NIH template is its shared layer plus its own grant.yaml',
   ['main.typ', 'lib/nih.typ', 'letters.typ', 'grant.yaml'].every(f => r21.includes(f) && r03.includes(f)) &&
   /code: R21/.test(get('data/nih-r21/grant.yaml', 'utf8')) && /UCF Gold/.test(get('data/nih-r21/lib/brand.typ', 'utf8')) && /code: R03/.test(get('data/nih-r03/grant.yaml', 'utf8')))
+check('the shared grant layer is offered to no one alone, and stands under NIH and NSF alike',
+  !(await api('/templates')).templates.some(t => ['grant', 'nih', 'nsf'].includes(t)) &&
+  ['lib/grant.typ', 'lib/budget.typ', 'checklist.typ'].every(f => r21.includes(f) && goali.includes(f)))
+check('a SEPA R25: the program plan, its own attachments, no DMS plan in its package',
+  ['humans.typ', 'sharing.typ'].every(f => sepa.includes(f)) && /Research Education Program Plan/.test(get('data/nih-r25-sepa/main.typ', 'utf8')) &&
+  !/dmsp/.test(get('data/nih-r25-sepa/package.yaml', 'utf8')))
+check('an NSF CMI GOALI: PAPPG format, the GOALI letter, no NIH files',
+  ['lib/nsf.typ', 'goali-letter.typ', 'subaward.typ', 'mentoring.typ'].every(f => goali.includes(f)) && !goali.includes('lib/nih.typ') &&
+  /^title: "GOALI: /m.test(get('data/nsf-cmi-goali/grant.yaml', 'utf8')))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -136,6 +145,10 @@ else {
   const out = (await api('/p/nih-r21/files')).map(f => f.path)
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
+  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali']) {
+    const r = await api(`/p/${t}/build/full`, { method: 'POST' })
+    check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
+  }
 }
 const tarList = async q => {
   const b = Buffer.from(await (await fetch(`${B_URL}/api/p/demo/archive${q}`, { headers: { cookie: COOKIE } })).arrayBuffer())

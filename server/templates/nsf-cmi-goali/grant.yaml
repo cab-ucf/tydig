@@ -1,0 +1,74 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the description, summary, budget and letters all follow.
+# CMI asks instrument-development proposals to start "Instrument Development:"
+# after "GOALI:"; drop it (and instrument: below) for other CMI work.
+title: "GOALI: Instrument Development: An example instrument that measures what matters"
+nofo: NSF 26-519            # MPS Chemistry Research Programs (MPS Chem); program: CMI
+years: 3
+style: american-chemical-society
+
+mechanism:
+  code: GOALI
+  name: Grant Opportunities for Academic Liaison with Industry (PAPPG II.F.5)
+  budget_rule: >-
+    No cost sharing, voluntary or otherwise. A small-business subaward is at
+    most a third of the total budget.
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+  subaward: 0.333         # a small business's share of the whole
+
+limits: { description: 15 }   # pages, Results from Prior NSF Support (at most 5) within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Chemistry
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. The industrial co-PI must be on the cover sheet.
+# prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    prior: { award: CHE-0000000, amount: "$450,000", period: 2022-2025, title: An earlier related project }
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: co-PI
+  - name: Grace Hopper
+    degrees: PhD
+    title: Director of Applications
+    role: Industrial co-PI
+    organization: Example Instruments Inc.
+    industry: true
+    months: 1               # a year, for the GOALI-Industrial PI Confirmation Letter
+
+program:
+  name: Chemical Measurement and Imaging (CMI)
+  contact: chem-cmi@nsf.gov
+  instrument: true          # adds Development timeline and Potential utility (CMI program page)
+  goali:
+    company: Example Instruments Inc.
+    city: Santa Barbara, CA
+    small_business: true    # then it may take NSF funds, as a subaward, and the letter certifies eligibility
+    contributes: engineering time, access to the instrument, and staff at integration milestones
+  # NSF 26-519's measures of success, reported in each annual report
+  measures:
+    - Publications or other scholarly outputs
+    - Data sets established or expanded
+    - Invention disclosures
+    - New technologies or techniques
+    - Undergraduate, graduate and postdoctoral researchers supported
+
+aims:
+  - title: Build the instrument's open control layer
+    summary: We expose and calibrate the commercial platform for autonomous use.
+  - title: Measure what matters first
+    summary: We choose each measurement by what it is expected to teach.
+  - title: Show it on real chemistry
+    summary: We test it on samples that change while they are measured.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators:
+  - { name: Mary Somerville, title: Senior Scientist, organization: Example National Laboratory }

@@ -1,0 +1,85 @@
+# Everything the application says more than once lives here: edit it once,
+# and the aims, plan, summary, budget and letters all follow.
+title: Data detectives -- middle-school students investigate the health of their community
+nofo: PAR-27-077            # Science Education Partnership Award (SEPA), NIGMS
+years: 5
+
+mechanism:
+  code: R25
+  name: Science Education Partnership Award (SEPA)
+  purpose: >-
+    research education for pre-college students and teachers, in classrooms
+    (pre-K to 12) or out of them (informal science education).
+  budget_rule: >-
+    PAR-27-077 limits direct costs to $250,000 a year (consortium F&A
+    excluded), for up to 5 years. F&A is 8% of modified total direct costs
+    (tuition, fees, equipment and consortium costs over $25,000 excluded).
+  cap: { year: 250000 }   # direct costs a year
+  modular: false          # the detailed R&R budget, not modules
+  months: { pi: 2.0 }     # the PD/PI gives at least 2.0 person months a year
+
+limits: { aims: 1, strategy: 25 }   # pages; the Plan goes in as the Research Strategy
+
+institution:
+  name: University of Central Florida
+  department: Department of Example Sciences
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PD/PI. Effort and salaries are in budget.yaml.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: Program Director/Principal Investigator
+    email: ada.lovelace@example.edu
+    commons: ALOVELACE     # eRA Commons ID
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: Program Faculty (evaluation)
+
+program:
+  setting: classroom      # classroom (pre-K to 12) or informal (informal science education)
+  # one or more of PAR-27-077's five activities
+  activities: [Research Experiences, Curriculum or Methods Development, Mentoring Activities]
+  participants:           # who, and how many a year
+    - { who: Middle-school students (grades 6-8), per_year: 120 }
+    - { who: Middle-school science teachers, per_year: 8 }
+  partners:
+    - { name: Example County Public Schools, role: classrooms, teachers and recruitment }
+    - { name: Example Science Center, role: summer program and public showcase }
+  website: sepa.example.edu   # live within 6 months of award; credits NIH, NIGMS and SEPA
+
+# Program objectives: each measured, which the Evaluation Plan reports on.
+aims:
+  - title: Teach students to reason with real health data
+    summary: Students investigate questions about their community with public datasets.
+    measure: gain on a validated data-reasoning assessment, pre to post
+  - title: Equip teachers to lead research projects
+    summary: Teachers co-develop and teach a six-week research unit.
+    measure: units taught a year; teacher self-efficacy survey
+  - title: Make biomedical research careers visible
+    summary: Students meet researchers and present their findings in public.
+    measure: career-awareness survey, pre to post and a year on
+
+# Markup; #pi, #G (this file) and #todo can be used in the body. The letter of
+# institutional commitment is required; partners' letters, a page each, are encouraged.
+letters:
+  - name: Grace Hopper
+    title: Dean, College of Sciences
+    institution: University of Central Florida
+    date: January 6, 2026
+    signature: assets/signature.svg
+    body: |
+      The University of Central Florida is committed to #pi.name's
+      #G.mechanism.code program, "#G.title". We will provide
+      #todo[staff, facilities and educational resources: rooms, labs, computing, release time]
+      for its five years.
+  - name: Mary Somerville
+    title: Director of Science Curriculum
+    institution: Example County Public Schools
+    date: January 5, 2026
+    signature: assets/signature.svg
+    body: |
+      Example County Public Schools will partner in "#G.title":
+      #todo[classrooms, teachers' release time, recruitment, data-sharing agreements].

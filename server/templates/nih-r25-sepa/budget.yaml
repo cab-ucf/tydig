@@ -1,0 +1,18 @@
+# The budget's inputs; lib/budget.typ computes everything else from them
+# (budget-report.typ shows it, budget.typ justifies it, `make budget` gives
+# it as Excel). One entry per year where a list is given.
+rates:
+  fringe: 0.32    # of salary, unless a person sets their own
+  fa: 0.08        # PAR-27-077: 8% of modified total direct costs, not the negotiated rate
+  raise: 0.03     # yearly salary increase
+personnel:        # base salary, calendar months of effort per year
+  - { name: Ada Lovelace, salary: 120000, months: [2.4, 2.4, 2.4, 2.4, 2.4] }
+  - { name: Charles Babbage, salary: 150000, months: [1.2, 1.2, 1.2, 1.2, 1.2] }
+  - { name: Program coordinator (TBN), salary: 55000, months: [12, 12, 12, 12, 12] }
+other:            # direct costs per year; fa: false keeps one out of the F&A base
+  # Participant/Trainee Support Costs: itemised, as PAR-27-077 asks
+  - { item: "Participant support: teacher stipends (8 x $2,250)", cost: [18000, 18000, 18000, 18000, 18000] }
+  - { item: "Participant support: student travel and meals", cost: [15000, 15000, 15000, 15000, 15000] }
+  - { item: Supplies (classroom research kits), cost: [12000, 8000, 8000, 8000, 6000] }
+  - { item: Travel to the annual SEPA Conference, cost: [4000, 4000, 4000, 4000, 4000] }
+  - { item: Program website, cost: [3000, 1500, 1500, 1500, 1500] }
