@@ -3,9 +3,9 @@
 // /lsp, go to the hub over iroh instead, through irp's wasm client
 // (public/irweb, from github.com/cab-ucf/irp); server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
-import { relayFor, relayUrl } from '../../server/relay.mjs'
+import { RELAY, relayUrl } from '../../server/relay.mjs'
 const m = /^#([a-z2-7]{26})(?:;r=(\S+))?$/.exec(location.hash)
-export const link = m && { seed: m[1], relay: m[2] ? relayUrl(decodeURIComponent(m[2])) : relayFor(m[1]), id: m[1].slice(0, 8) }
+export const link = m && { seed: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {

@@ -5,7 +5,7 @@
 // connection, so nothing behind it knows the difference. No domain, no TLS
 // certificate, no open port: the hub can sit behind NAT on a laptop.
 import { Duplex } from 'node:stream'
-import { derive, relayFor } from './relay.mjs'
+import { derive } from './relay.mjs'
 export { newSeed } from './relay.mjs'
 
 const ALPN = [...Buffer.from('irweb/http/1')]
@@ -15,7 +15,7 @@ export async function startLink({ server, seed, relay }) {
   const b = iroh.Endpoint.builder()
   b.applyMinimal()
   b.secretKey([...derive(seed, 'irweb v1 endpoint identity')])
-  b.relayMode(iroh.RelayMode.customFromUrls([relay || relayFor(seed)]))
+  b.relayMode(iroh.RelayMode.customFromUrls([relay]))
   b.alpns([ALPN])
   const ep = await b.bind()
   ;(async () => {
