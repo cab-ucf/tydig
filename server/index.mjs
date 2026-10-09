@@ -747,7 +747,10 @@ p.post('/checkpoint', async (req, res) => {
       await note(name, 'comments', JSON.stringify(comments).slice(0, 200_000))
   }
   // Saving is committing and, with a remote, pushing.
-  const pushed = (await gitsync.status(name)).configured ? await gitsync.syncNow(name, { reason: 'save' }).catch(e => ({ ok: false, error: e.message })) : null
+  // A slow remote does not hold the save: after 20 s the push carries on alone.
+  const pushed = (await gitsync.status(name)).configured ? await Promise.race([
+    gitsync.syncNow(name, { reason: 'save' }).catch(e => ({ ok: false, error: e.message })),
+    new Promise(r => setTimeout(r, 20_000, { ok: null }))]) : null
   res.json({ ok: true, pushed: pushed && { ok: pushed.ok, error: pushed.error || null }, provenance: provenance && {
     keyId: provenance.keyId, verified: provenance.verified,
     sigOk: provenance.sigOk, stateOk: provenance.stateOk } })

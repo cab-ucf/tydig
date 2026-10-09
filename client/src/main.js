@@ -28,7 +28,7 @@ const settings = Object.assign(
   { vim: false, lsp: true, theme: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
-// theme: dark or light, the system's until toggled (Alt-D)
+// theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
 const system = matchMedia('(prefers-color-scheme: light)')
 const theme = () => settings.theme ?? (system.matches ? 'light' : 'dark')
 document.documentElement.dataset.theme = theme()
@@ -97,10 +97,11 @@ const saveAs = (blob, p, type, view = type === 'application/pdf') => {
   view ? a.target = '_blank' : a.download = p.split('/').pop()
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
 }
-const toast = (html, ok = true) => {
+// ms 0: stays until the next toast replaces it
+const toast = (html, ok = true, ms = ok ? 2500 : 8000) => {
   const t = $('toast') ?? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'toast' }))
   t.innerHTML = html; t.className = ok ? '' : 'bad'; clearTimeout(t.timer)
-  t.timer = setTimeout(() => t.remove(), ok ? 2500 : 8000)
+  if (ms) t.timer = setTimeout(() => t.remove(), ms)
 }
 const download = async (url, name) => {
   const r = await fetch(url)
@@ -223,24 +224,29 @@ async function lspExts(filePath) {
 }
 
 // ---------- dark editor theme ----------
-const darkHighlight = Prec.high(syntaxHighlighting(HighlightStyle.define([
-  { tag: t.heading, color: '#5ec5d4', fontWeight: 'bold' },
-  { tag: t.strong, color: '#eef2f6', fontWeight: 'bold' },
-  { tag: t.emphasis, color: '#eef2f6', fontStyle: 'italic' },
-  { tag: t.keyword, color: '#c792ea' },
-  { tag: t.string, color: '#a5d6a7' },
-  { tag: t.number, color: '#f3a96a' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: '#9aa3ad', fontStyle: 'italic' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#82aaff' },
-  { tag: t.variableName, color: '#f2f2f2' },
-  { tag: [t.operator, t.punctuation, t.bracket], color: '#7fd1de' },
-  { tag: [t.labelName, t.tagName], color: '#f3a96a' },
-  { tag: [t.link, t.url], color: '#5ec5d4', textDecoration: 'underline' },
-  { tag: t.monospace, color: '#cba6f7' },
-  { tag: [t.processingInstruction, t.macroName], color: '#7fd1de' },
+// Syntax colours for the dark themes, by role: black, and cyberpunk.
+const palette = c => Prec.high(syntaxHighlighting(HighlightStyle.define([
+  { tag: t.heading, color: c.head, fontWeight: 'bold' },
+  { tag: [t.strong, t.emphasis], color: c.text, fontWeight: 'bold' },
+  { tag: t.emphasis, color: c.text, fontStyle: 'italic', fontWeight: 'normal' },
+  { tag: t.keyword, color: c.key },
+  { tag: t.string, color: c.str },
+  { tag: [t.number, t.labelName, t.tagName], color: c.num },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: c.com, fontStyle: 'italic' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: c.fn },
+  { tag: t.variableName, color: c.text },
+  { tag: [t.operator, t.punctuation, t.bracket, t.processingInstruction, t.macroName], color: c.op },
+  { tag: [t.link, t.url], color: c.head, textDecoration: 'underline' },
+  { tag: t.monospace, color: c.mono },
 ])))
+const PALETTES = {
+  dark: palette({ head: '#5ec5d4', text: '#f2f2f2', key: '#c792ea', str: '#a5d6a7', num: '#f3a96a',
+    com: '#9aa3ad', fn: '#82aaff', op: '#7fd1de', mono: '#cba6f7' }),
+  cyber: palette({ head: '#ff2bd6', text: '#f7ecff', key: '#c77dff', str: '#00f5d4', num: '#ffd23f',
+    com: '#a083c4', fn: '#ff71ce', op: '#b967ff', mono: '#ff9de2' }),
+}
 const darkChrome = EditorView.theme({}, { dark: true })
-const themeComp = new Compartment(), themeExt = () => theme() === 'dark' ? [darkHighlight, darkChrome] : []
+const themeComp = new Compartment(), themeExt = () => PALETTES[theme()] ? [PALETTES[theme()], darkChrome] : []
 
 // ---------- editor ----------
 const commentsChanged = Annotation.define()
@@ -903,7 +909,7 @@ function applyLayout() {
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
   document.documentElement.dataset.theme = theme()
-  document.body.classList.toggle('dark-preview', theme() === 'dark')
+  document.body.classList.toggle('dark-preview', theme() !== 'light')
   view?.dispatch({ effects: themeComp.reconfigure(themeExt()) })
   document.body.classList.toggle('sect-projects-closed', !settings.projectsOpen)
   document.body.classList.toggle('sect-files-closed', !settings.filesOpen)
@@ -1115,7 +1121,7 @@ const actions = {
   checkpoint: async (named) => {
     const message = typeof named === 'string' ? named : prompt('Checkpoint name:')
     if (message == null) return
-    toast('saving&hellip;')
+    toast('saving&hellip;', true, 0)
     // Sign the checkpoint with this device's post-quantum key; fall back to
     // an unsigned checkpoint if signing is unavailable.
     let signed = {}
@@ -1125,9 +1131,11 @@ const actions = {
       signed = await signCheckpoint({ user: me.id, project: projName, message, files })
     } catch (e) { console.warn('checkpoint will be unsigned:', e) }
     const r = await api(P('/checkpoint'), { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message, ...signed }) })
+      body: JSON.stringify({ message, ...signed }) }).catch(() => ({ error: 'the hub did not answer. Your edits are ' +
+        'kept in this browser and reach the hub when it is back; save again then' }))
     toast(r.error ? `not saved: ${esc(r.error)}` : !r.pushed ? 'saved (committed; no git remote to push to)'
-      : r.pushed.ok ? 'saved and pushed' : `saved, but the push failed: ${esc(r.pushed.error || '')}`, !r.error && r.pushed?.ok !== false)
+      : r.pushed.ok ? 'saved and pushed' : r.pushed.ok == null ? 'saved; the push is still running (slow remote)'
+      : `saved, but the push failed: ${esc(r.pushed.error || '')}`, !r.error && r.pushed?.ok !== false)
     if (sidebarMode === 'history') renderHistory()
   },
   'export-pdf': exportPdf,
@@ -1141,7 +1149,7 @@ const actions = {
   'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
-  theme: () => { settings.theme = theme() === 'dark' ? 'light' : 'dark'; applyLayout() },
+  theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   comments: () => openSidebar('comments'),
   history: () => openSidebar('history'),
   build: () => openSidebar('build'),
@@ -1176,7 +1184,7 @@ Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
 Alt-C     comments   Alt-H  history   Alt-B  build
-Alt-D     dark / light
+Alt-D     theme: dark, cyberpunk, light
 
 Vim mode: Settings > Vim (then vim keys apply inside the editor)`),
 }

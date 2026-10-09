@@ -10,6 +10,13 @@
   --hi: #fff; --line: #ffffff14; --bad-bg: #3b1f1f; --bad-fg: #f0b9af; --good-bg: #1d3326; --good-fg: #a5d6a7;
   color-scheme: dark;
 }
+/* cyberpunk: neon pink and purple on violet-black */
+:root[data-theme="cyber"] {
+  --ink: #07000f; --ink-2: #14002a; --ink-3: #3d1166; --editor: #07000f;
+  --teal: #ff2bd6; --fg: #f7ecff; --fg-dim: #b48ad6; --line: #ff2bd618;
+}
+:root[data-theme="cyber"] .cm-cursor { border-left: 2px solid #00f5d4 !important; }
+:root[data-theme="cyber"] .cm-selectionBackground { background: #c77dff44 !important; }
 /* light: paper chrome; the editor uses CodeMirror's own light highlighting */
 :root[data-theme="light"] {
   --ink: #eef0f3; --ink-2: #fbfbfc; --ink-3: #d3d8de; --editor: #fbfbfc; --paper-bg: #d5d8dd;
@@ -163,7 +170,7 @@ body.focus #preview { padding: 0; }
 body.focus #page { box-shadow: none; min-height: 100%; }
 
 /* dark theme: dim the rendered page too (inverted, hues kept), not just the chrome */
-body.dark-preview #preview { background: #000; }
+body.dark-preview #preview { background: var(--ink); }
 body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 0 1px #ccc; } /* inverted with the page: #333 */
 
 .recipe label { font-size: .78rem; color: var(--fg-dim); display: flex; gap: .35rem; align-items: center; }
