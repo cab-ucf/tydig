@@ -112,7 +112,7 @@ const textOf = b => { if (b.length >= 1e6 || b.includes(0)) return null; try { r
 // copy) and reach previews via the raw-file shadow map instead.
 const GENERATED = /^(out|build|figures)\//
 const okName = n => /^[\w-]{1,64}$/.test(n)
-const HUB_DIRS = /^(gitsync|federation)$/i // DATA/ beside the projects; never one
+const HUB_DIRS = /^(gitsync|federation|agents)$/i // DATA/ beside the projects; never one
 // a project: a git repo under DATA that is not one of the hub's own directories
 const isProj = n => okName(n) && !HUB_DIRS.test(n) && existsSync(path.join(DATA, n, '.git'))
 const okHash = h => /^[0-9a-f]{7,40}$/.test(h)
@@ -439,7 +439,8 @@ app.use(compression())
 // the typst compiler's wasm calls new Function('return 0').)
 // Sync's websocket is named outright: Safari's 'self' does not cover ws(s).
 const HTTPS = /^https:/.test(process.env.TYDIG_URL || '')
-const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace(/^http/, 'ws')).join(' ')}; ` +
+// localhost: a model on the person's own machine (ghost suggestions, Ollama)
+const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace(/^http/, 'ws')).join(' ')} http://localhost:* http://127.0.0.1:*; ` +
   "script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
   "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 app.use((req, res, next) => (res.set({
@@ -515,6 +516,68 @@ app.get('/api/auth-config', (req, res) => res.json({
 }))
 
 // Everything else under /api requires a valid session.
+// ---------- agents: members that are programs ----------
+// An owner adds one in Share and gets a token, once; the hub keeps only its
+// hash (DATA/agents/<proj>.json). With it an agent (agent.mjs, through
+// agent-mcp.mjs) reads and edits this project's text, sees where it is
+// @mentioned, and answers in the Discussion. Nothing else: no sharing,
+// remotes, builds or other projects.
+const agentsFile = n => path.join(DATA, 'agents', `${n}.json`)
+const agentsOf = n => { try { return JSON.parse(readFileSync(agentsFile(n), 'utf8')) } catch { return [] } }
+const saveAgents = (n, a) => { mkdirSync(path.dirname(agentsFile(n)), { recursive: true }); writeFileSync(agentsFile(n), JSON.stringify(a, null, 1)) }
+const tokenHash = t => createHash('sha256').update(String(t)).digest('hex')
+const live = async (n, f) => { const dc = await hocuspocus.openDirectConnection(n, { agent: true }); try { return await f(dc.document) } finally { await dc.disconnect().catch(() => {}) } }
+const quoteOf = (doc, c) => {
+  const t = doc.getMap('files').get(c.file), at = s => t && Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(Buffer.from(s, 'base64')), doc)?.index
+  const a = at(c.anchor), b = at(c.head)
+  return a != null && b != null ? t.toString().slice(a, b) : null
+}
+const ag = express.Router({ mergeParams: true })
+app.use('/api/agent/:proj', (req, res, next) => {
+  const t = /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1], n = req.params.proj
+  const a = t && isProj(n) && agentsOf(n).find(a => a.hash === tokenHash(t))
+  if (!a) return res.status(401).json({ error: 'not a valid agent token for this project' })
+  req.agent = a.name; next()
+}, ag)
+// Where it is @mentioned and has not yet answered (its replies name what they answer).
+ag.get('/tasks', async (req, res) => res.json(await live(req.params.proj, doc => {
+  const at = new RegExp(`@${req.agent}\\b`, 'i'), chat = doc.getArray('chat').toArray(), comments = doc.getMap('comments')
+  const done = new Set(chat.filter(m => m.agent === req.agent).map(m => m.answers))
+  const ctx = c => c && { file: c.file, quote: quoteOf(doc, c), comment: c.text }
+  return { agent: req.agent, tasks: [
+    ...[...comments].filter(([id, c]) => at.test(c.text) && !done.has(id)).map(([id, c]) => ({ id, from: c.author, text: c.text, ts: c.ts, ...ctx(c) })),
+    ...chat.filter(m => !m.agent && at.test(m.text) && !done.has(m.id)).map(m => ({ id: m.id, from: m.author, text: m.text, ts: m.ts, ...ctx(m.re && comments.get(m.re)) })),
+  ] }
+})))
+ag.get('/files', async (req, res) => res.json(await live(req.params.proj, doc => [...doc.getMap('files').keys()].sort())))
+ag.get('/file', async (req, res) => {
+  const text = await live(req.params.proj, doc => doc.getMap('files').get(String(req.query.path))?.toString())
+  text == null ? res.status(404).json({ error: 'no such text file' }) : res.json({ path: req.query.path, text })
+})
+// Written into the live text, merged from what the agent read (base), so
+// typing done since is kept.
+ag.put('/file', async (req, res) => {
+  const { path: rel, text, base } = req.body || {}
+  if (!okPath(rel) || GENERATED.test(rel) || typeof text !== 'string' || text.length > 1e6) return res.status(400).json({ error: 'bad path or text' })
+  await live(req.params.proj, async doc => {
+    const files = doc.getMap('files'), t = files.get(rel)
+    const merged = t && typeof base === 'string' ? await merge3(base, t.toString(), text) : text
+    doc.transact(() => t ? setText(t, merged) : files.set(rel, new Y.Text(merged)))
+  })
+  res.json({ ok: true })
+})
+ag.post('/say', async (req, res) => {
+  const { text, answers } = req.body || {}
+  if (typeof text !== 'string' || !text.trim() || text.length > 20000) return res.status(400).json({ error: 'say something' })
+  await live(req.params.proj, doc => {
+    const chat = doc.getArray('chat'), asked = chat.toArray().find(m => m.id === answers)
+    const re = doc.getMap('comments').has(answers) ? answers : asked?.re
+    chat.push([{ id: randomBytes(8).toString('hex'), author: req.agent, agent: req.agent, color: 'hsl(280 70% 55%)',
+      text: text.trim(), ts: Date.now(), ...(answers && { answers }), ...(re && { re }) }])
+  })
+  res.json({ ok: true })
+})
+
 app.use('/api', async (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next()
   const sess = await sessionFrom(fromNodeHeaders(req.headers))
@@ -851,6 +914,15 @@ p.get('/info', (req, res) => res.json({ root: UNSAFE ? proj(req.params.proj) : '
 const admin = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
   : res.status(403).json({ error: 'only the project owner or an admin can change where it syncs' })
 p.get('/federation', async (req, res) => res.json(await federation.status(req.params.proj)))
+p.get('/agents', (req, res) => res.json(agentsOf(req.params.proj).map(({ name, created }) => ({ name, created }))))
+p.post('/agents', admin, (req, res) => {
+  const name = String(req.body?.name || '').trim().toLowerCase(), list = agentsOf(req.params.proj)
+  if (!/^[a-z][\w-]{0,31}$/.test(name) || list.some(a => a.name === name)) return res.status(400).json({ error: 'a new name: letters, digits, - or _' })
+  const token = `tyd_${randomBytes(24).toString('base64url')}`
+  saveAgents(req.params.proj, [...list, { name, hash: tokenHash(token), created: new Date().toISOString() }])
+  res.json({ name, token }) // shown once; the hub keeps only its hash
+})
+p.delete('/agents/:name', admin, (req, res) => { saveAgents(req.params.proj, agentsOf(req.params.proj).filter(a => a.name !== req.params.name)); res.json({ ok: true }) })
 p.post('/federation/invite', admin, async (req, res) => {
   try { res.json({ invite: await federation.invite(req.params.proj) }) }
   catch (e) { res.status(400).json({ error: e.message }) }
@@ -969,7 +1041,7 @@ const lspOpen = new Map() // proj -> its open LSP sockets, closed when a member 
 lifecycle.dropProject = async n => {
   if (!isProj(n)) return
   hocuspocus.closeConnections(n); lspOpen.get(n)?.forEach(ws => ws.close())
-  for (const f of [proj(n), path.join(DATA, 'gitsync', `${n}.json`), keyOf(n), keyOf(n) + '.pub', path.join(DATA, 'federation', `${n}.json`)])
+  for (const f of [proj(n), path.join(DATA, 'gitsync', `${n}.json`), keyOf(n), keyOf(n) + '.pub', path.join(DATA, 'federation', `${n}.json`), agentsFile(n)])
     await rm(f, { recursive: true, force: true })
 }
 httpServer.on('upgrade', async (req, sock, head) => {

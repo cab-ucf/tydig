@@ -19,7 +19,8 @@ page.on('error', e => errors.push('[CRASH] ' + e.message))
 page.on('console', m => { if (m.type() === 'error') errors.push('[console] ' + m.text()) })
 page.on('response', r => { if (r.status() >= 400) errors.push(`[http ${r.status()}] ${r.url()}`) })
 const external = []
-page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && new URL(r.url()).origin !== new URL(B).origin) external.push(r.url()) })
+// the local model (ghost suggestions) is this machine, asked for by the person
+page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && ![new URL(B).origin, 'http://localhost:11434'].includes(new URL(r.url()).origin)) external.push(r.url()) })
 page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(d.defaultValue() || 'first signed checkpoint'); else if (d.type() === 'confirm' && yes) await d.accept(); else await d.dismiss() })
 let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -108,6 +109,22 @@ await page.evaluate(() => document.querySelector('[data-act="share"]').click());
 await page.type('#share-email', 'newcomer@example.com'); await page.click('#share-add button'); await sleep(1500)
 check('sharing with a new address lists it as invited', await page.evaluate(() =>
   /newcomer@example\.com\s*invited/.test(document.getElementById('share-body').innerText)))
+// ghost suggestions, from a stand-in for Ollama on this machine
+const ollama = (await import('node:http')).createServer((q, r) => {
+  let b = ''; q.on('data', d => b += d); q.on('end', () => {
+    r.writeHead(200, { 'access-control-allow-origin': '*', 'content-type': 'application/json' })
+    r.end(JSON.stringify({ response: /"model":"qwen/.test(b) ? ' GHOSTED' : '' }))
+  })
+}).listen(11434)
+await page.evaluate(() => document.querySelectorAll('dialog[open]').forEach(d => d.close()))
+await page.evaluate(() => document.querySelector('[data-act="ghost"]').click()); await sleep(300)
+await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.type(' x'); await sleep(1500)
+const ghost = await page.$eval('.cm-ghost', e => e.textContent).catch(() => null)
+await page.keyboard.press('Tab'); await sleep(300)
+check('a local model suggests in grey, and Tab takes it', ghost === ' GHOSTED' &&
+  await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('x GHOSTED')))
+ollama.close()
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
@@ -117,7 +134,7 @@ check('and its tabs show one pane each', (await shows('files')).join() === 'tree
   (await shows('preview')).join() === 'preview' && (await shows('side')).join() === 'side')
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
-check('the app talks to no other host (fonts are bundled)', external.length === 0)
+check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)
 if (external.length) console.log('  external:', external.slice(0, 3).join(' '))
 if (realErrors.length) console.log(realErrors.join('\n'))
 await browser.close()

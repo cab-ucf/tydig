@@ -158,6 +158,12 @@ logs:
 link:
     @cat "{{TYDIG_DATA}}/link"
 
+# Run an agent member of PROJECT (Share > Agents gives its token):
+#   TYDIG_AGENT_TOKEN=tyd_... just agent paper
+# Each @mention is handed to Claude Code (TYDIG_AGENT_CMD for another agent).
+agent project:
+    TYDIG_HUB=http://localhost:{{TYDIG_PORT}} TYDIG_PROJECT={{project}} node server/agent.mjs
+
 # Give an account a fresh password and print it (no mail to reset by);
 # with no address, list the accounts.
 passwd email='':
@@ -186,7 +192,7 @@ test:
     npm install >/dev/null
     npm run build >/dev/null
     repo=$PWD
-    for suite in test authtest offlinetest provtest singleporttest signuptest; do
+    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest; do
         # each suite in a scratch dir of its own: never the real data/
         t=$(mktemp -d); cd "$t"
         echo "--- $suite"

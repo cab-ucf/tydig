@@ -1,7 +1,7 @@
 import { link } from './link.js' // first: patches fetch and WebSocket in link mode
 import { basicSetup } from 'codemirror'
-import { EditorView, keymap, Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
-import { EditorState, Annotation, Compartment, Prec } from '@codemirror/state'
+import { EditorView, keymap, Decoration, ViewPlugin, WidgetType, hoverTooltip } from '@codemirror/view'
+import { EditorState, Annotation, Compartment, Prec, StateField, StateEffect } from '@codemirror/state'
 import { HighlightStyle, syntaxHighlighting, LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { indentWithTab } from '@codemirror/commands'
@@ -25,7 +25,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, m: 'edit', treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -125,6 +125,8 @@ const userColor = localStorage.userColor ||
 const ydoc = new Y.Doc()
 const filesMap = ydoc.getMap('files')
 const ycomments = ydoc.getMap('comments')
+// the Discussion: messages for the whole project; one with `re` replies to a comment
+const ychat = ydoc.getArray('chat')
 const ymeta = ydoc.getMap('meta')
 
 // IndexedDB keeps the whole doc locally: edits made offline survive reloads
@@ -254,6 +256,42 @@ let view = null, currentPath = null
 const undoManagers = new Map()
 const vimComp = new Compartment(), langComp = new Compartment(), lspComp = new Compartment()
 
+// Ghost suggestions: a model on this person's own machine (Ollama) proposes
+// how the line goes on, in grey after the cursor; Tab takes it, typing or
+// moving dismisses it. Off until Settings > Ghost suggestions names a model.
+const setGhost = StateEffect.define()
+class Ghost extends WidgetType {
+  constructor(text) { super(); this.text = text }
+  toDOM() { return Object.assign(document.createElement('span'), { className: 'cm-ghost', textContent: this.text }) }
+}
+const ghostField = StateField.define({
+  create: () => null,
+  update: (g, tr) => tr.effects.find(e => e.is(setGhost))?.value ?? (tr.docChanged || tr.selection ? null : g),
+  provide: f => EditorView.decorations.from(f, g => g ? Decoration.set([Decoration.widget({ widget: new Ghost(g.text), side: 1 }).range(g.pos)]) : Decoration.none),
+})
+const ghostPlugin = ViewPlugin.fromClass(class {
+  update(u) {
+    if (!settings.ghost || !u.docChanged || !u.transactions.some(t => t.isUserEvent('input'))) return
+    clearTimeout(this.t); this.ask?.abort()
+    this.t = setTimeout(() => this.suggest(u.view), 600)
+  }
+  async suggest(v) {
+    const { head, empty } = v.state.selection.main, doc = v.state.doc
+    if (!empty) return
+    this.ask = new AbortController()
+    const r = await fetch(`${settings.ghost.url}/api/generate`, { method: 'POST', signal: this.ask.signal, body: JSON.stringify({
+      model: settings.ghost.model, prompt: doc.sliceString(Math.max(0, head - 2000), head), suffix: doc.sliceString(head, head + 800),
+      stream: false, options: { temperature: 0.2, num_predict: 60, stop: ['\n\n'] } }) }).then(r => r.json()).catch(() => null)
+    const text = r?.response?.replace(/\s+$/, '')
+    if (text && v.state.selection.main.head === head) v.dispatch({ effects: setGhost.of({ pos: head, text }) })
+  }
+})
+const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
+  const g = v.state.field(ghostField, false)
+  if (!g) return false
+  v.dispatch({ changes: { from: g.pos, insert: g.text }, selection: { anchor: g.pos + g.text.length } }); return true
+} }, { key: 'Escape', run: v => !!v.state.field(ghostField, false) && (v.dispatch({ effects: setGhost.of(null) }), true) }]))
+
 // Hovering commented text shows its comments
 const commentHover = hoverTooltip((v, pos) => {
   const cs = fileComments(currentPath).filter(c => c.from <= pos && pos <= c.to)
@@ -297,7 +335,7 @@ async function openFile(p) {
         lspComp.of(lsp),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
-        commentHighlights, commentHover,
+        commentHighlights, commentHover, ghostField, ghostPlugin, ghostKeys,
         EditorView.lineWrapping,
         EditorView.updateListener.of(u => { if (u.docChanged) { scheduleCompile(); updateWordCount() } }),
       ],
@@ -405,6 +443,10 @@ document.addEventListener('mouseup', () => setTimeout(() => {
   b.onclick = () => { b.hidden = true; getSelection().removeAllRanges(); addComment(ctx) }
 }))
 $('pv-comment').onmousedown = $('bar-comment').onmousedown = e => e.preventDefault() // keep the selection
+ychat.observe(() => {
+  if (sidebarMode === 'chat') renderChat()
+  if (sidebarMode === 'comments') renderComments()
+})
 ycomments.observe(() => {
   view?.dispatch({ annotations: commentsChanged.of(true) })
   if (sidebarMode === 'comments') renderComments()
@@ -755,7 +797,7 @@ function openSidebar(mode) {
   settings.sideOpen = true; if (phone()) settings.m = 'side'
   applyLayout()
   $('side-title').textContent = mode
-  ;({ comments: renderComments, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
+  ;({ comments: renderComments, chat: renderChat, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; sidebarMode = null; applyLayout() }
 
@@ -764,7 +806,7 @@ function renderComments() {
   sideBody.replaceChildren(...items.map(c => {
     const el = document.createElement('div')
     el.className = 'comment'
-    el.innerHTML = `<div class="meta"><span class="pin-n"></span><span class="dot"></span><b></b><time>${new Date(c.ts).toLocaleString()}</time></div><div class="cfile"></div><p></p><button>resolve</button>`
+    el.innerHTML = `<div class="meta"><span class="pin-n"></span><span class="dot"></span><b></b><time>${new Date(c.ts).toLocaleString()}</time></div><div class="cfile"></div><p></p><div class="replies"></div><button>resolve</button>`
     el.querySelector('.pin-n').textContent = c.n
     el.querySelector('.dot').style.background = c.color
     if (!pinSafe(c.file, c.from)) {
@@ -773,7 +815,8 @@ function renderComments() {
     }
     el.querySelector('b').textContent = c.author
     el.querySelector('.cfile').textContent = c.file
-    el.querySelector('p').textContent = c.text
+    el.querySelector('p').replaceChildren(...mentions(c.text))
+    el.querySelector('.replies').replaceChildren(...ychat.toArray().filter(m => m.re === c.id).map(message), composer(c.id, 'reply'))
     el.querySelector('button').onclick = () => ycomments.delete(c.id)
     el.querySelector('.meta').onclick = async () => {
       if (currentPath !== c.file) await openFile(c.file)
@@ -784,6 +827,37 @@ function renderComments() {
     return el
   }))
   if (!items.length) sideBody.innerHTML = '<p class="empty">No comments. Select text, then Edit > Comment. Pins appear in the preview.</p>'
+}
+
+// @names stand out: an agent member answers to its own
+const mentions = text => text.split(/(@[\w-]+)/).map((t, i) => i % 2 ? Object.assign(document.createElement('b'), { className: 'at', textContent: t }) : t)
+const message = m => {
+  const el = document.createElement('div'); el.className = 'msg'
+  el.innerHTML = `<div class="meta"><span class="dot"></span><b></b><time>${new Date(m.ts).toLocaleString()}</time></div><p></p>`
+  el.querySelector('.dot').style.background = m.color || 'var(--fg-dim)'
+  el.querySelector('b').textContent = m.author
+  el.querySelector('p').replaceChildren(...mentions(m.text))
+  const on = m.re && ycomments.get(m.re)
+  if (on) el.querySelector('.meta').append(Object.assign(document.createElement('em'), { textContent: `on a comment in ${on.file}` }))
+  return el
+}
+// Enter sends; Shift-Enter is a new line
+const composer = (re, hint) => {
+  const t = Object.assign(document.createElement('textarea'), { className: 'say', rows: 1, placeholder: `${hint}; @name asks an agent` })
+  t.onkeydown = e => {
+    if (e.key !== 'Enter' || e.shiftKey || !t.value.trim()) return
+    e.preventDefault()
+    ychat.push([{ id: crypto.getRandomValues(new Uint32Array(4)).join('-'), author: userName, color: userColor, text: t.value.trim(), ts: Date.now(), ...(re && { re }) }])
+    t.value = ''
+  }
+  return t
+}
+function renderChat() {
+  const list = ychat.toArray()
+  sideBody.replaceChildren(...list.map(message), composer(null, 'Message everyone'))
+  if (!list.length) sideBody.prepend(Object.assign(document.createElement('p'), { className: 'empty',
+    textContent: 'The project\'s discussion: for everyone working on it, and agents (@name).' }))
+  sideBody.scrollTop = sideBody.scrollHeight
 }
 
 async function renderHistory() {
@@ -931,8 +1005,9 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 // iOS zooms into any field under 16px when it is tapped; maximum-scale stops
 // that there and, on iOS, still lets people pinch-zoom (Android would not).
 if (/iP(hone|ad|od)/.test(navigator.userAgent)) document.querySelector('meta[name=viewport]').content += ', maximum-scale=1'
-// Phones show one pane at a time, picked in the bottom tab bar (#mtabs).
-const phoneQ = matchMedia('(max-width: 800px)'), phone = () => phoneQ.matches
+// Phones, narrow or on their side (short, touch), show one pane at a time,
+// picked in the bottom tab bar (#mtabs); a turned phone gets a wide preview.
+const phoneQ = matchMedia('(max-width: 800px), (max-height: 500px) and (pointer: coarse)'), phone = () => phoneQ.matches
 function applyLayout() {
   document.body.dataset.m = settings.m
   document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.m === settings.m))
@@ -1124,6 +1199,7 @@ async function showShare() {
   const mine = orgs.find(o => o.name === projName)
   const isOwner = mine?.role === 'owner' || mine?.role === 'admin'
   const full = (await authClient.organization.getFullOrganization({ query: { organizationSlug: projName } }).catch(() => null))?.data
+  const agents = await api(P('/agents')).catch(() => [])
   const row = (who, role, act, id) => `<div class="share-row"><span>${esc(who)}</span><em>${esc(role)}</em>${
     isOwner && act && role !== 'owner' ? `<button data-${act}="${esc(id)}">${act}</button>` : ''}</div>`
   body.innerHTML = `
@@ -1136,7 +1212,24 @@ async function showShare() {
       <p class="hint">An address with no account here is invited: send them its invite link (below
         it), which signs them up with the project waiting. The address alone cannot sign up.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
-    ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p><input readonly value="${esc(share.link)}">` : ''}`
+    ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p><input readonly value="${esc(share.link)}">` : ''}
+    <h4>Agents</h4>
+    <div class="share-list">${agents.map(a => `<div class="share-row"><span>@${esc(a.name)}</span><em>agent</em>${
+      isOwner ? `<button data-agent="${esc(a.name)}">remove</button>` : ''}</div>`).join('')}</div>
+    ${isOwner ? `<form id="agent-add"><input id="agent-name" placeholder="agent name, e.g. claude" required /><button>add</button></form>
+      <p class="hint">An agent works on this project only: reads and edits its text, and answers where it is
+        @mentioned, in comments and the Discussion. Run it where Claude Code is installed.</p>` : ''}`
+  body.querySelectorAll('[data-agent]').forEach(b => b.onclick = async () => {
+    if (!confirm(`Remove @${b.dataset.agent}? Its token stops working at once.`)) return
+    await api(P('/agents/' + b.dataset.agent), { method: 'DELETE' }); showShare()
+  })
+  const add = $('agent-add'); if (add) add.onsubmit = async e => {
+    e.preventDefault()
+    const r = await api(P('/agents'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: $('agent-name').value }) })
+    if (r.error) return alert(r.error)
+    prompt(`@${r.name} is a member. Its token is shown only now. On the hub's machine, run:`, `TYDIG_AGENT_TOKEN=${r.token} just agent ${projName}`)
+    showShare()
+  }
   body.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {
     if (!confirm('Remove this collaborator? They lose access at once.')) return
     const r = await api(P('/members/' + b.dataset.remove), { method: 'DELETE' })
@@ -1191,9 +1284,18 @@ const actions = {
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   comments: () => openSidebar('comments'),
+  chat: () => openSidebar('chat'),
   history: () => openSidebar('history'),
   build: () => openSidebar('build'),
   review: () => openSidebar('review'),
+  ghost: () => {
+    const model = prompt('Ghost suggestions from a model on your own computer, through Ollama (ollama.com). ' +
+      'Model to use (e.g. qwen2.5-coder:1.5b), or empty to turn them off. Ollama must allow this page: ' +
+      `OLLAMA_ORIGINS=${location.origin}`, settings.ghost?.model || 'qwen2.5-coder:1.5b')
+    if (model == null) return
+    settings.ghost = model.trim() ? { url: settings.ghost?.url || 'http://localhost:11434', model: model.trim() } : null
+    applyLayout()
+  },
   vim: () => { settings.vim = !settings.vim; applyLayout(); view?.dispatch({ effects: vimComp.reconfigure(settings.vim ? vim() : []) }) },
   lsp: () => { settings.lsp = !settings.lsp; lspDead = false; lspClient = null; applyLayout(); if (currentPath) openFile(currentPath) },
   share: showShare,
@@ -1231,7 +1333,7 @@ Alt-0     focus mode (toggle works while typing)
 Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
-Alt-C     comments   Alt-H  history   Alt-B  build
+Alt-C     comments   Alt-M  discussion   Alt-H  history   Alt-B  build
 Alt-D     theme: dark, cyberpunk, light
 
 Vim mode: Settings > Vim (then vim keys apply inside the editor)`),
@@ -1256,7 +1358,7 @@ const KEYMAP = {
   'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus',
   'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
-  'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments',
+  'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
   'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment',
 }
@@ -1276,7 +1378,7 @@ $('tgl-theme').onclick = () => actions.theme()
 $('mtabs').onclick = e => {
   const m = e.target.dataset?.m
   if (!m) return
-  if (m === 'side') return openSidebar(sidebarMode || 'comments')
+  if (m === 'side') return openSidebar(sidebarMode || 'chat')
   settings.m = m; applyLayout(); if (m === 'preview') scheduleCompile()
 }
 phoneQ.onchange = applyLayout

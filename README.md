@@ -84,18 +84,32 @@ which is the root for every build.
 
 ## Agents (Claude Code and the like)
 
-An agent edits a project the way a collaborator does, and its changes show
-up live in every open editor, merged with whatever people typed meanwhile:
+An agent can be a member, asked for work in the editor:
 
-- **Through the git remote** (any machine, or Claude Code on the web): it
-  clones the project's repo, commits, and pushes. The hub pulls on every
-  save (Ctrl-S), on "push now", and every 5 minutes (`TYDIG_GIT_PUSH_MINUTES`).
+1. Settings > Share > Agents: add one (say `claude`). Its token is shown once;
+   it opens this project only, to read and edit text and to answer.
+2. Where Claude Code is installed and the hub is reachable:
+   `TYDIG_AGENT_TOKEN=tyd_... just agent <project>`.
+3. Write `@claude ...` in a comment on some text, or in the Discussion
+   (Alt-M). It edits live, merged with whatever people type meanwhile, and
+   answers in the thread. It uses only tydig's tools (`server/agent-mcp.mjs`,
+   an MCP server): no shell, no other files. `TYDIG_AGENT_CMD` runs another
+   agent instead; the MCP server works in any MCP client.
+
+An agent can also work like any collaborator, on its own copy:
+
+- **Through the git remote**: it clones the project's repo, commits, and
+  pushes; the hub pulls on every save (Ctrl-S), on "push now", and every
+  5 minutes (`TYDIG_GIT_PUSH_MINUTES`).
 - **On the hub's own disk**: run it in `data/<project>/`; each file it writes
-  is merged into the live text as it lands.
+  is merged into the live text as it lands (files only, never git there).
 
-Changes are merged line by line; where an agent and a person changed the
-same lines, the person's text wins. Review an agent's work as history
-(History pane) or as a branch and pull request on the git host.
+Where an agent and a person change the same lines, the person's text wins.
+
+**Ghost suggestions** (Settings): a model on your own machine, through
+[Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.
+Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b`, then start it
+with `OLLAMA_ORIGINS=<the page's address>` so the page may ask it.
 
 ## Production
 
