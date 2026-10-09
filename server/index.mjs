@@ -22,7 +22,7 @@ const DATA = path.resolve(process.env.TYDIG_DATA || 'data')
 
 // ---------- auth: better-auth sessions + organization-based project access ----------
 await mkdir(DATA, { recursive: true })
-import { auth, authorizeProject, userProjects } from './auth.mjs'
+import { auth, authorizeProject, userProjects, lifecycle } from './auth.mjs'
 
 // Validate a session from request headers (cookie). Returns {user,session}|null.
 const sessionFrom = async headers => auth.api.getSession({ headers }).catch(() => null)
@@ -240,7 +240,9 @@ async function mirror(name, document) {
       .catch(e => console.warn(`mirror: skipped ${rel} (${e.message})`))
   }
   for (const old of written.get(name) ?? [])
-    if (!cur.has(old) && okPath(old) && !GENERATED.test(old)) await safe(name, old).then(f => rm(f, { force: true })).catch(() => {})
+    if (!cur.has(old) && okPath(old) && !GENERATED.test(old))
+      building.has(name) ? cur.add(old) // deleted after the build: see idle
+        : await safe(name, old).then(f => rm(f, { force: true })).catch(() => {})
   written.set(name, cur)
 }
 
@@ -542,7 +544,7 @@ app.get('/api/bridge', (req, res) => {
   ws.on('close', () => res.end())
   res.on('close', () => { ws.terminate(); bridges.delete(id) })
 })
-app.post('/api/bridge/:id', express.raw({ type: () => true, limit: '64mb' }), (req, res) => {
+app.post('/api/bridge/:id', express.raw({ type: () => true, limit: '16mb' }), (req, res) => {
   const b = bridges.get(req.params.id)
   if (b?.user !== req.user.id) return res.sendStatus(404)
   b.ws.send(req.body ?? Buffer.alloc(0), { binary: req.get('x-binary') === '1' })
@@ -649,14 +651,22 @@ p.get('/raw/*rel', async (req, res) => {
 })
 
 // any body: browsers send no Content-Type for extensions they don't know (.dat, .npy, .h5)
-p.put('/raw/*rel', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+// Disk per project (TYDIG_QUOTA_MB, 1000): uploads that would pass it are refused.
+const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
+const used = async n => { let b = 0; for await (const rel of walk(proj(n))) b += (await lstat(inProj(n, rel)).catch(() => ({ size: 0 }))).size; return b }
+// While a build runs it can swap a directory for a symlink, so writes and deletes wait.
+const idle = (req, res, next) => building.has(req.params.proj)
+  ? res.status(409).json({ error: 'a build is running in this project; try again when it ends' }) : next()
+p.put('/raw/*rel', idle, express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const rel = wild(req)
+  if (await used(req.params.proj) + (req.body?.length || 0) > QUOTA)
+    return res.status(413).json({ error: `this project is at its ${QUOTA / 2 ** 20} MB limit (TYDIG_QUOTA_MB)` })
   await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
   await writeIn(req.params.proj, rel, req.body ?? '')
   res.json({ ok: true })
 })
 
-p.delete('/raw/*rel', async (req, res) => {
+p.delete('/raw/*rel', idle, async (req, res) => {
   await rm(await safe(req.params.proj, wild(req)))
   res.json({ ok: true })
 })
@@ -950,10 +960,18 @@ for (const sig of ['SIGINT', 'SIGTERM'])
 import { WebSocketServer, WebSocket } from 'ws'
 import { spawn } from 'node:child_process'
 const lspWss = new WebSocketServer({ noServer: true })
-const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8)
+const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8), lspsOf = new Map()
 let lsps = 0
 const syncWss = new WebSocketServer({ noServer: true })
 const lspOpen = new Map() // proj -> its open LSP sockets, closed when a member is removed
+// An account deleted with a project nobody else is in: the project goes too,
+// with its remote settings, deploy key and federation link.
+lifecycle.dropProject = async n => {
+  if (!isProj(n)) return
+  hocuspocus.closeConnections(n); lspOpen.get(n)?.forEach(ws => ws.close())
+  for (const f of [proj(n), path.join(DATA, 'gitsync', `${n}.json`), keyOf(n), keyOf(n) + '.pub', path.join(DATA, 'federation', `${n}.json`)])
+    await rm(f, { recursive: true, force: true })
+}
 httpServer.on('upgrade', async (req, sock, head) => {
   sock.on('error', () => {}) // a client reset while we await the session must not crash the hub
   const u = new URL(req.url, 'http://x')
@@ -968,7 +986,8 @@ httpServer.on('upgrade', async (req, sock, head) => {
   if (req.headers.cookie) headers.set('cookie', req.headers.cookie)
   else if (u.searchParams.get('t')) headers.set('cookie', `better-auth.session_token=${u.searchParams.get('t')}`)
   const sess = await sessionFrom(headers)
-  if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name) || lsps >= MAX_LSP) return sock.destroy()
+  if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name) || lsps >= MAX_LSP ||
+    (lspsOf.get(sess.user.id) || 0) >= 2) return sock.destroy() // two each: one person cannot take every slot
   lspWss.handleUpgrade(req, sock, head, ws => {
     const open = lspOpen.get(name) ?? lspOpen.set(name, new Set()).get(name)
     open.add(ws); ws.on('close', () => open.delete(ws))
@@ -976,8 +995,9 @@ httpServer.on('upgrade', async (req, sock, head) => {
     // commands write files, so on the host it would be a way out of the project.
     const lsp = UNSAFE ? spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })
       : spawn('podman', [...sandboxArgs(proj(name), 86400, '-i'), 'tinymist', 'lsp'], { stdio: ['pipe', 'pipe', 'ignore'] })
-    lsps++
-    lsp.on('close', () => lsps--)
+    const who = sess.user.id
+    lsps++; lspsOf.set(who, (lspsOf.get(who) || 0) + 1)
+    lsp.on('close', () => { lsps--; lspsOf.set(who, lspsOf.get(who) - 1) })
     lsp.on('error', () => ws.close(1011, 'tinymist unavailable'))
     lsp.stdin.on('error', () => ws.close()) // the process died: EPIPE, not a crash
     ws.on('message', m => {

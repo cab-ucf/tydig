@@ -18,6 +18,8 @@
 // it. A conflict in the working tree is therefore never fatal -- we resolve
 // it by regenerating from the merged CRDT.
 import { existsSync } from 'node:fs'
+import { lookup } from 'node:dns/promises'
+import { BlockList, isIP } from 'node:net'
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import * as Y from 'yjs'
@@ -44,6 +46,25 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     if (!(LOCAL ? /^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)\S+$/ : /^(https?:\/\/|git@|ssh:\/\/)\S+$/).test(String(url || '')))
       throw new Error(`not a git URL${LOCAL ? '' : ' (local paths need TYDIG_GIT_LOCAL=1 on the hub)'}`)
     if (!/^(?!-)(?!.*\.\.)[\w./-]{1,100}$/.test(String(branch))) throw new Error('bad branch name')
+  }
+
+  // A remote on this hub's own network (loopback, private, link-local, cloud
+  // metadata) is refused unless TYDIG_GIT_PRIVATE=1: otherwise anyone who may
+  // set a remote could make the hub probe hosts only it can reach.
+  const PRIVATE = new BlockList()
+  for (const [a, n] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+    ['172.16.0.0', 12], ['192.168.0.0', 16]]) PRIVATE.addSubnet(a, n, 'ipv4')
+  for (const [a, n] of [['::', 127], ['fc00::', 7], ['fe80::', 10]]) PRIVATE.addSubnet(a, n, 'ipv6')
+  const hostOf = url => (/^[\w.-]+@([^:/]+):/.exec(url) || /^\w+:\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)/.exec(url))?.[1]?.replace(/^\[|\]$/g, '')
+  async function reachable(url) {
+    const host = hostOf(url)
+    if (!host || process.env.TYDIG_GIT_PRIVATE === '1') return
+    const ips = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true }).catch(() => [])
+    for (const { address, family } of ips) {
+      const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(address)?.[1]
+      if (PRIVATE.check(v4 || address, v4 || family === 4 ? 'ipv4' : 'ipv6'))
+        throw new Error(`${host} is on this hub's own network; set TYDIG_GIT_PRIVATE=1 on the hub to allow that`)
+    }
   }
 
   async function doc(p) {
@@ -77,7 +98,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     const task = (async () => {
       const c = await cfg(p)
       if (!c?.url) return { skipped: 'no remote configured' }
-      check(c.url, c.branch || 'main')
+      check(c.url, c.branch || 'main'); await reachable(c.url)
       const { ydoc, close } = await doc(p)
       try {
         // The URL may carry a token, so it is never stored in .git/config,
@@ -148,7 +169,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
 
   // First contact: pull an existing project down from a remote.
   async function adopt(p, url, branch) {
-    check(url, branch ?? 'main')
+    check(url, branch ?? 'main'); await reachable(url)
     branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(p, 'ls-remote', '--symref', url, 'HEAD').catch(() => ''))?.[1] || 'main'
     check(url, branch)
     await saveCfg(p, { url, branch })
@@ -176,7 +197,7 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
     },
     async setRemote(p, url, branch = 'main') {
       if (!okName(p)) throw new Error('bad project name')
-      check(url, branch)
+      check(url, branch); await reachable(url)
       const c = (await cfg(p)) || {}
       await saveCfg(p, { ...c, url, branch })
       return this.status(p)

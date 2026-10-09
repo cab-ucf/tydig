@@ -1179,6 +1179,14 @@ const actions = {
     const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true })
     alert(error ? error.message : 'Password changed; other sessions are signed out.')
   },
+  'delete-account': async () => {
+    if (!confirm('Delete your account? Projects you own pass to an admin, else to the longest-standing ' +
+      'member; a project nobody else is in is deleted with it. This cannot be undone.')) return
+    const password = prompt('Your password, to confirm:')
+    if (!password) return
+    const { error } = await authClient.deleteUser({ password })
+    error ? alert(error.message) : location.reload()
+  },
   'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
   'quick-open': () => quickOpen(),

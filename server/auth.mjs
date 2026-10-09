@@ -6,7 +6,9 @@ import { organization, genericOAuth } from 'better-auth/plugins'
 import { getMigrations } from 'better-auth/db/migration'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import Database from 'better-sqlite3'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
+import { promisify } from 'node:util'
+import { verifyPassword } from 'better-auth/crypto'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -66,12 +68,49 @@ const invitesFor = email => db.prepare(
   "SELECT * FROM invitation WHERE lower(email) = lower(?) AND status = 'pending'")
   .all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
 
+// Passwords: scrypt at OWASP's recommended cost (N=2^16, r=8, p=2, 64 MiB),
+// stored as s2$salt$key. Hashes from before (better-auth's lighter default,
+// salt:key) still verify; they move up when the password next changes.
+const S = { N: 1 << 16, r: 8, p: 2, maxmem: 160 << 20 }, kdf = promisify(scrypt)
+const password = {
+  hash: async pw => { const salt = randomBytes(16).toString('hex'); return `s2$${salt}$${(await kdf(pw.normalize('NFKC'), salt, 64, S)).toString('hex')}` },
+  verify: async ({ hash, password: pw }) => {
+    if (!hash.startsWith('s2$')) return verifyPassword({ hash, password: pw })
+    const [, salt, key] = hash.split('$')
+    return timingSafeEqual(Buffer.from(key, 'hex'), await kdf(pw.normalize('NFKC'), salt, 64, S))
+  },
+}
+
+// Sign-in attempts per account, whoever makes them: per-visitor limits alone
+// let someone who keeps changing address (or iroh id) guess passwords forever.
+const tries = new Map(), TRIES = 10, WINDOW = 15 * 60_000
+const tooMany = email => {
+  const k = String(email).toLowerCase(), now = Date.now(), t = (tries.get(k) || []).filter(x => now - x < WINDOW)
+  tries.set(k, [...t, now])
+  return t.length >= TRIES
+}
+
+// Deleting an account: each project it alone owns passes to an admin, else
+// to the longest-standing member; one with nobody else in it is deleted
+// (index.mjs removes its files: dropProject).
+export const lifecycle = { dropProject: async () => {} }
+async function handOver(u) {
+  for (const { organizationId: org } of db.prepare("SELECT organizationId FROM member WHERE userId = ? AND role = 'owner'").all(u.id)) {
+    if (db.prepare("SELECT 1 FROM member WHERE organizationId = ? AND role = 'owner' AND userId != ?").get(org, u.id)) continue
+    const heir = db.prepare("SELECT id FROM member WHERE organizationId = ? AND userId != ? ORDER BY role = 'admin' DESC, createdAt LIMIT 1").get(org, u.id)
+    if (heir) { db.prepare("UPDATE member SET role = 'owner' WHERE id = ?").run(heir.id); continue }
+    await lifecycle.dropProject(db.prepare('SELECT slug FROM organization WHERE id = ?').get(org).slug)
+    db.prepare('DELETE FROM organization WHERE id = ?').run(org)
+  }
+}
+
 export const auth = betterAuth({
   database: db,
   secret: SECRET,
   baseURL: process.env.TYDIG_URL || 'http://localhost:5173',
   trustedOrigins: withLoopbackTwins(configuredOrigins),
-  emailAndPassword: { enabled: !(ssoInfo?.only), autoSignIn: true },
+  emailAndPassword: { enabled: !(ssoInfo?.only), autoSignIn: true, password },
+  user: { deleteUser: { enabled: true, beforeDelete: handOver } },
   session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
   // set by index.mjs from the socket (or a trusted proxy): never client-chosen
   advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } },
@@ -82,6 +121,11 @@ export const auth = betterAuth({
       // the routed path, which has had its ./ and ../ removed.
       if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))
         throw new APIError('FORBIDDEN', { message: 'projects are created and removed through tydig' })
+      if (ctx.path === '/sign-in/email' && tooMany(ctx.body?.email)) throw new APIError('TOO_MANY_REQUESTS', {
+        message: 'Too many sign-in attempts for this account; try again in 15 minutes.' })
+      // the name, not the address, is what comments show to everyone
+      if (ctx.path === '/sign-up/email' && !String(ctx.body?.name || '').trim()) throw new APIError('BAD_REQUEST', {
+        message: 'Give a name: it is what collaborators see on your comments.' })
       // An invited address signs up with its invite link (x-tydig-invite: the
       // invitation's id): knowing or guessing the address alone is not enough.
       const key = ctx.headers?.get?.('x-tydig-invite')

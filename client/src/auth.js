@@ -72,7 +72,7 @@ async function loginScreen() {
         <div class="auth-brand">tydig</div>${originWarning}${sso}
         <div class="auth-tabs"><button data-tab="in" class="on">Sign in</button><button data-tab="up">Create account</button></div>
         <form id="auth-form">
-          <label class="up-only" hidden>Name<input name="name" autocomplete="name" /></label>
+          <label class="up-only" hidden>Name (shown on your comments)<input name="name" autocomplete="name" /></label>
           <label>Email<input name="email" type="email" autocomplete="email" required
             placeholder="you@example.com" /></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="8" /></label>
@@ -94,6 +94,7 @@ async function loginScreen() {
       mode = b.dataset.tab
       root.querySelectorAll('.auth-tabs button').forEach(x => x.classList.toggle('on', x === b))
       root.querySelector('.up-only').hidden = mode === 'in'
+      form.name.required = mode === 'up' // shown on comments, so never derived from the address
       submit.textContent = mode === 'in' ? 'Sign in' : 'Create account'
       form.password.autocomplete = mode === 'in' ? 'current-password' : 'new-password'
       err.hidden = true
@@ -105,7 +106,7 @@ async function loginScreen() {
       const body = { email: form.email.value, password: form.password.value }
       const res = mode === 'in'
         ? await authClient.signIn.email(body)
-        : await authClient.signUp.email({ ...body, name: form.name.value || form.email.value.split('@')[0],
+        : await authClient.signUp.email({ ...body, name: form.name.value.trim(),
           fetchOptions: invite ? { headers: { 'x-tydig-invite': invite } } : {} })
       submit.disabled = false
       if (res.error) {

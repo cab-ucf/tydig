@@ -121,5 +121,11 @@ same lines, the person's text wins. Review an agent's work as history
   to the repo as a deploy key (tick write access). The private half stays
   in `data/gitsync/keys/`, out of every build's reach. Accounts are
   `data/auth.db`, copied while the hub is down.
+- **Limits.** Each project may hold `TYDIG_QUOTA_MB` (1000) of files. Git
+  remotes on the hub's own network (private, loopback, link-local) are
+  refused unless `TYDIG_GIT_PRIVATE=1`, e.g. for a campus GitLab.
+- **Accounts.** Settings > Delete my account: each project it owns passes to
+  an admin, else to the longest-standing member; one nobody else is in is
+  deleted with it. Comments keep the name they were written under.
 - **Updates.** `git pull && just serve`.
 
