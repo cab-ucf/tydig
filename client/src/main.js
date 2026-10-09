@@ -698,6 +698,7 @@ async function compile() {
       $('page').innerHTML = svg
       $('page').querySelectorAll('a[href^="javascript:" i], a[href^="data:" i]').forEach(a => a.removeAttribute('href'))
       $('diag').hidden = true
+      fitText()
     }
   } catch (e) {
     if (my === seq) { $('diag').textContent = explainCompileError(e); $('diag').hidden = false }
@@ -705,6 +706,22 @@ async function compile() {
   compiling = false
   if (dirty) { dirty = false; scheduleCompile() }
 }
+
+// On a phone, fit means fit the text, not the paper: the page's side margins
+// are cut away, so the words are as large as the screen allows.
+function fitText() {
+  const pg = $('page'), svg = pg.querySelector('svg')
+  pg.style.marginLeft = ''
+  if (!svg || !phone() || settings.zoom || settings.m !== 'preview') return
+  pg.style.width = '100%'
+  const r = svg.getBoundingClientRect(), xs = [...svg.querySelectorAll('.typst-text, .typst-shape, image')]
+    .map(e => e.getBoundingClientRect()).filter(b => b.width && b.width < r.width * 0.97)
+  if (!xs.length) return
+  const left = Math.min(...xs.map(b => b.left)) - r.left - 6, right = Math.max(...xs.map(b => b.right)) - r.left + 6
+  const k = r.width / (right - left)
+  pg.style.width = `${k * 100}%`; pg.style.marginLeft = `${-left * k}px`
+}
+addEventListener('resize', () => fitText())
 
 async function exportPdf() {
   const main = $('main-sel').value
@@ -911,6 +928,9 @@ function renderReview() {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 // ---------- menubar, layout, shortcuts ----------
+// iOS zooms into any field under 16px when it is tapped; maximum-scale stops
+// that there and, on iOS, still lets people pinch-zoom (Android would not).
+if (/iP(hone|ad|od)/.test(navigator.userAgent)) document.querySelector('meta[name=viewport]').content += ', maximum-scale=1'
 // Phones show one pane at a time, picked in the bottom tab bar (#mtabs).
 const phoneQ = matchMedia('(max-width: 800px)'), phone = () => phoneQ.matches
 function applyLayout() {
@@ -931,6 +951,7 @@ function applyLayout() {
   // null fits the pane (and follows the divider); a zoom is a width, not a
   // cap, so zooming in past the pane scrolls it sideways
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
+  fitText()
   $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
   for (const m of ['editor', 'preview']) document.body.classList.toggle('max-' + m, settings.max === m)
   document.querySelectorAll('[data-check]').forEach(b =>
