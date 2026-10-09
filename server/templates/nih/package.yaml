@@ -1,0 +1,37 @@
+# Everything an NIH application needs, in the order NIH assembles it. The
+# editor's Checklist panel, the checklist page and `make full` read this.
+#   file:  where it is (built here into out/, or uploaded into docs/); none = a form
+#   from:  where to get an uploaded one;  when: always (default), applicable,
+#   jit (just-in-time, after review), resubmission;  each: investigators = one per person
+# Check it against your funding opportunity (grant.yaml nofo:): it can add or drop items.
+items:
+  - { id: sf424, name: "SF424 (R&R) cover, project/performance sites", from: "ASSIST or your grants office" }
+  - { id: summary, name: Project Summary/Abstract, file: out/summary.pdf, limit: 30 lines }
+  - { id: narrative, name: Project Narrative, file: out/narrative.pdf, limit: 3 sentences }
+  - { id: references, name: "Bibliography & References Cited", file: out/references.pdf }
+  - { id: resources, name: "Facilities & Other Resources", file: out/resources.pdf }
+  - { id: equipment, name: Equipment, file: out/equipment.pdf }
+  - { id: keyperson, name: Senior/Key Person Profile, from: ASSIST }
+  - id: biosketch
+    name: Biographical Sketch (Common Form)
+    each: investigators
+    file: "docs/biosketch-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+    limit: 5 pages
+  - id: support
+    name: Current and Pending (Other) Support
+    each: investigators
+    file: "docs/support-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+    when: jit
+  - { id: modular, name: PHS 398 Modular Budget, from: "ASSIST: the modules in out/budget-report.pdf" }
+  - { id: budget, name: Budget Justification (personnel), file: out/budget.pdf }
+  - { id: introduction, name: Introduction to Application, file: docs/introduction.pdf, when: resubmission, limit: 1 page }
+  - { id: aims, name: Specific Aims, file: out/aims.pdf, limit: 1 page }
+  - { id: strategy, name: Research Strategy, file: out/strategy.pdf, limit: 6 pages }
+  - { id: humans, name: PHS Human Subjects and Clinical Trials Information, from: ASSIST, when: applicable }
+  - { id: animals, name: Vertebrate Animals, file: docs/vertebrate-animals.pdf, when: applicable }
+  - { id: leadership, name: Multiple PD/PI Leadership Plan, file: docs/leadership-plan.pdf, when: applicable }
+  - { id: letters, name: Letters of Support, file: out/letters.pdf }
+  - { id: dmsp, name: Data Management and Sharing Plan, file: out/dmsp.pdf, limit: 2 pages }
+  - { id: authentication, name: Authentication of Key Biological/Chemical Resources, file: docs/authentication.pdf, when: applicable, limit: 1 page }

@@ -61,12 +61,23 @@ to a copy of `client/dist` it serves itself.
 A new project starts from one (Projects > the menu beside the name):
 
 - `report`: a pre-registered report whose numbers come from its analysis.
-- `nih-r21`, `nih-r03`: an NIH application. Names, aims, effort, budget and
-  letters live once in `grant.yaml`; every attachment reads them. `main.typ`
-  holds Specific Aims, Research Strategy and References (so citations
-  resolve), each flagged in red over its page limit; `make` cuts it into
-  NIH's separate PDFs, beside the summary, narrative, budget, resources and
-  letters, in `out/`.
+- `nih-r21`, `nih-r03`: an NIH application. Names, aims and letters live
+  once in `grant.yaml`; every attachment reads them. `main.typ` holds
+  Specific Aims, Research Strategy and References (so citations resolve),
+  each flagged in red over its page limit. From the build panel:
+  - `all`: each attachment as its own PDF in `out/`, as NIH takes them;
+  - `full`: the whole application as one PDF, opened by a checklist, with a
+    page marking anything still missing;
+  - `budget`: `out/budget.xlsx`, from `budget.yaml` (salaries, effort, rates,
+    costs), computed once in Typst for the report, the justification and the
+    sheet. Give `budget.yaml` your institution's Excel template and a map of
+    its cells, and the numbers go into it, its formulas kept.
+
+  `package.yaml` lists every component the application needs, built here,
+  uploaded (biosketches from SciENcv, per person) or entered in NIH's forms.
+  The **checklist** button in the bar shows what is here and what is not,
+  live, with an upload button where each missing file belongs. Any template
+  with a `package.yaml` gets it, so another funder's is a list away.
 
 Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
 Branding is a layer of its own, chosen beside the template: `brand-ucf/`

@@ -1,0 +1,22 @@
+# The budget's inputs; lib/budget.typ computes everything else from them
+# (budget-report.typ shows it, budget.typ justifies it, `make budget` gives
+# it as Excel). One entry per year where a list is given.
+rates:
+  fringe: 0.32    # of salary, unless a person sets their own
+  fa: 0.52        # F&A (indirect) rate, on modified total direct costs
+  raise: 0.03     # yearly salary increase
+personnel:        # base salary, calendar months of effort per year
+  - { name: Ada Lovelace, salary: 120000, months: [2.4, 2.4] }
+  - { name: Charles Babbage, salary: 150000, months: [0.6, 0.6] }
+  - { name: Graduate student (TBN), salary: 30000, months: [12, 12], fringe: 0.05 }
+other:            # direct costs per year; fa: false keeps one out of the F&A base
+  - { item: Supplies, cost: [15000, 12000] }
+  - { item: Travel, cost: [3000, 3000] }
+  - { item: Publication costs, cost: [0, 3000] }
+  - { item: Tuition remission, cost: [14000, 14000], fa: false }
+# Your institution's Excel template, filled by `make budget`: a cell
+# ("Sheet!B4") for each number, named as lib/budget.typ names it, e.g.
+# direct.0 (year 1), fa.1, total.0, personnel.Ada Lovelace.salary.0.
+# excel:
+#   template: docs/budget-template.xlsx
+#   cells: { "Summary!C10": direct.0, "Summary!D10": direct.1 }

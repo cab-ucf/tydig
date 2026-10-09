@@ -18,6 +18,7 @@ import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
 
 import { IndexeddbPersistence } from 'y-indexeddb'
+import { parse as parseYaml } from 'yaml'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -537,6 +538,7 @@ function renderTree() {
   }
   emit(root, '', 0)
   $('tree').replaceChildren(...rows)
+  checklistBadge()
 }
 const picked = new Set()
 async function remove(paths) {
@@ -797,7 +799,7 @@ function openSidebar(mode) {
   settings.sideOpen = true; if (phone()) settings.m = 'side'
   applyLayout()
   $('side-title').textContent = mode
-  ;({ comments: renderComments, chat: renderChat, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
+  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; sidebarMode = null; applyLayout() }
 
@@ -858,6 +860,60 @@ function renderChat() {
   if (!list.length) sideBody.prepend(Object.assign(document.createElement('p'), { className: 'empty',
     textContent: 'The project\'s discussion: for everyone working on it, and agents (@name).' }))
   sideBody.scrollTop = sideBody.scrollHeight
+}
+
+// The Checklist: a project with a package.yaml (the grant templates) lists
+// every component its application needs; each shows whether it is here,
+// live, and a missing upload can be added straight to where it belongs.
+// (lib/package.typ expands `each: investigators` the same way.)
+function checklist() {
+  const pkg = filesMap.get('package.yaml')
+  if (!pkg) return null
+  try {
+    const G = parseYaml(filesMap.get('grant.yaml')?.toString() || '') || {}, key = p => p.name.split(' ').pop().toLowerCase()
+    const files = [...filesMap.keys(), ...diskFiles.map(f => f.path)]
+    const glob = g => new RegExp('^' + g.replace(/[.+^$()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '$')
+    return (parseYaml(pkg.toString())?.items || []).flatMap(i => i.each === 'investigators'
+      ? (G.investigators || []).map(p => ({ ...i, id: `${i.id}-${key(p)}`, name: `${i.name}: ${p.name}`, file: i.file.replace('{key}', key(p)) })) : [i])
+      .map(i => ({ ...i, when: i.when || 'always', have: i.file && files.filter(f => glob(i.file).test(f)) }))
+  } catch (e) { return [{ name: `package.yaml or grant.yaml does not parse: ${e.message}`, when: 'always', have: [] }] }
+}
+const NEEDED = { always: 'required', applicable: 'if applicable', jit: 'just-in-time', resubmission: 'resubmissions' }
+function renderChecklist() {
+  const items = checklist() || []
+  sideBody.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint',
+    textContent: 'Everything the application needs (package.yaml). Build "all" for what is made here, "full" for the whole application in one PDF.' }),
+    ...items.map(i => {
+      const el = document.createElement('div'), built = i.file?.startsWith('out/'), ok = i.have?.length
+      el.className = 'check' + (ok ? ' ok' : i.when === 'always' && i.file ? ' missing' : '')
+      el.innerHTML = `<span class="mark">${!i.file ? 'form' : ok ? '&#10003;' : i.when === 'always' ? '&#10007;' : '&ndash;'}</span>
+        <span><b></b><small></small></span><span class="act"></span>`
+      el.querySelector('b').textContent = i.name + (i.limit ? ` (${i.limit})` : '')
+      el.querySelector('small').textContent = `${NEEDED[i.when] || i.when} · ${!i.file ? i.from || 'an online form' : built ? (ok ? i.file : 'build it: make') : i.file}`
+      const act = el.querySelector('.act')
+      if (ok) act.append(Object.assign(document.createElement('button'), { textContent: 'open', onclick: () => openDisk(i.have[0]) }))
+      else if (i.file && !built) {
+        if (/^https?:/.test(i.from || '')) act.append(Object.assign(document.createElement('a'), { href: i.from, target: '_blank', rel: 'noopener', textContent: 'get it' }))
+        act.append(Object.assign(document.createElement('button'), { textContent: 'upload', onclick: () => {
+          const pick = Object.assign(document.createElement('input'), { type: 'file', accept: '.pdf,application/pdf' })
+          pick.onchange = async () => {
+            const r = await fetch(rawUrl(i.file.replace('*', 'upload')), { method: 'PUT', body: pick.files[0] })
+            r.ok ? refreshDisk() : alert(`upload failed: ${(await r.json().catch(() => ({}))).error || r.status}`)
+          }
+          pick.click()
+        } }))
+      }
+      return el
+    }))
+}
+// the bar's count: required components that are here, of all required
+function checklistBadge() {
+  const items = checklist(), b = $('bar-check')
+  b.hidden = !items
+  if (!items) return
+  const need = items.filter(i => i.when === 'always' && i.file)
+  b.textContent = `checklist ${need.filter(i => i.have?.length).length}/${need.length}`
+  if (sidebarMode === 'checklist') renderChecklist()
 }
 
 async function renderHistory() {
@@ -1285,6 +1341,7 @@ const actions = {
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   comments: () => openSidebar('comments'),
   chat: () => openSidebar('chat'),
+  checklist: () => openSidebar('checklist'),
   history: () => openSidebar('history'),
   build: () => openSidebar('build'),
   review: () => openSidebar('review'),
@@ -1372,6 +1429,7 @@ document.addEventListener('keydown', e => {
 $('focus-exit').onclick = () => actions.focus()
 $('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
+$('bar-check').onclick = () => openSidebar('checklist')
 $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()
 $('tgl-theme').onclick = () => actions.theme()

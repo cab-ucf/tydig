@@ -127,6 +127,16 @@ check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.
 check('builds leave no nested repo or symlink behind', !ex('data/demo/nest/.git') && !(await import('node:fs')).existsSync('data/demo/escape'))
 await sleep(600)
 check('analysis output still not CRDT-managed', !fA.has('build/results.json'))
+// a grant template: the whole application in one PDF, and the budget as Excel
+const { execFileSync: sh } = await import('node:child_process')
+let pyOk = true; try { sh('python3', ['-c', 'import pypdf, openpyxl']) } catch { pyOk = false }
+if (!pyOk) console.log('SKIP grant full/budget builds (this host lacks pypdf/openpyxl; the build sandbox has them)')
+else {
+  const full = await api('/p/nih-r21/build/full', { method: 'POST' }), xl = await api('/p/nih-r21/build/budget', { method: 'POST' })
+  const out = (await api('/p/nih-r21/files')).map(f => f.path)
+  check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
+  check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
+}
 const tarList = async q => {
   const b = Buffer.from(await (await fetch(`${B_URL}/api/p/demo/archive${q}`, { headers: { cookie: COOKIE } })).arrayBuffer())
   return (await import('node:child_process')).execFileSync('tar', ['-tzf', '-'], { input: b }).toString().split('\n')

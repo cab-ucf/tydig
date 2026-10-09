@@ -13,16 +13,16 @@ mechanism:
   budget_rule: >-
     An R03 may request up to $50,000 in direct costs per year for up to two
     years.
+  cap: { year: 50000, total: 100000 }   # direct costs: a year, all years
 
 limits: { aims: 1, strategy: 6 }   # pages
-budget: { modules: 2 }             # $25,000 modules of direct costs per year
 
 institution:
   name: University of Central Florida
   department: Department of Example Sciences
   address: 4000 Central Florida Blvd, Orlando, FL 32816
 
-# The first is the PI. months: calendar months of effort per year.
+# The first is the PI. Effort and salaries are in budget.yaml.
 investigators:
   - name: Ada Lovelace
     degrees: PhD
@@ -30,12 +30,10 @@ investigators:
     role: Principal Investigator
     email: ada.lovelace@example.edu
     commons: ALOVELACE     # eRA Commons ID
-    months: 2.4
   - name: Charles Babbage
     degrees: PhD
     title: Professor
     role: Co-Investigator
-    months: 0.6
 
 aims:
   - title: Establish feasibility of the core method
