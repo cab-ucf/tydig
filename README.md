@@ -81,10 +81,24 @@ A new project starts from one (Projects > the menu beside the name):
 
 Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
 Branding is a layer of its own, chosen beside the template: `brand-ucf/`
-(black and gold, letterhead on letters from UCF) replaces `lib/brand.typ`.
+(black and gold, letterhead on letters from UCF) replaces `lib/brand.typ`,
+and carries UCF's budget workbook: put it at `brand-ucf/docs/budget-template.xlsx`
+and map its input cells in `brand-ucf/budget-excel.yaml`. Then `make budget`
+fills a copy from `budget.yaml` (the workbook's formulas do the totals), and
+`make budget-import` reads a filled-in one (`docs/budget-filled.xlsx`) back
+into `budget.yaml`, saying where its totals and tydig's disagree.
 Another university copies it as `brand-<name>/`. Official logos are their
 owners' trademarks, so none ship here: put yours at `assets/brand/logo.svg`
 and set `logo` in `lib/brand.typ`.
+
+**Citations** (the cite button, or Ctrl-Alt-C on selected text): search
+PubMed or Crossref, see each paper's authors, venue, year and abstract, and
+cite it: its BibTeX comes from Crossref by DOI, the registrar's own record,
+into the `.bib`, and `@key` goes into the text. "Suggest for this file"
+offers papers for each paragraph that cites nothing. "Check references"
+holds every entry in the `.bib` to its published record: a DOI that does not
+exist, a title nothing matches (a made-up reference), wrong authors, year or
+journal are each named, with the published record one click away.
 
 File > Download gives the sources as a `.tar.gz` (enough to rebuild), or
 everything with the PDFs; any file downloads from its row in the tree.

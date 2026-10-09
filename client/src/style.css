@@ -102,7 +102,7 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
    fits; touch has no hover, so row buttons always show; 16px inputs stop iOS
    zooming in on focus. */
 @media (max-width: 800px), (max-height: 500px) and (pointer: coarse) {
-  #brand, #peers, #main-label, #bar-comment, #bar-build, #bar-check, #wordcount, #tgl-tree, #tgl-side, #split, .spacer { display: none !important; }
+  #brand, #peers, #main-label, #bar-comment, #bar-cite, #bar-build, #bar-check, #wordcount, #tgl-tree, #tgl-side, #split, .spacer { display: none !important; }
   #bar { gap: .25rem; padding: 0 .35rem; padding-top: env(safe-area-inset-top); }
   #projname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .menu > button { padding: .45rem .5rem; }
@@ -380,3 +380,16 @@ body.max-editor #preview, body.max-editor #split, body.max-preview #editor, body
 .check .act { display: flex; gap: .3rem; align-items: center; font-size: .75rem; }
 .check .act button { font-size: .72rem; background: none; border: 1px solid var(--ink-3); border-radius: 3px; color: var(--fg); cursor: pointer; }
 #side-body .hint { font-size: .78rem; color: var(--fg-dim); margin: 0 0 .5rem; }
+.cite-bar { display: flex; gap: .3rem; margin-bottom: .4rem; }
+.cite-bar input { flex: 1; min-width: 0; background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 4px; padding: .3rem .45rem; }
+.cite-bar button, .paper button, .ref button { font-size: .75rem; background: none; border: 1px solid var(--ink-3); border-radius: 3px; color: var(--fg); cursor: pointer; padding: .2rem .5rem; }
+.paper { padding: .45rem 0; border-bottom: 1px solid var(--ink-3); font-size: .82rem; }
+.paper .ptitle { color: var(--fg); font-weight: 600; text-decoration: none; display: block; }
+.paper .ptitle:hover { color: var(--teal); }
+.paper small, .ref small { display: block; color: var(--fg-dim); font-size: .72rem; margin: .1rem 0; }
+.paper .abs { margin: .2rem 0; font-size: .76rem; color: var(--fg-dim); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.paper .abs.open { display: block; }
+.para blockquote { margin: .6rem 0 .2rem; padding-left: .5rem; border-left: 2px solid var(--teal); font-size: .76rem; color: var(--fg-dim); }
+.ref { padding: .4rem 0; border-bottom: 1px solid var(--ink-3); font-size: .8rem; }
+.ref p { margin: .15rem 0; font-size: .75rem; }
+.ref.ok b { color: var(--teal); } .ref.web b { color: var(--fg-dim); } .ref.differs b { color: #d9a441; } .ref.missing b, .ref.error b { color: #e06c5b; }

@@ -19,6 +19,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
+import { renderCite } from './cite.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -793,13 +794,14 @@ function maybeWatchBuild() {
 
 // ---------- sidebar ----------
 const sideBody = $('side-body')
+let citeCtx = { files: filesMap, view: () => view, current: () => currentPath }
 let sidebarMode = null
 function openSidebar(mode) {
   sidebarMode = mode
   settings.sideOpen = true; if (phone()) settings.m = 'side'
   applyLayout()
   $('side-title').textContent = mode
-  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
+  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, cite: () => renderCite(sideBody, citeCtx), history: renderHistory, build: renderBuild, review: renderReview })[mode]()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; sidebarMode = null; applyLayout() }
 
@@ -1342,6 +1344,13 @@ const actions = {
   comments: () => openSidebar('comments'),
   chat: () => openSidebar('chat'),
   checklist: () => openSidebar('checklist'),
+  // Cite: search on the selected words; the citation goes after them
+  cite: () => {
+    const sel = view && !view.state.selection.main.empty && view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+    citeCtx = { files: filesMap, view: () => view, current: () => currentPath, at: sel ? view.state.selection.main.to : undefined,
+      query: sel ? sel.replace(/#\w+(\([^)]*\))?|[*_=\[\]\\@]/g, ' ').replace(/\s+/g, ' ').trim().split(' ').slice(0, 25).join(' ') : '' }
+    openSidebar('cite')
+  },
   history: () => openSidebar('history'),
   build: () => openSidebar('build'),
   review: () => openSidebar('review'),
@@ -1382,6 +1391,7 @@ Ctrl-S    save: commit, and push to the git remote
 Alt-N     new file
 Alt-E     export preview PDF
 Ctrl-Alt-M  comment on selection
+Ctrl-Alt-C  cite: find papers for the selection, check references
 Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
 
 Alt-1     file tree
@@ -1417,7 +1427,7 @@ const KEYMAP = {
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
-  'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment',
+  'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment', 'C-A-KeyC': 'cite',
 }
 document.addEventListener('keydown', e => {
   const combo = (e.ctrlKey || e.metaKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey ? 'S-' : '') + e.code
@@ -1430,6 +1440,8 @@ $('focus-exit').onclick = () => actions.focus()
 $('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
 $('bar-check').onclick = () => openSidebar('checklist')
+$('bar-cite').onmousedown = e => e.preventDefault() // keep the selection
+$('bar-cite').onclick = () => actions.cite()
 $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()
 $('tgl-theme').onclick = () => actions.theme()

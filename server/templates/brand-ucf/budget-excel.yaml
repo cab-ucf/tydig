@@ -1,0 +1,23 @@
+# UCF's budget workbook, and where budget.yaml's inputs sit in it. Put the
+# workbook at docs/budget-template.xlsx (in server/templates/brand-ucf/ for
+# every new UCF project), then map its input cells below.
+#   make budget          writes budget.yaml's inputs into a copy, out/budget.xlsx;
+#                        the workbook's own formulas compute the totals
+#   make budget-import   reads a filled-in one (docs/budget-filled.xlsx) back
+#                        into budget.yaml, and says where its totals and
+#                        tydig's disagree
+# A path names a budget.yaml input: rates.fa, personnel.0.salary,
+# personnel.Ada Lovelace.months.1, other.Supplies.cost.0 (a list entry by its
+# index, or by its name or item).
+template: docs/budget-template.xlsx
+inputs: {}
+#  rates.fringe: Rates!C4
+#  rates.fa: Rates!C5
+#  personnel.0.name: Personnel!B8
+#  personnel.0.salary: Personnel!C8
+#  personnel.0.months.0: Personnel!D8
+#  personnel.0.months.1: Personnel!E8
+#  other.Supplies.cost.0: Other!C5
+check: {}         # what lib/budget.typ computes, and the cell that should agree
+#  direct.0: Summary!C30
+#  fa.0: Summary!C31

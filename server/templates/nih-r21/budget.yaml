@@ -14,9 +14,5 @@ other:            # direct costs per year; fa: false keeps one out of the F&A ba
   - { item: Travel, cost: [3000, 3000] }
   - { item: Publication costs, cost: [0, 3000] }
   - { item: Tuition remission, cost: [14000, 14000], fa: false }
-# Your institution's Excel template, filled by `make budget`: a cell
-# ("Sheet!B4") for each number, named as lib/budget.typ names it, e.g.
-# direct.0 (year 1), fa.1, total.0, personnel.Ada Lovelace.salary.0.
-# excel:
-#   template: docs/budget-template.xlsx
-#   cells: { "Summary!C10": direct.0, "Summary!D10": direct.1 }
+# An institution's own budget workbook: its layer (brand-ucf) adds
+# budget-excel.yaml, which says where these inputs sit in it.
