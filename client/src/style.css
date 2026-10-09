@@ -402,3 +402,10 @@ body.write #editor { display: block !important; flex: 1 1 auto !important; }
 body.write .cm-content { max-width: 70ch; margin: 0 auto; padding: 10vh 1.5rem 40vh; }
 body.write #focus-exit { display: block; opacity: 0; }
 body.write #focus-exit:hover, body.write #focus-exit:focus-visible { opacity: 1; }
+
+/* the surprise overlay: words tinted, sentences underlined on the same scale, or tinted by AI-likeness */
+.scope-sent { text-decoration: underline 2px; text-underline-offset: 3px; }
+.scope-ai { border-radius: 2px; }
+.cm-scope-tip { padding: 4px 8px; font-size: 12px; max-width: 520px; }
+.cm-scope-tip p { margin: 2px 0; }
+#scope { font-size: 11px; width: auto; padding: 0 6px; }

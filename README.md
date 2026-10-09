@@ -195,6 +195,19 @@ An agent can also work like any collaborator, on its own copy:
 
 Where an agent and a person change the same lines, the person's text wins.
 
+**Surprise overlay** (View): every word tinted by how much it surprised a
+language model, every sentence underlined by its own surprise, and one click
+on the bar's `ppl` readout recolours each sentence by how AI-like it reads
+(Fast-DetectGPT's criterion: teal reads human, violet reads AI). Hover a word
+for its bits, rank and the model's uncertainty. The model is a
+[Perplexiscope](https://github.com/cab-ucf) engine on your own machine
+(`just` in its folder serves GPT-2 at `http://localhost:8000`; a GPU box:
+`ssh -L 8000:localhost:8000 gpu-box`), so nothing leaves it. Typst files are
+scored as the prose they typeset: code, math, citations and markup are left
+out. The AI reading is a z-score until the engine is calibrated (`just
+calib` there), then a percentage; it is evidence, not a verdict: short,
+edited or translated text, and non-native writers, fool such detectors.
+
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.
 Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b`. Base models

@@ -20,6 +20,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
 import { renderCite } from './cite.js'
+import { surprise, aiText } from './surprise.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -27,7 +28,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, treeOpen: true, sideOpen: false, focus: false, write: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true, sideOpen: false, focus: false, write: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -323,6 +324,14 @@ const ghostPlugin = ViewPlugin.fromClass(class {
 })
 const noFim = new Set(), said = new Set()
 const ghostSay = m => said.has(m) || (said.add(m), toast(m, false, 15000))
+// Surprise and AI-likeness, from a Perplexiscope engine on this machine
+const scope = surprise({
+  url: () => settings.scope?.url, by: () => settings.scope?.by, typst: () => !!currentPath?.endsWith('.typ'),
+  report: r => { const b = $('scope'); b.hidden = !settings.scope
+    b.textContent = r.error ? 'surprise: no engine' : `ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
+    b.title = r.error ? `No Perplexiscope engine at ${r.error}: start it there (just, in its folder)` :
+      `perplexity of this file's prose ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token); AI-likeness of the whole: ${aiText(r.ai)}. Hover a word or sentence.` },
+})
 const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
   const g = v.state.field(ghostField, false)
   if (!g || g.wait) return false
@@ -372,7 +381,7 @@ async function openFile(p) {
         lspComp.of(lsp),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
-        commentHighlights, commentHover, ghostField, ghostPlugin, ghostKeys,
+        commentHighlights, commentHover, ghostField, ghostPlugin, ghostKeys, scope.extension,
         EditorView.lineWrapping,
         EditorView.updateListener.of(u => { if (u.docChanged) { scheduleCompile(); updateWordCount() } }),
       ],
@@ -1153,6 +1162,7 @@ function applyLayout() {
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
   document.body.classList.toggle('write', settings.write)
+  $('scope').hidden = !settings.scope
   document.documentElement.dataset.theme = theme()
   document.body.classList.toggle('dark-preview', theme() !== 'light')
   view?.dispatch({ effects: themeComp.reconfigure(themeExt()) })
@@ -1165,7 +1175,7 @@ function applyLayout() {
   $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
   for (const m of ['editor', 'preview']) document.body.classList.toggle('max-' + m, settings.max === m)
   document.querySelectorAll('[data-check]').forEach(b =>
-    b.classList.toggle('checked', !!settings[b.dataset.check]))
+    b.classList.toggle('checked', b.dataset.check === 'scope-ai' ? settings.scope?.by === 'ai' : !!settings[b.dataset.check]))
   saveSettings()
 }
 document.querySelectorAll('.sect-head[data-sect]').forEach(h => {
@@ -1441,6 +1451,14 @@ const actions = {
     settings.ghost = model.trim() ? { url: settings.ghost?.url || 'http://localhost:11434', model: model.trim() } : null
     applyLayout()
   },
+  scope: () => {
+    const url = prompt('Show how surprising each word is to a language model, and how AI-like each sentence reads, from a ' +
+      'Perplexiscope engine on your computer (run `just` in its folder). Its address, or empty to turn this off:', settings.scope?.url || 'http://localhost:8000')
+    if (url == null) return
+    settings.scope = url.trim() ? { url: url.trim(), by: settings.scope?.by || 'bits' } : null
+    applyLayout(); scope.refresh()
+  },
+  'scope-ai': () => { if (!settings.scope) return actions.scope(); settings.scope.by = settings.scope.by === 'ai' ? 'bits' : 'ai'; applyLayout(); scope.refresh() },
   vim: () => { settings.vim = !settings.vim; applyLayout(); view?.dispatch({ effects: vimComp.reconfigure(settings.vim ? vim() : []) }) },
   lsp: () => { settings.lsp = !settings.lsp; lspDead = false; lspClient = null; applyLayout(); if (currentPath) openFile(currentPath) },
   share: showShare,
@@ -1517,6 +1535,7 @@ document.addEventListener('keydown', e => {
   actions[act]?.()
 }, true)
 $('focus-exit').onclick = () => actions.focus()
+$('scope').onclick = () => actions['scope-ai']() // surprise <-> AI-likeness
 $('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
 $('bar-check').onclick = () => openSidebar('checklist')

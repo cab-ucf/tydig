@@ -23,7 +23,8 @@ page.on('response', r => { if (r.status() >= 400 && !ours(r.url())) errors.push(
 const external = []
 // the local model (ghost suggestions) is this machine, asked for by the person
 page.on('request', r => { if (!/^(data|blob):/.test(r.url()) && ![new URL(B).origin, 'http://localhost:11434'].includes(new URL(r.url()).origin)) external.push(r.url()) })
-page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(d.defaultValue() || 'first signed checkpoint'); else if (d.type() === 'confirm' && yes) await d.accept(); else await d.dismiss() })
+let answer = null
+page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(answer ?? (d.defaultValue() || 'first signed checkpoint')); else if (d.type() === 'confirm' && yes) await d.accept(); else await d.dismiss() })
 let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden, title: document.getElementById('side-title').textContent, body: document.getElementById('side-body').innerText.slice(0, 300) }))
@@ -158,6 +159,30 @@ await page.screenshot({ path: `${tmp}/ui-write.png` })
 await page.keyboard.down('Alt'); await page.keyboard.press('KeyW'); await page.keyboard.up('Alt'); await sleep(500)
 check('writing mode hides the preview and every bar, and centres the text', w.preview === 'none' && w.bar === 'none' &&
   w.full > w.width + 100 && Math.abs(w.left - w.right) < 30 && await page.evaluate(() => getComputedStyle(document.getElementById('preview')).display !== 'none'))
+
+// the surprise overlay, from a stand-in for a Perplexiscope engine: it scores
+// the prose (never the markup), and each word lands on its own source text
+const seen = []
+const engine = new (await import('ws')).WebSocketServer({ port: 8765 })
+engine.on('connection', ws => { ws.send(JSON.stringify({ type: 'hello', model: 'fake' })); ws.on('message', m => {
+  const r = JSON.parse(m); seen.push(r.text)
+  const words = [...r.text.matchAll(/\S+/g)].map(x => ({ s: x.index, e: x.index + x[0].length, bits: x[0].length * 2, rank: 5, ent: 3, toks: [[x[0], x[0].length * 2]] }))
+  ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words, sents: [{ s: 0, e: r.text.trimEnd().length, w: words.length, n: words.length, bits: words.length * 6, z: 3 }],
+    ai: { z: 3 }, ppl: 42, bpt: 5.4, ntok: words.length }))
+}) })
+answer = 'http://localhost:8765'
+await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(2500); answer = null
+const sc = await page.evaluate(() => ({ bar: document.getElementById('scope').textContent,
+  words: [...document.querySelectorAll('.cm-content [style*="background"]')].map(e => e.textContent) }))
+check('the overlay tints words from the engine, and the bar gives the file\'s perplexity', sc.bar.startsWith('ppl 42.0') && sc.words.length > 20)
+check('it scores the prose, not the markup', seen.length && !/#(let|set)|@\w|\$/.test(seen.at(-1)) && /water sample was left/.test(seen.at(-1)) &&
+  sc.words.every(w => !/^[#$@]/.test(w)))
+await page.click('#scope'); await sleep(1500)
+check('one click shows AI-likeness per sentence instead', await page.evaluate(() => document.querySelectorAll('.scope-ai').length > 0 &&
+  /AI z \+3\.0/.test(document.getElementById('scope').textContent)))
+answer = ''; await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(500); answer = null
+check('and it turns off', await page.evaluate(() => !document.querySelector('.scope-ai') && document.getElementById('scope').hidden))
+engine.close()
 
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)

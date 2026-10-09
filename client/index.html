@@ -53,6 +53,8 @@
       <div class="menu"><button>Settings</button><div class="dropdown">
         <button data-act="vim" data-check="vim">Vim mode</button>
         <button data-act="ghost" data-check="ghost">Ghost suggestions (local model)...</button>
+        <button data-act="scope" data-check="scope">Surprise overlay (local model)...</button>
+        <button data-act="scope-ai" data-check="scope-ai">Surprise overlay: AI-likeness</button>
         <button data-act="lsp" data-check="lsp">LSP (tinymist)</button>
         <hr/>
         <button data-act="share">Share project...</button>
@@ -78,6 +80,7 @@
     <button id="bar-build" title="Build panel (Alt-B)">build</button>
     <button id="bar-check" title="What the application needs, and what is here" hidden>checklist</button>
     <span id="wordcount" title="words in current file"></span>
+    <button id="scope" class="tgl" hidden></button>
     <button id="tgl-tree" class="tgl" title="Toggle sidebar (Alt-1)">&#9707;</button>
     <button id="tgl-side" class="tgl" title="Toggle panel (Alt-2)">&#9706;</button>
     <button id="tgl-theme" class="tgl" title="Theme: dark, cyberpunk, light (Alt-D)">&#9680;</button>
