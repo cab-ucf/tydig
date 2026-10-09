@@ -11,5 +11,10 @@
   set block(spacing: 0.9em)
   show heading: set text(11pt)
   show heading.where(level: 1): set block(above: 1em, below: 0.6em)
+  // words the funder forbids (a MIRA withdraws an application that says "aims")
+  show: b => G.mechanism.at("forbid", default: ()).fold(b, (b, w) => {
+    show regex("(?i)\\b" + w + "\\b"): it => box(fill: red, inset: 1pt, text(white)[#it (#G.mechanism.code forbids this word)])
+    b
+  })
   body
 }

@@ -1,0 +1,31 @@
+# Everything a MIRA (PAR-27-032, Early Stage Investigators) application needs, in the order NIH assembles
+# it. The editor's Checklist panel, the checklist page and `make full` read
+# this.
+#   file:  where it is (built here into out/, or uploaded into docs/); none = a form
+#   from:  where to get an uploaded one;  when: always (default), applicable,
+#   jit (just-in-time, after review), revision, renewal
+# No Specific Aims, no resubmissions, no Multiple PD/PI plan, no subawards.
+items:
+  - { id: sf424, name: "SF424 (R&R) cover, project/performance sites", from: "ASSIST or your grants office" }
+  - { id: summary, name: Project Summary/Abstract, file: out/summary.pdf, limit: 30 lines }
+  - { id: narrative, name: Project Narrative, file: out/narrative.pdf, limit: 3 sentences }
+  - { id: references, name: "Bibliography & References Cited", file: out/references.pdf }
+  - { id: resources, name: "Facilities & Other Resources", file: out/resources.pdf }
+  - { id: equipment, name: Equipment, file: out/equipment.pdf }
+  - { id: keyperson, name: Senior/Key Person Profile, from: ASSIST }
+  - id: biosketch
+    name: Biographical Sketch (Common Form, with the NIH Supplement) (the PD/PI only)
+    each: investigators
+    file: "docs/biosketch-{key}.pdf"
+    from: https://www.ncbi.nlm.nih.gov/sciencv/
+  - { id: rrbudget, name: "R&R Budget (not itemised: the PD/PI at $0 in A, the request in F, F&A in H)", from: "ASSIST: the numbers in out/budget-report.pdf" }
+  - { id: budget, name: "Budget Justification (equipment, data management and sharing, F&A exclusions)", file: out/budget.pdf }
+  - { id: introduction, name: Introduction to Application, file: docs/introduction.pdf, when: revision, limit: 1 page }
+  - { id: strategy, name: Research Strategy, file: out/strategy.pdf, limit: 6 pages }
+  - { id: humans, name: PHS Human Subjects and Clinical Trials Information, from: ASSIST, when: applicable }
+  - { id: animals, name: Vertebrate Animals, file: docs/vertebrate-animals.pdf, when: applicable }
+  - { id: letters, name: Letters of Support (the letter of institutional commitment, required), file: out/letters.pdf }
+  - { id: dmsp, name: Data Management and Sharing Plan, file: out/dmsp.pdf, limit: 2 pages }
+  - { id: sharing, name: Resource Sharing Plan (model organisms, research tools), file: docs/resource-sharing.pdf, when: applicable }
+  - { id: support, name: Other Support (shows the MIRA research effort), file: docs/other-support.pdf, when: jit }
+  - { id: aor, name: "AOR letter: the 51% effort, other NIGMS research awards ended and applications withdrawn", file: docs/aor-letter.pdf, when: jit }

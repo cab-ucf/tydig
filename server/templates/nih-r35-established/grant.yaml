@@ -1,0 +1,58 @@
+# Everything the application says more than once lives here: edit it once,
+# and the strategy, summary, budget and letters all follow.
+title: How cells decide they are crowded, and what they do about it
+nofo: PAR-26-121            # MIRA for established and new investigators, and renewals (NIGMS)
+years: 5
+
+mechanism:
+  code: R35
+  name: Maximizing Investigators' Research Award (MIRA)
+  budget_rule: >-
+    PAR-26-121 allows up to $750,000 in direct costs a year, generally in
+    line with the PD/PI's recent NIGMS funding; new investigators ask
+    $275,000, equipment excluded.
+  cap: { year: 750000 }
+  modular: false
+  effort: 45              # percent of total research effort, at least, on the MIRA
+  forbid: [aims?]         # the word withdraws the application
+
+institution:
+  name: University of Central Florida
+  department: Department of Example Sciences
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The PD/PI; a MIRA has one. Effort is in calendar months a year, all institutions.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Professor
+    role: Program Director/Principal Investigator
+    email: ada.lovelace@example.edu
+    commons: ALOVELACE     # eRA Commons ID
+effort: { research: 11, mira: 6.6 }   # months of research effort a year, and of it on the MIRA
+
+# The research program: its directions, each a question and its share of the
+# program's effort and resources (adding to 100). Never call them "aims".
+directions:
+  - title: How cells sense crowding
+    question: What molecular signals tell a cell its neighbours are too close?
+    effort: 50
+  - title: Tools to watch it happen
+    question: Can we image those signals live, in tissue?
+    effort: 30
+  - title: A model to predict it
+    question: Which simple rules reproduce what we measure?
+    effort: 20
+
+limits: { strategy: 6 }   # pages; a MIRA has no Specific Aims page
+
+# Optional letters from collaborators, a page each, no figures. Markup;
+# #pi, #G and #todo can be used in the body.
+letters:
+  - name: Mary Somerville
+    title: Professor
+    institution: Example Research Institute
+    date: January 5, 2027
+    signature: assets/signature.svg
+    body: |
+      I will continue our collaboration with #pi.name on #todo[what, and what I bring].

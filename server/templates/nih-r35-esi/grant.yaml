@@ -1,0 +1,60 @@
+# Everything the application says more than once lives here: edit it once,
+# and the strategy, summary, budget and letters all follow.
+title: How cells decide they are crowded, and what they do about it
+nofo: PAR-27-032            # MIRA for Early Stage Investigators (NIGMS)
+years: 5
+
+mechanism:
+  code: R35
+  name: Maximizing Investigators' Research Award (MIRA) for Early Stage Investigators
+  esi: true
+  budget_rule: >-
+    PAR-27-032 allows up to $275,000 in direct costs a year, equipment
+    included (in year 1 only), with no yearly inflation.
+  cap: { year: 275000 }
+  modular: false
+  effort: 51              # percent of total research effort, at least, on the MIRA
+  forbid: [aims?]         # the word withdraws the application
+
+institution:
+  name: University of Central Florida
+  department: Department of Example Sciences
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The PD/PI; a MIRA has one. Effort is in calendar months a year, all institutions.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Assistant Professor
+    role: Program Director/Principal Investigator
+    email: ada.lovelace@example.edu
+    commons: ALOVELACE     # eRA Commons ID
+effort: { research: 11, mira: 6.6 }   # months of research effort a year, and of it on the MIRA
+
+# The research program: its directions, each a question and its share of the
+# program's effort and resources (adding to 100). Never call them "aims".
+directions:
+  - title: How cells sense crowding
+    question: What molecular signals tell a cell its neighbours are too close?
+    effort: 50
+  - title: Tools to watch it happen
+    question: Can we image those signals live, in tissue?
+    effort: 30
+  - title: A model to predict it
+    question: Which simple rules reproduce what we measure?
+    effort: 20
+
+limits: { strategy: 6 }   # pages; a MIRA has no Specific Aims page
+
+# Markup; #pi, #G (this file) and #todo can be used in the body. The letter
+# of institutional commitment is required: without it, no review.
+letters:
+  - name: Grace Hopper
+    title: Chair, Department of Example Sciences
+    institution: University of Central Florida
+    date: January 6, 2027
+    signature: assets/signature.svg
+    body: |
+      The Department is committed to #pi.name's independent research program
+      and #G.mechanism.code application, "#G.title":
+      #todo[start-up funds, space, salary commitment, career development and mentoring toward promotion].

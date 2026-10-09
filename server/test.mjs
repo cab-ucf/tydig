@@ -33,7 +33,8 @@ let pass = true
 const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL'), name); pass &&= cond }
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
-const [r21, r03, sepa, goali] = [await nih('nih-r21'), await nih('nih-r03'), await nih('nih-r25-sepa'), await nih('nsf-cmi-goali')]
+const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established']) made.push(await nih(t))
+const [r21, r03, sepa, goali, esi, mira] = made
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
@@ -46,6 +47,10 @@ check('the shared grant layer is offered to no one alone, and stands under NIH a
 check('a SEPA R25: the program plan, its own attachments, no DMS plan in its package',
   ['humans.typ', 'sharing.typ'].every(f => sepa.includes(f)) && /Research Education Program Plan/.test(get('data/nih-r25-sepa/main.typ', 'utf8')) &&
   !/dmsp/.test(get('data/nih-r25-sepa/package.yaml', 'utf8')))
+check('a MIRA, ESI or established: no Specific Aims anywhere, the word itself flagged, each NOFO\'s rules',
+  [esi, mira].every(f => f.includes('main.typ') && !f.includes('aims.typ')) && !/#section\("aims"/.test(get('data/nih-r35-esi/main.typ', 'utf8')) &&
+  /forbid: \[aims\?\]/.test(get('data/nih-r35-esi/grant.yaml', 'utf8')) && /effort: 51/.test(get('data/nih-r35-esi/grant.yaml', 'utf8')) &&
+  /effort: 45/.test(get('data/nih-r35-established/grant.yaml', 'utf8')) && !(await api('/templates')).templates.includes('nih-r35'))
 check('an NSF CMI GOALI: PAPPG format, the GOALI letter, no NIH files',
   ['lib/nsf.typ', 'goali-letter.typ', 'subaward.typ', 'mentoring.typ'].every(f => goali.includes(f)) && !goali.includes('lib/nih.typ') &&
   /^title: "GOALI: /m.test(get('data/nsf-cmi-goali/grant.yaml', 'utf8')))
@@ -145,7 +150,7 @@ else {
   const out = (await api('/p/nih-r21/files')).map(f => f.path)
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
-  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali']) {
+  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established']) {
     const r = await api(`/p/${t}/build/full`, { method: 'POST' })
     check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
   }

@@ -89,6 +89,14 @@ A new project starts from one (Projects > the menu beside the name):
   activities, participants, partners, website) in `grant.yaml`, objectives
   that the Evaluation Plan measures, a detailed budget at 8% F&A, warned in
   red over $250,000 a year or with the PD/PI under 2.0 months.
+- `nih-r35-esi`, `nih-r35-established`: an NIGMS MIRA (R35; PAR-27-032 for
+  early-stage investigators, PAR-26-121 for the rest and renewals). No
+  Specific Aims: the Research Strategy in the NOFO's own headings, the
+  program as `directions:` with their share of effort, and the word "aims",
+  which withdraws a MIRA, shown red wherever it is written. The budget is
+  the request a year (capped at $275,000 or $750,000), with equipment and
+  data-sharing costs justified, and the PD/PI's MIRA effort checked (51% or
+  45% of research effort).
 - `nsf-cmi-goali`: an NSF GOALI to Chemical Measurement and Imaging (NSF
   26-519), in PAPPG 24-1's format: the Project Description with the
   instrument-development and university–industry sections CMI and GOALI

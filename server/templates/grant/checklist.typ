@@ -5,7 +5,7 @@
 #show: format
 #let present = sys.inputs.at("present", default: none)
 #let present = if present != none { json(bytes(present)) }
-#let when = (always: [required], applicable: [if applicable], jit: [just-in-time], resubmission: [resubmissions], revision: [revisions])
+#let when = (always: [required], applicable: [if applicable], jit: [just-in-time], resubmission: [resubmissions], revision: [revisions], renewal: [renewals])
 
 #section("checklist", [#G.mechanism.code application: checklist], limit: none)[
   #G.title \ #text(9pt)[#name(pi), #G.institution.name. #if present == none [Run `make full` to check what is here.]]
