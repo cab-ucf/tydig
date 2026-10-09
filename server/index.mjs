@@ -599,6 +599,22 @@ ag.post('/say', async (req, res) => {
   res.json({ ok: true })
 })
 
+// A comment on a passage, as a person leaves one: anchored to the first place
+// the quoted text appears in the file, so it moves with the text.
+ag.post('/comment', async (req, res) => {
+  const { file, quote, text } = req.body || {}
+  if (typeof text !== 'string' || !text.trim() || text.length > 20000 || typeof quote !== 'string' || !quote) return res.status(400).json({ error: 'say something, on a quote' })
+  const r = await live(req.params.proj, doc => {
+    const t = doc.getMap('files').get(String(file)), i = t?.toString().indexOf(quote) ?? -1
+    if (i < 0) return { error: `"${quote.slice(0, 60)}" is not in ${file}: quote the text exactly` }
+    const rel = (j, a) => Buffer.from(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(t, j, a))).toString('base64')
+    const id = randomBytes(8).toString('hex')
+    doc.getMap('comments').set(id, { file, author: req.agent, agent: req.agent, color: 'hsl(280 70% 55%)', text: text.trim(), ts: Date.now(), anchor: rel(i, 0), head: rel(i + quote.length, -1) })
+    return { ok: true, id }
+  })
+  res.status(r.error ? 400 : 200).json(r)
+})
+
 app.use('/api', async (req, res, next) => {
   if (req.path.startsWith('/auth/')) return next()
   const sess = await sessionFrom(fromNodeHeaders(req.headers))

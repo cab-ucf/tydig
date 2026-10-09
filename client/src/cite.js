@@ -4,89 +4,11 @@
 // record, never typed or generated; the check compares each entry with that
 // record (or, without a DOI, the best Crossref match) and offers the fix.
 import * as Y from 'yjs'
+// searching and checking: shared with agent members (server/agent-mcp.mjs)
+import { SEARCH, parseBib, keyFor, bibtex, check } from '../../server/refs.mjs'
 
-const CR = 'https://api.crossref.org/works', PM = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
-const plain = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/<[^>]+>/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
-// how alike two titles are: the share of words they have in common
-const alike = (a, b) => { const x = new Set(plain(a).split(' ')), y = new Set(plain(b).split(' ')); return 2 * [...x].filter(w => y.has(w)).length / (x.size + y.size || 1) }
-const json = u => fetch(u).then(r => r.ok ? r.json() : Promise.reject(Object.assign(new Error(`${new URL(u).host}: ${r.status}`), { status: r.status })))
-
-// ---- searching ----
-const fromCrossref = w => ({ title: w.title?.[0] || '(untitled)', authors: (w.author || []).map(a => a.family || a.name).filter(Boolean),
-  year: w.issued?.['date-parts']?.[0]?.[0], venue: w['container-title']?.[0], doi: w.DOI, cites: w['is-referenced-by-count'],
-  abstract: (w.abstract || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), url: `https://doi.org/${w.DOI}` })
-async function searchCrossref(q) {
-  const r = await json(`${CR}?query.bibliographic=${encodeURIComponent(q)}&rows=8&select=DOI,title,author,issued,container-title,is-referenced-by-count,abstract`)
-  return r.message.items.map(fromCrossref)
-}
-async function searchPubmed(q) {
-  const ids = (await json(`${PM}/esearch.fcgi?db=pubmed&sort=relevance&retmax=8&retmode=json&term=${encodeURIComponent(q)}`)).esearchresult.idlist
-  if (!ids.length) return []
-  const xml = new DOMParser().parseFromString(await (await fetch(`${PM}/efetch.fcgi?db=pubmed&retmode=xml&id=${ids}`)).text(), 'text/xml')
-  return [...xml.querySelectorAll('PubmedArticle')].map(a => {
-    const t = s => a.querySelector(s)?.textContent?.trim(), pmid = t('PMID')
-    return { title: t('ArticleTitle'), authors: [...a.querySelectorAll('AuthorList > Author > LastName')].map(n => n.textContent),
-      year: Number(t('JournalIssue PubDate Year') || t('ArticleDate Year') || (t('MedlineDate') || '').slice(0, 4)) || undefined,
-      venue: t('Journal > Title'), doi: a.querySelector('ArticleId[IdType="doi"]')?.textContent, pmid,
-      abstract: [...a.querySelectorAll('AbstractText')].map(x => x.textContent).join(' '), url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` }
-  })
-}
-const SEARCH = { pubmed: searchPubmed, crossref: searchCrossref }
-
-// ---- the bibliography ----
-// @type{key, field = {value} or "value" or bare, ...}: enough of BibTeX to check and edit entries
-function parseBib(text) {
-  const out = []
-  for (let i = text.indexOf('@'); i >= 0; i = text.indexOf('@', i + 1)) {
-    const m = /^@(\w+)\s*\{\s*([^,\s]+)\s*,/.exec(text.slice(i))
-    if (!m) continue
-    let depth = 0, j = i + m[0].indexOf('{') // from the entry's own brace
-    for (; j < text.length; j++) { if (text[j] === '{') depth++; else if (text[j] === '}' && --depth === 0) break }
-    const body = text.slice(i + m[0].length, j), fields = {}
-    for (const f of body.matchAll(/(\w+)\s*=\s*(\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}|"([^"]*)"|([\w.-]+))/g))
-      fields[f[1].toLowerCase()] = (f[3] ?? f[4] ?? f[5]).replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
-    out.push({ type: m[1].toLowerCase(), key: m[2], fields, from: i, to: j + 1 })
-    i = j
-  }
-  return out
-}
 const bibOf = files => files.has('refs.bib') ? 'refs.bib' : [...files.keys()].find(p => p.endsWith('.bib')) || 'refs.bib'
-const keyFor = (p, taken) => {
-  const base = plain(p.authors[0] || 'anon').split(' ').pop() + (p.year || '') + (plain(p.title).split(' ').find(w => w.length > 3) || '')
-  let k = base; for (let n = 0; taken.has(k); n++) k = base + 'abcdefghijklmnopqrstuvwxyz'[n % 26]
-  return k
-}
-// the registrar's BibTeX for a DOI; a PubMed paper without one, from its PubMed record
-async function bibtex(p, key) {
-  if (p.doi) {
-    const t = await fetch(`${CR}/${encodeURIComponent(p.doi)}/transform/application/x-bibtex`).then(r => r.ok ? r.text() : null)
-    if (t) return t.trim().replace(/^@(\w+)\{[^,]*,/, `@$1{${key},`).replace(/, (\w+)=/g, ',\n  $1 = ').replace(/ \}$/, '\n}')
-  }
-  return `@article{${key},\n  title = {${p.title}},\n  author = {${p.authors.join(' and ')}},\n  journal = {${p.venue || ''}},\n  year = {${p.year || ''}},\n  note = {PMID: ${p.pmid}},\n  url = {${p.url}}\n}`
-}
-
-// ---- checking ----
-const families = s => String(s || '').split(/\s+and\s+/i).map(a => plain(a.includes(',') ? a.split(',')[0] : a.split(' ').pop()))
-async function check(e) {
-  const f = e.fields, doi = f.doi?.replace(/^https?:\/\/(dx\.)?doi\.org\//, '')
-  // a web page or report has no registry record to hold it to
-  if (!doi && /^(misc|online|electronic|www|manual|techreport|unpublished)$/.test(e.type))
-    return { status: 'web', note: `not a published paper, so not checkable here: open ${f.url || 'its source'} and confirm it` }
-  // a lookup that fails is "could not check", never "does not exist"; only a 404 is an answer
-  let w = doi && await json(`${CR}/${encodeURIComponent(doi)}`).then(r => r.message, err => err.status === 404 ? null : Promise.reject(err))
-  if (!w && f.title) w = (await json(`${CR}?query.bibliographic=${encodeURIComponent(`${f.title} ${families(f.author)[0] || ''}`)}&rows=1`)).message.items[0]
-  if (!w || alike(w.title?.[0], f.title) < 0.8) return { status: 'missing', note: doi ? `no published paper matches DOI ${doi}` :
-    'no published paper matches this title: check it exists, and add its DOI' }
-  const p = fromCrossref(w), issues = []
-  if (alike(p.title, f.title) < 0.95) issues.push(`title: "${p.title}"`)
-  const mine = families(f.author), theirs = p.authors.map(plain)
-  if (theirs.length && (mine.length !== theirs.length || mine.some((a, i) => a !== theirs[i]))) issues.push(`authors: ${p.authors.join(', ')}`)
-  if (p.year && f.year && Number(f.year) !== p.year) issues.push(`year: ${p.year}`)
-  if (p.venue && f.journal && alike(p.venue, f.journal) < 0.6) issues.push(`journal: ${p.venue}`)
-  if (!doi) issues.push(`DOI: ${p.doi}`)
-  return { status: issues.length ? 'differs' : 'ok', note: issues.join('; '), paper: p }
-}
 
 // ---- the panel ----
 // ctx: { files (the Y.Map), view (the editor, or null), current (its path), query, at }
@@ -147,7 +69,7 @@ export function renderCite(body, ctx) {
       // PubMed wants every word to match: its six most telling (longest) words; Crossref ranks twelve
       const terms = src.value === 'pubmed' ? [...new Set(words)].sort((a, b) => b.length - a.length).slice(0, 6) : words.slice(0, 12)
       let found = await SEARCH[src.value](terms.join(' ')).catch(() => [])
-      if (!found.length && src.value === 'pubmed') found = await searchCrossref(words.slice(0, 12).join(' ')).catch(() => []) // nothing in PubMed: wider
+      if (!found.length && src.value === 'pubmed') found = await SEARCH.crossref(words.slice(0, 12).join(' ')).catch(() => []) // nothing in PubMed: wider
       groups.push(el('div', { className: 'para' }, el('blockquote', { textContent: p.slice(0, 160) + (p.length > 160 ? '...' : '') }),
         ...found.slice(0, 3).map(x => card(x, at))))
     }

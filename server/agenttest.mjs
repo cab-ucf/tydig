@@ -53,15 +53,57 @@ const reply = doc.getArray('chat').toArray().find(m => m.answers === 'c1')
 check('its answer is in the Discussion, threaded on the comment', reply?.author === 'claude' && reply.re === 'c1')
 check('and that task is done', !(await (await agent(token, 'GET', '/tasks')).json()).tasks.some(t => t.id === 'c1'))
 
-// the MCP server, as Claude Code would drive it
-const mcp = spawn(process.execPath, [path.join(here, 'agent-mcp.mjs')], { env: { ...process.env, TYDIG_HUB: B, TYDIG_PROJECT: 'paper', TYDIG_AGENT_TOKEN: token } })
-let out = ''; mcp.stdout.on('data', d => out += d)
-for (const [id, method, params] of [[1, 'initialize', { protocolVersion: '2025-06-18' }], [2, 'tools/list'], [3, 'tools/call', { name: 'tydig_tasks', arguments: {} }]])
-  mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
-await until(() => out.split('\n').filter(Boolean).length >= 3, 8000); mcp.kill()
-const [init, list, called] = out.split('\n').filter(Boolean).map(l => JSON.parse(l))
-check('MCP: it introduces itself and lists its tools', init.result.serverInfo.name === 'tydig' && list.result.tools.length === 5)
-check('MCP: a tool call returns the tasks', called.result.content[0].text.includes('m1'))
+// the MCP server, as Claude Code would drive it, against stand-ins for
+// Crossref, PubMed and OpenAlex
+const work = { DOI: '10.1/a', type: 'journal-article', title: ['Cells sense crowding'], author: [{ family: 'Smith' }], issued: { 'date-parts': [[2020]] }, 'container-title': ['Cell'] }
+const fake = (await import('node:http')).createServer((q, r) => {
+  const u = new URL(q.url, 'http://x'), send = (b, type = 'application/json') => r.writeHead(200, { 'content-type': type }).end(typeof b === 'string' ? b : JSON.stringify(b))
+  if (u.pathname.endsWith('/transform/application/x-bibtex')) return send('@article{X, title={Cells sense crowding}, author={Smith, Ann}, journal={Cell}, year={2020}, doi={10.1/a}}', 'text/plain')
+  if (u.pathname.startsWith('/works/')) return decodeURIComponent(u.pathname.slice(7)) === '10.1/a' ? send({ message: work }) : r.writeHead(404).end()
+  if (u.pathname === '/works') return send({ message: { items: [work, { DOI: '10.1/a.s001', type: 'component', title: ['Supplement'] }] } })
+  if (u.pathname.endsWith('esearch.fcgi')) return send({ esearchresult: { idlist: ['111', '222'] } })
+  if (u.pathname.endsWith('efetch.fcgi')) return send(['<PubmedArticleSet>', ...[['111', '10.1/a'], ['222', null]].map(([id, doi]) => `<PubmedArticle><PMID>${id}</PMID>
+    <Journal><Title>Cell</Title><JournalIssue><PubDate><Year>2020</Year></PubDate></JournalIssue></Journal><ArticleTitle>Paper ${id} &amp; crowding</ArticleTitle>
+    <AuthorList><Author><LastName>Smith</LastName></Author></AuthorList><Abstract><AbstractText>About <i>crowding</i>.</AbstractText></Abstract>
+    ${doi ? `<ArticleIdList><ArticleId IdType="doi">${doi}</ArticleId></ArticleIdList>` : ''}</PubmedArticle>`), '</PubmedArticleSet>'].join(''), 'text/xml')
+  if (u.pathname === '/oa') return send({ results: [{ title: 'Crowding, a contrary view', authorships: [{ author: { display_name: 'Bob Jones' } }], publication_year: 2023,
+    doi: 'https://doi.org/10.1/b', cited_by_count: 4, abstract_inverted_index: { No: [0], effect: [1] } }] })
+  r.writeHead(404).end()
+}).listen(3999)
+const mcp = spawn(process.execPath, [path.join(here, 'agent-mcp.mjs')], { env: { ...process.env, TYDIG_HUB: B, TYDIG_PROJECT: 'paper', TYDIG_AGENT_TOKEN: token,
+  TYDIG_CROSSREF: 'http://localhost:3999/works', TYDIG_PUBMED: 'http://localhost:3999/eutils', TYDIG_OPENALEX: 'http://localhost:3999/oa', OPENALEX_API_KEY: 'k' } })
+let out = '', n = 0; mcp.stdout.on('data', d => out += d)
+const rpc = async (method, params) => {
+  const id = ++n; mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n')
+  let m; await until(() => (m = out.split('\n').filter(Boolean).map(l => JSON.parse(l)).find(x => x.id === id)), 8000); return m
+}
+const tool = async (name, args = {}) => { const r = (await rpc('tools/call', { name, arguments: args })).result; return r.isError ? { error: r.content[0].text } : JSON.parse(r.content[0].text) }
+const init = await rpc('initialize', { protocolVersion: '2025-06-18' }), list = await rpc('tools/list')
+check('MCP: it introduces itself and lists its tools', init.result.serverInfo.name === 'tydig' && list.result.tools.length === 9)
+check('MCP: a tool call returns the tasks', JSON.stringify(await tool('tydig_tasks')).includes('m1'))
+const found = await tool('tydig_search', { query: 'cells crowding' })
+check('search: every index, one entry a paper (not a supplement), abstracts as text', found.papers.length === 3 && !found.failed.length &&
+  found.papers.some(p => p.doi === '10.1/b' && p.abstract === 'No effect') && found.papers.some(p => p.pmid === '222' && p.title === 'Paper 222 & crowding'))
+const c1 = await tool('tydig_cite', { doi: '10.1/a' }), c2 = await tool('tydig_cite', { doi: 'https://doi.org/10.1/a' })
+check('cite: the registrar\'s own BibTeX into refs.bib, under a key it returns, and once', c1.key === 'smith2020cells' && c1.added && c2.key === c1.key && !c2.added &&
+  /@article\{smith2020cells,[\s\S]*doi = \{10\.1\/a\}/.test((await (await agent(token, 'GET', '/file?path=refs.bib')).json()).text))
+check('cite: a DOI that does not exist is refused, not invented', /404|exists/.test((await tool('tydig_cite', { doi: '10.1/nope' })).error || ''))
+const bib = (await (await agent(token, 'GET', '/file?path=refs.bib')).json()).text
+await agent(token, 'PUT', '/file', { path: 'refs.bib', base: bib, text: bib + '\n@article{wrong, title={Cells sense crowding}, author={Jones, Bob}, year={2021}, doi={10.1/a}}\n' })
+const m0 = (await (await agent(token, 'GET', '/file?path=main.typ')).json()).text
+await agent(token, 'PUT', '/file', { path: 'main.typ', base: m0, text: m0 + '\nCells sense crowding @smith2020cells. Others disagree @wrong; see @ghost2019.\n' })
+const refs = await tool('tydig_check_refs')
+const ref = k => refs.references.find(r => r.key === k)
+check('check: each reference against its record, with the sentences citing it', ref('smith2020cells')?.status === 'ok' &&
+  ref('smith2020cells').cited[0]?.sentence === 'Cells sense crowding @smith2020cells.' && ref('wrong')?.status === 'differs' && /authors: Smith/.test(ref('wrong').note))
+check('check: a key cited but never added is named', refs.not_in_bibliography.join() === 'ghost2019')
+const said = await tool('tydig_comment', { file: 'main.typ', quote: 'Others disagree', text: 'Jones 2023 (10.1/b) finds no effect.' })
+await sleep(300)
+const note = doc.getMap('comments').get(said.id)
+check('comment: on the passage it quotes, by the agent, for everyone to see', note?.author === 'claude' && note.file === 'main.typ' &&
+  main.toString().slice(Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(Buffer.from(note.anchor, 'base64')), doc).index).startsWith('Others disagree'))
+check('comment: a quote that is not in the file is refused', /not in main\.typ/.test((await tool('tydig_comment', { file: 'main.typ', quote: 'no such words', text: 'x' })).error || ''))
+mcp.kill(); fake.close()
 
 // the runner: an agent that does nothing gets the task closed with a note, not retried forever
 const runner = spawn(process.execPath, [path.join(here, 'agent.mjs')], { env: { ...process.env, TYDIG_HUB: B, TYDIG_PROJECT: 'paper', TYDIG_AGENT_TOKEN: token, TYDIG_AGENT_CMD: 'test -n "$TYDIG_PROMPT" && test -f "$TYDIG_MCP"; exit 3' }, stdio: 'ignore' })

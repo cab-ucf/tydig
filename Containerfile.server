@@ -17,7 +17,7 @@ COPY server/package.json server/
 RUN npm ci -w client
 COPY client/ client/
 COPY fonts/ fonts/
-COPY server/relay.mjs server/
+COPY server/relay.mjs server/refs.mjs server/
 RUN npm run build
 
 # ---------- stage 2: runtime ----------

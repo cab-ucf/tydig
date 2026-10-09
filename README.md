@@ -172,6 +172,18 @@ An agent can be a member, asked for work in the editor:
    an MCP server): no shell, no other files. `TYDIG_AGENT_CMD` runs another
    agent instead; the MCP server works in any MCP client.
 
+**A second opinion on the references.** Agents have the Cite panel's tools:
+search PubMed and Crossref (and OpenAlex, given a free `OPENALEX_API_KEY`
+where the agent runs), cite a paper only from its registrar's record (so it
+cannot invent one), and check every reference against its record, with the
+sentences that cite it. Ask `@claude check the references`: it searches
+each claim several ways (its words, technical or MeSH terms, the opposite
+finding, reviews), reads the abstracts, and comments on the sentences where
+the collaborators should weigh something: evidence against, a stronger or
+newer source, a reference that does not match or does not say what the
+sentence claims, a claim with nothing behind it. It comments; it does not
+rewrite your text unless asked.
+
 An agent can also work like any collaborator, on its own copy:
 
 - **Through the git remote**: it clones the project's repo, commits, and
