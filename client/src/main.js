@@ -27,7 +27,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, treeOpen: true, sideOpen: false, focus: false, write: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -751,7 +751,8 @@ function missingReferences() {
   for (const [p, t] of filesMap) {
     if (!p.endsWith('.typ')) continue
     const dir = p.slice(0, p.lastIndexOf('/') + 1)
-    for (const [, ref] of t.toString().matchAll(/\b(?:image|json|csv|yaml|toml|xml|read|include|import)\(\s*"([^"@][^"]*)"/g)) {
+    // a whole literal path only: "/" + name is built at run time, and not a file
+    for (const [, ref] of t.toString().matchAll(/\b(?:image|json|csv|yaml|toml|xml|read|include|import)\(\s*"([^"@][^"]*)"\s*[,)]/g)) {
       const abs = normPath(ref.startsWith('/') ? ref : dir + ref)
       if (present.has(abs) || out.has(abs)) continue
       const r = normPath(ref), fix = !ref.startsWith('/') && (present.has(r) ? r : [...present].find(q => q.endsWith('/' + r)))
@@ -764,8 +765,9 @@ function explainCompileError(e) {
   const raw = String(e?.message || e)
   if (!/access denied|outside of project root|not found/.test(raw)) return raw
   const missing = missingReferences(), gen = missing.filter(([p]) => /^(build|figures|out)\//.test(p))
-  let msg = missing.length ? 'Missing:\n' + missing.map(([, why]) => '  ' + why).join('\n')
-    : 'The document reads a file that does not exist in the project.'
+  // the compiler's own words first: a guess below must never hide them
+  let msg = raw.split('\n')[0] + '\n\n' + (missing.length ? 'Missing:\n' + missing.map(([, why]) => '  ' + why).join('\n')
+    : 'The document reads a file that does not exist in the project.')
   if (gen.length) msg += '\nFiles under build/, figures/ or out/ come from the build: open the build panel and run "all".'
   return msg + '\n\nA relative path starts from the file that names it, not from the document; ' +
     'a path starting with / starts at the project root.'
@@ -1150,6 +1152,7 @@ function applyLayout() {
   // has to be released here or no pane can ever appear.
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
+  document.body.classList.toggle('write', settings.write)
   document.documentElement.dataset.theme = theme()
   document.body.classList.toggle('dark-preview', theme() !== 'light')
   view?.dispatch({ effects: themeComp.reconfigure(themeExt()) })
@@ -1409,7 +1412,8 @@ const actions = {
   comment: addComment,
   'toggle-tree': () => { settings.treeOpen = !settings.treeOpen; applyLayout() },
   'toggle-side': () => { settings.sideOpen = !settings.sideOpen; if (settings.sideOpen && !sidebarMode) sidebarMode = 'comments', renderComments(); applyLayout() },
-  focus: () => { settings.focus = !settings.focus; applyLayout() },
+  focus: () => { settings.write ? settings.write = false : settings.focus = !settings.focus; applyLayout() },
+  write: () => { settings.write = !settings.write; applyLayout(); view?.focus() },
   'max-editor': () => { settings.max = settings.max === 'editor' ? null : 'editor'; applyLayout() },
   'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
@@ -1472,6 +1476,7 @@ Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
 Alt-1     file tree
 Alt-2     side panel
 Alt-0     focus mode (toggle works while typing)
+Alt-W     writing mode: the text alone, centred, no preview
 Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
@@ -1498,7 +1503,7 @@ document.addEventListener('click', () => document.querySelectorAll('#menubar .dr
 // while typing in the editor (essential for exiting focus mode).
 const KEYMAP = {
   'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus',
-  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
+  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen', 'A-KeyW': 'write',
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',

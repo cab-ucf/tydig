@@ -393,3 +393,12 @@ body.max-editor #preview, body.max-editor #split, body.max-preview #editor, body
 .ref { padding: .4rem 0; border-bottom: 1px solid var(--ink-3); font-size: .8rem; }
 .ref p { margin: .15rem 0; font-size: .75rem; }
 .ref.ok b { color: var(--teal); } .ref.web b { color: var(--fg-dim); } .ref.differs b { color: #d9a441; } .ref.missing b, .ref.error b { color: #e06c5b; }
+
+/* writing: the text alone, in a column a line can be read across; Alt-W (or the corner) leaves */
+body.write #bar, body.write #tree-pane, body.write #side, body.write #zoomctl, body.write .cm-gutters,
+body.write #preview, body.write #split, body.write #mtabs { display: none !important; }
+body.write #layout { height: 100dvh; }
+body.write #editor { display: block !important; flex: 1 1 auto !important; }
+body.write .cm-content { max-width: 70ch; margin: 0 auto; padding: 10vh 1.5rem 40vh; }
+body.write #focus-exit { display: block; opacity: 0; }
+body.write #focus-exit:hover, body.write #focus-exit:focus-visible { opacity: 1; }

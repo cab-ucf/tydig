@@ -3,7 +3,7 @@
 import * as Y from 'yjs'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import WebSocket from 'ws'
-import { rmSync, existsSync } from 'node:fs'
+import { rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs'
 
 const B = 'http://localhost:3000'
 let pass = true
@@ -58,6 +58,19 @@ check('a report to a grant: your main.typ stays, the grant\'s is set beside it',
   r2.beside.some(([a, b]) => a === 'main.typ' && b === 'main.nih-r21.typ') && text(p, 'main.nih-r21.typ')?.includes('#section("aims"'))
 check('the grant\'s files arrive', ['grant.yaml', 'package.yaml', 'lib/nih.typ', 'budget.yaml'].every(f => r2.added.includes(f)) && text(p, 'lib/brand.typ')?.includes('UCF'))
 check('the report\'s untouched files go', r2.removed.includes('scripts/analysis.py') && !existsSync('data/paper/scripts/analysis.py'))
+
+// a project made from an older version of a template: a file it never
+// changed is the template's to update, though today's template differs from it
+await json(ann, '/projects/aged', { template: 'nih-r21' })
+const a = await open('aged'), was = '// lib/nih.typ as the template once was\n'
+const t = a.getMap('files').get('lib/nih.typ'); t.delete(0, t.length); t.insert(0, was)
+writeFileSync('data/aged/.collab/base/lib/nih.typ', was)
+await sleep(2500)
+const r3 = await json(ann, '/p/aged/template', { template: 'nih-r03' })
+await sleep(500)
+check('a file from an older template, never changed, is updated to today\'s', r3.updated.includes('lib/nih.typ') &&
+  text(a, 'lib/nih.typ') === readFileSync(new URL('templates/nih/lib/nih.typ', import.meta.url), 'utf8'))
+check('and what the template gave is kept for the next switch', readFileSync('data/aged/.collab/base/grant.yaml', 'utf8').includes('code: R03'))
 
 console.log(pass ? '\nTEMPLATE ALL PASS' : '\nTEMPLATE FAILURES')
 process.exit(pass ? 0 : 1)

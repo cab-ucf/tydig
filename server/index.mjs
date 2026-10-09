@@ -429,6 +429,14 @@ const scaffold = async (t, brand, dir) => {
   for (const l of layersOf(t, brand)) await cp(path.join(TEMPLATES, l), dir, { recursive: true })
   await mkdir(path.join(dir, '.collab'), { recursive: true })
   await writeFile(path.join(dir, '.collab', 'template.json'), JSON.stringify({ template: t, brand: brand || null }))
+  await keepBase(dir, await stack(t, brand))
+}
+// what the template gave the project, kept (.collab/base/): a switch tells
+// your changes from its own by this, not by today's version of the template
+const keepBase = async (dir, files) => {
+  const b = path.join(dir, '.collab', 'base')
+  await rm(b, { recursive: true, force: true })
+  for (const [rel, data] of files) { await mkdir(path.dirname(path.join(b, rel)), { recursive: true }); await writeFile(path.join(b, rel), data) }
 }
 // every file a template (with a brand) gives a project: path -> bytes, later layers winning
 async function stack(t, brand) {
@@ -969,6 +977,18 @@ const putFile = async (n, doc, rel, b) => { const t = textOf(b), files = doc.get
   if (t != null && !GENERATED.test(rel)) files.has(rel) ? setText(files.get(rel), t) : files.set(rel, new Y.Text(t))
   else { await mkdir(path.dirname(inProj(n, rel)), { recursive: true }); await writeIn(n, rel, b) } }
 const fileNow = async (n, doc, rel) => { const t = doc.getMap('files').get(rel); return t ? Buffer.from(t.toString()) : readIn(n, rel).catch(() => null) }
+// the template's files as this project got them: kept, or (a project from
+// before they were) each as the commit that added it has it; else today's
+async function given(n, from) {
+  const b = path.join(proj(n), '.collab', 'base'), out = new Map()
+  if (existsSync(b)) { for await (const rel of walk(b)) out.set(rel, await readFile(path.join(b, rel))); return out }
+  const added = new Map() // path -> the first commit with it (git log is newest first)
+  let at; for (const l of (await git(n, 'log', '--diff-filter=A', '--name-only', '--format=%x00%H').catch(() => '')).split('\n'))
+    l.startsWith('\0') ? at = l.slice(1) : l && added.set(l, at)
+  for (const [rel, now] of await stack(from.template, from.brand)) out.set(rel, added.has(rel)
+    ? await run('git', ['-C', proj(n), 'show', `${added.get(rel)}:${rel}`], { encoding: 'buffer', maxBuffer: 1 << 26 }).then(r => r.stdout, () => now) : now)
+  return out
+}
 // a project from before templates were recorded: the one its files match best
 async function inferTemplate(n, doc) {
   let best = null, most = 0
@@ -990,7 +1010,7 @@ p.post('/template', admin, async (req, res) => {
   let from
   await live(n, async doc => {
     from = await recorded(n) || await inferTemplate(n, doc)
-    const old = from ? await stack(from.template, from.brand) : new Map(), next = await stack(template, brand), files = doc.getMap('files')
+    const old = from ? await given(n, from) : new Map(), next = await stack(template, brand), files = doc.getMap('files')
     const put = (rel, b) => putFile(n, doc, rel, b)
     for (const [rel, theirs] of next) {
       const base = old.get(rel), cur = await fileNow(n, doc, rel)
@@ -1013,6 +1033,7 @@ p.post('/template', admin, async (req, res) => {
     await mirror(n, doc)
   })
   await writeFile(path.join(proj(n), '.collab', 'template.json'), JSON.stringify({ template, brand }))
+  await keepBase(proj(n), await stack(template, brand))
   await git(n, 'add', '-A')
   await git(n, 'commit', '-q', '-m', `checkpoint: template ${from ? `${from.template}${from.brand ? '+' + from.brand : ''}` : 'none'} -> ${template}${brand ? '+' + brand : ''}`).catch(() => {})
   res.json({ from, ...report })

@@ -149,6 +149,16 @@ check('Ollama refusing the page says how to let it in', await page.evaluate(() =
   document.getElementById('toast')?.textContent.includes(`OLLAMA_ORIGINS=${location.origin}`)))
 ollama.close()
 
+// writing mode: the text alone, centred; Alt-W again, and all is back
+await page.keyboard.down('Alt'); await page.keyboard.press('KeyW'); await page.keyboard.up('Alt'); await sleep(500)
+const w = await page.evaluate(() => { const c = document.querySelector('.cm-content').getBoundingClientRect(), e = document.getElementById('editor').getBoundingClientRect()
+  return { preview: getComputedStyle(document.getElementById('preview')).display, bar: getComputedStyle(document.getElementById('bar')).display,
+    left: c.left - e.left, right: e.right - c.right, width: c.width, full: e.width } })
+await page.screenshot({ path: `${tmp}/ui-write.png` })
+await page.keyboard.down('Alt'); await page.keyboard.press('KeyW'); await page.keyboard.up('Alt'); await sleep(500)
+check('writing mode hides the preview and every bar, and centres the text', w.preview === 'none' && w.bar === 'none' &&
+  w.full > w.width + 100 && Math.abs(w.left - w.right) < 30 && await page.evaluate(() => getComputedStyle(document.getElementById('preview')).display !== 'none'))
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
