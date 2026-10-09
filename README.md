@@ -39,7 +39,8 @@ over [iroh](https://iroh.computer) through irp's wasm client, end-to-end
 encrypted, through NAT, so the hub can be a laptop with no open port, domain or
 certificate. The code is the hub's address and is unguessable; sign-in and
 invitations still decide who gets in. A new code: delete `data/link-seed` and
-restart. Firefox is refused by n0's relays (its ECH GREASE): use another
+restart. The hub uses the nearest of n0's relays, measured once and named in
+the link (`;r=use1-1`); delete `data/link-relay` to measure again. Firefox is refused by n0's relays (its ECH GREASE): use another
 browser, or set `security.tls.ech.grease_probability` to 0 in `about:config`.
 
 The static site deploys from this repo (`.github/workflows/pages.yml`; Settings

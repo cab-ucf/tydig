@@ -805,12 +805,18 @@ app.use((e, req, res, next) => {
 const PORT = Number(process.env.PORT || 3000)
 // The hub's link: tydig's static page plus a seed only this hub holds (link.mjs).
 import { startLink, newSeed } from './link.mjs'
+import { nearest, relayUrl } from './relay.mjs'
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/app/'
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
 let linkOnline = false
-const RELAY = process.env.TYDIG_LINK_RELAY
+// The relay: the nearest of n0's, measured once and kept, so the link stays
+// the same and traffic does not cross an ocean (Florida to Singapore) for
+// every keystroke. TYDIG_LINK_RELAY picks one; delete data/link-relay to re-measure.
+const relayFile = path.join(DATA, 'link-relay')
+const RELAY = process.env.TYDIG_LINK_RELAY || (PAGE ? existsSync(relayFile) ? readFileSync(relayFile, 'utf8').trim()
+  : await nearest().then(r => (r && writeFileSync(relayFile, r + '\n'), r)) : null)
 const LINK = PAGE && `${PAGE}#${LINK_SEED}${RELAY ? `;r=${RELAY}` : ''}`
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n')
 const httpServer = app.listen(PORT, e => {
@@ -822,7 +828,7 @@ const httpServer = app.listen(PORT, e => {
   if (LINK) {
     console.log(`collaborators, from any browser: ${LINK}`)
     // Say whether the link works: it needs the hub to reach its relay over HTTPS.
-    startLink({ server: httpServer, seed: LINK_SEED, relay: RELAY })
+    startLink({ server: httpServer, seed: LINK_SEED, relay: RELAY && relayUrl(RELAY) })
       .then(l => {
         const late = setTimeout(() => console.warn('link: no relay reachable yet, so the link will not connect. ' +
           'The hub needs outbound HTTPS (port 443) to *.relay.n0.iroh.link.'), 20_000)
