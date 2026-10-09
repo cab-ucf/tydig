@@ -277,43 +277,55 @@ class Ghost extends WidgetType {
 }
 const ghostField = StateField.define({
   create: () => null,
-  update: (g, tr) => tr.effects.find(e => e.is(setGhost))?.value ?? (tr.docChanged || tr.selection ? null : g),
+  update: (g, tr) => { const e = tr.effects.find(e => e.is(setGhost)); return e ? e.value : tr.docChanged || tr.selection ? null : g },
   provide: f => EditorView.decorations.from(f, g => g ? Decoration.set([Decoration.widget({ widget: new Ghost(g.text), side: 1 }).range(g.pos)]) : Decoration.none),
 })
+// One question at a time, never cancelled by typing: a slow model's answer
+// still lands if what was typed meanwhile is how it begins.
 const ghostPlugin = ViewPlugin.fromClass(class {
   update(u) {
     if (!settings.ghost || !u.docChanged || !u.transactions.some(t => t.isUserEvent('input'))) return
-    clearTimeout(this.t); this.ask?.abort()
-    this.t = setTimeout(() => this.suggest(u.view), 600)
+    clearTimeout(this.t); this.t = setTimeout(() => this.suggest(u.view), 600)
   }
   async suggest(v) {
     const { head, empty } = v.state.selection.main, doc = v.state.doc, { url, model } = settings.ghost
-    if (!empty) return
-    this.ask = new AbortController()
-    // fill-in-the-middle where the model can; thinking models asked not to think
+    if (!empty || this.busy) return
+    this.busy = true; v.dispatch({ effects: setGhost.of({ pos: head, text: '…', wait: true }) })
+    // fill-in-the-middle where the model can; otherwise raw, so a chat model
+    // continues the text rather than answering it; thinking models not to think
     const gen = async fim => {
-      const r = await fetch(`${url}/api/generate`, { method: 'POST', signal: this.ask.signal, body: JSON.stringify({
-        model, prompt: doc.sliceString(Math.max(0, head - 2000), head), ...fim && { suffix: doc.sliceString(head, head + 800) },
-        think: false, stream: false, options: { temperature: 0.2, num_predict: 60, stop: ['\n\n'] } }) })
+      const r = await fetch(`${url}/api/generate`, { method: 'POST', body: JSON.stringify({
+        model, prompt: doc.sliceString(Math.max(0, head - 2000), head), ...fim ? { suffix: doc.sliceString(head, head + 800) } : { raw: true },
+        think: false, stream: false, keep_alive: '30m', options: { temperature: 0.2, num_predict: 40, stop: ['\n'] } }) })
       return { ok: r.ok, status: r.status, ...await r.json().catch(() => ({})) }
     }
-    let r = await gen(!noFim.has(model)).catch(e => e.name === 'AbortError' ? null : { status: 0 })
-    if (r?.status === 400 && /insert|suffix/i.test(r.error)) { noFim.add(model); r = await gen(false).catch(() => null) }
+    let r = await gen(!noFim.has(model)).catch(() => ({ status: 0 }))
+    if (r.status === 400 && /insert|suffix/i.test(r.error)) { noFim.add(model); r = await gen(false).catch(() => ({ status: 0 })) }
+    this.busy = false
+    if (v.state.field(ghostField, false)?.wait) v.dispatch({ effects: setGhost.of(null) })
     // Ollama refusing this page's origin looks, from here, like no Ollama at all
-    if (r && !r.ok) return ghostSay(r.status ? `Ollama: ${esc(r.error || `error ${r.status}`)}` : `No answer from Ollama at ${esc(url)}.
+    if (!r.ok) return ghostSay(r.status ? `Ollama: ${esc(r.error || `error ${r.status}`)}` : `No answer from Ollama at ${esc(url)}.
       If it is running, it refuses this page: set <code>OLLAMA_ORIGINS=${location.origin}</code> in Ollama's own
       environment (Linux service: <code>systemctl edit ollama</code>, add
       <code>Environment="OLLAMA_ORIGINS=${location.origin}"</code>; Mac: <code>launchctl setenv OLLAMA_ORIGINS
       ${location.origin}</code>), then restart Ollama.`)
-    const text = r?.response?.replace(/\s+$/, '')
-    if (text && v.state.selection.main.head === head) v.dispatch({ effects: setGhost.of({ pos: head, text }) })
+    // the rest of this sentence, past what was typed while the model thought,
+    // without any of the text before it that a small model may say back first
+    const before = doc.sliceString(Math.max(0, head - 400), head), out = r.response || ''
+    const echo = [...Array(Math.min(out.length, before.length) + 1).keys()].reverse().find(k => k >= 8 && before.endsWith(out.slice(0, k))) || 0
+    const text = /^[\s\S]*?(?:[.!?](?=\s|$)|$)/.exec(out.slice(echo))[0].replace(/\s+$/, '')
+    const now = v.state.selection.main.head, typed = now >= head ? v.state.doc.sliceString(head, now) : null
+    if (text.trim().length >= 20 && before.includes(text.trim())) return // a sentence from above, said again
+    if (typed != null && text.length > typed.length && text.startsWith(typed))
+      v.dispatch({ effects: setGhost.of({ pos: now, text: text.slice(typed.length) }) })
+    else if (typed) this.suggest(v) // it went elsewhere: ask about where the text is now
   }
 })
 const noFim = new Set(), said = new Set()
 const ghostSay = m => said.has(m) || (said.add(m), toast(m, false, 15000))
 const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
   const g = v.state.field(ghostField, false)
-  if (!g) return false
+  if (!g || g.wait) return false
   v.dispatch({ changes: { from: g.pos, insert: g.text }, selection: { anchor: g.pos + g.text.length } }); return true
 } }, { key: 'Escape', run: v => !!v.state.field(ghostField, false) && (v.dispatch({ effects: setGhost.of(null) }), true) }]))
 

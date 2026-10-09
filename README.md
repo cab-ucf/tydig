@@ -197,8 +197,12 @@ Where an agent and a person change the same lines, the person's text wins.
 
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.
-Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b` (any model
-works: thinking ones like qwen3 are asked not to think). Ollama answers only
+Nothing leaves your computer. `ollama pull qwen2.5-coder:1.5b`. Base models
+(`…-base`, or coder models, which fill in the middle) continue text best;
+chat models like qwen3 are asked raw, not to think, and their repetitions
+are dropped. A faint `…` means the model is thinking: keep typing, and if
+you type how its answer begins, the rest still appears. It suggests the
+rest of the sentence. Ollama answers only
 pages it is told to: put `OLLAMA_ORIGINS=<the page's address>` (the page says
 which) in Ollama's own environment -- `systemctl edit ollama` and
 `Environment="OLLAMA_ORIGINS=..."` for the Linux service, `launchctl setenv`

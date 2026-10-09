@@ -128,18 +128,23 @@ const ollama = (await import('node:http')).createServer((q, r) => {
     const j = JSON.parse(b), h = { 'access-control-allow-origin': '*', 'content-type': 'application/json' }
     if (refuse) return r.writeHead(403).end() // as Ollama does: no CORS header, so a network error here
     if (j.suffix) return r.writeHead(400, h).end(JSON.stringify({ error: `${j.model} does not support insert` }))
-    r.writeHead(200, h).end(JSON.stringify({ response: /^qwen/.test(j.model) && j.think === false ? ' GHOSTED' : '' }))
+    // slow, as a busy GPU is; raw, or it would answer instead of continue
+    setTimeout(() => r.writeHead(200, h).end(JSON.stringify({ response: j.raw && j.think === false ? ' GHOSTED here. And on, and on' : 'You wrote: ...' })), 1500)
   })
 }).listen(11434)
 await page.evaluate(() => document.querySelectorAll('dialog[open]').forEach(d => d.close()))
 await page.evaluate(() => document.querySelector('[data-act="ghost"]').click()); await sleep(300)
-await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.type(' x'); await sleep(1500)
+await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.type(' x'); await sleep(1100)
+const waiting = await page.$eval('.cm-ghost', e => e.textContent).catch(() => null)
+await page.keyboard.type(' GHO'); await sleep(2500) // typed while it thinks: what it says next still lands
 const ghost = await page.$eval('.cm-ghost', e => e.textContent).catch(() => null)
 await page.keyboard.press('Tab'); await sleep(300)
-check('a local model suggests in grey (a thinking one, with no fill-in-the-middle, too), and Tab takes it', ghost === ' GHOSTED' &&
-  await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('x GHOSTED')))
+check('a local model (a slow, thinking one, with no fill-in-the-middle) shows it is thinking, then the rest of the sentence; Tab takes it',
+  waiting === '…' && ghost === 'STED here.' && await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('x GHOSTED here.')))
+await page.keyboard.type(' z'); await sleep(2500); await page.keyboard.press('Escape'); await sleep(200)
+check('Escape dismisses a suggestion', !(await page.$('.cm-ghost')))
 refuse = true
-await page.keyboard.type(' y'); await sleep(1500)
+await page.keyboard.type(' y'); await sleep(3000)
 check('Ollama refusing the page says how to let it in', await page.evaluate(() =>
   document.getElementById('toast')?.textContent.includes(`OLLAMA_ORIGINS=${location.origin}`)))
 ollama.close()
