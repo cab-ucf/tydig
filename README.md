@@ -200,7 +200,7 @@ language model, every sentence underlined by its own surprise, and one click
 on the bar's `ppl` readout recolours each sentence by how AI-like it reads
 (Fast-DetectGPT's criterion: teal reads human, violet reads AI). Hover a word
 for its bits, rank and the model's uncertainty. The model is a
-[Perplexiscope](https://github.com/cab-ucf) engine on your own machine
+Perplexiscope engine on your own machine
 (`just` in its folder serves GPT-2 at `http://localhost:8000`; a GPU box:
 `ssh -L 8000:localhost:8000 gpu-box`), so nothing leaves it. Typst files are
 scored as the prose they typeset: code, math, citations and markup are left
