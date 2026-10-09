@@ -1,3 +1,4 @@
+import './private.mjs' // first: everything the hub writes is its own
 // tydig server v2
 // Project = git repo at data/<proj>/. Text files live in a Yjs map ('files':
 // path -> Y.Text) mirrored to disk on autosave; binaries (images, built PDFs)
@@ -7,10 +8,10 @@ import express from 'express'
 import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, mkdtemp, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, open, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, constants as FS } from 'node:fs'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import path from 'node:path'
 
 const run = promisify(execFile)
@@ -60,10 +61,15 @@ const MAX_BUILDS = Number(process.env.TYDIG_MAX_BUILDS || 2)
 const runner = (name, args, timeout = 180_000) => {
   const tool = runnerTool(name)
   const argv = tool === 'make' ? ['-C', '/work', ...args] : args
-  return UNSAFE
+  return (UNSAFE
     ? run(tool, args, { cwd: proj(name), env: { ...process.env, TYPST_ROOT: proj(name) }, timeout, maxBuffer: 8e6 })
     : run('podman', [...sandboxArgs(proj(name), timeout / 1000), tool, ...argv], { timeout: timeout + 10_000, maxBuffer: 8e6 })
+  ).finally(() => scrub(name))
 }
+// What a build may leave that the hub would trust: nested git repos (their
+// config runs commands) and symlinks (paths out of the project). Gone after each.
+const scrub = name => run('find', [proj(name), '-mindepth', '1', '(', '-path', `${proj(name)}/.git`, '-prune', ')',
+  '-o', '(', '-name', '.git', '-prune', '-exec', 'rm', '-rf', '{}', '+', ')', '-o', '-type', 'l', '-exec', 'rm', '-f', '{}', '+']).catch(() => {})
 const runnerTool = name => {
   for (const f of ['Makefile', 'makefile', 'GNUmakefile']) if (existsSync(inProj(name, f))) return 'make'
   return 'just'
@@ -106,6 +112,9 @@ const textOf = b => { if (b.length >= 1e6 || b.includes(0)) return null; try { r
 // copy) and reach previews via the raw-file shadow map instead.
 const GENERATED = /^(out|build|figures)\//
 const okName = n => /^[\w-]{1,64}$/.test(n)
+const HUB_DIRS = /^(gitsync|federation)$/i // DATA/ beside the projects; never one
+// a project: a git repo under DATA that is not one of the hub's own directories
+const isProj = n => okName(n) && !HUB_DIRS.test(n) && existsSync(path.join(DATA, n, '.git'))
 const okHash = h => /^[0-9a-f]{7,40}$/.test(h)
 const okPath = p => typeof p === 'string' && p.length < 256 && /^[\w./@ -]+$/.test(p) &&
   p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
@@ -115,7 +124,11 @@ const inProj = (n, p) => path.join(proj(n), p)
 const gitQ = new Map()
 // Never wait on a person (a credential prompt) or forever (a stalled remote):
 // the queue below is per project, so one stuck call would stop its autosaves.
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+// core.fsmonitor off, for this repo and any nested one: a build can leave a
+// sub/.git whose fsmonitor command the hub's own `git add` would run, on the
+// host, outside the sandbox.
+const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0',
+  GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false' }
 // Private remotes: each project gets its own SSH key (a deploy key: one repo,
 // nothing else), kept beside the projects, never in one, so no build can
 // read it. GitHub's host key is pinned; other hosts are trusted on first use.
@@ -144,7 +157,23 @@ const safe = async (n, rel) => {
     throw Object.assign(new Error('bad path'), { status: 400 })
   return f
 }
-const NOFOLLOW = FS.O_WRONLY | FS.O_CREAT | FS.O_TRUNC | (FS.O_NOFOLLOW || 0)
+// Opened, then checked: the kernel says where the open file really is, so a
+// build swapping a directory for a symlink between safe() and the open
+// cannot lead the hub out of the project (Linux; elsewhere safe() alone).
+// Written files are truncated only once that check has passed.
+const openIn = async (n, rel, write) => {
+  const fh = await open(await safe(n, rel), (write ? FS.O_WRONLY | FS.O_CREAT : FS.O_RDONLY) | (FS.O_NOFOLLOW || 0), 0o644)
+  const at = await realpath(`/proc/self/fd/${fh.fd}`).catch(() => null)
+  if (at && !at.startsWith(await realpath(proj(n)) + path.sep)) {
+    await fh.close(); throw Object.assign(new Error('bad path'), { status: 400 })
+  }
+  return fh
+}
+const readIn = async (n, rel) => { const fh = await openIn(n, rel); try { return await fh.readFile() } finally { await fh.close() } }
+const writeIn = async (n, rel, data) => {
+  const fh = await openIn(n, rel, true)
+  try { await fh.truncate(0); await fh.writeFile(data) } finally { await fh.close() }
+}
 // Replace a Y.Text's content with a minimal edit, so comment anchors and
 // concurrent edits outside the changed span survive. Never splits a surrogate pair.
 const setText = (t, s) => {
@@ -207,7 +236,7 @@ async function mirror(name, document) {
     const text = t.toString()
     if (last.get(rel) === text && existsSync(inProj(name, rel))) continue
     await mkdir(path.dirname(inProj(name, rel)), { recursive: true })
-    await safe(name, rel).then(f => writeFile(f, text, { flag: NOFOLLOW })).then(() => last.set(rel, text))
+    await writeIn(name, rel, text).then(() => last.set(rel, text))
       .catch(e => console.warn(`mirror: skipped ${rel} (${e.message})`))
   }
   for (const old of written.get(name) ?? [])
@@ -241,7 +270,7 @@ function watchProject(name, document) {
           continue
         }
         if (!okPath(rel) || GENERATED.test(rel)) continue
-        const b = await safe(name, rel).then(f => readFile(f)).catch(() => null)
+        const b = await readIn(name, rel).catch(() => null)
         const text = b && textOf(b), base = mirrored.get(name)?.get(rel)
         if (text == null) continue
         if (!files.has(rel)) add.push([rel, text])
@@ -265,6 +294,7 @@ const hocuspocus = Server.configure({
   port: 1234,
   debounce: 2000,
   async onAuthenticate({ token, requestHeaders, documentName }) {
+    if (!isProj(documentName)) throw new Error('no such project')
     if (!originOk(requestHeaders?.origin)) throw new Error('untrusted origin')
     const headers = new Headers()
     if (requestHeaders?.cookie) headers.set('cookie', requestHeaders.cookie)
@@ -275,7 +305,7 @@ const hocuspocus = Server.configure({
     return { user: { id: sess.user.id, name: sess.user.name } }
   },
   async onLoadDocument({ documentName: name, document }) {
-    if (!okName(name) || !existsSync(proj(name))) return document
+    if (!isProj(name)) return document
     const files = document.getMap('files')
     if (files.size) return document
     // The CRDT is the identity of the document; the working tree is a
@@ -314,7 +344,7 @@ const hocuspocus = Server.configure({
 // State first, then the working tree: a crash in between leaves the disk
 // older than the state, which the next load correctly ignores.
 async function store(name, document) {
-  if (!okName(name) || !existsSync(proj(name))) return
+  if (!isProj(name)) return
   await ensureRepo(name)
   const tmp = `${crdtFile(name)}.${randomBytes(4).toString('hex')}`
   await writeFile(tmp, Y.encodeStateAsUpdate(document))
@@ -435,7 +465,7 @@ app.all('/api/auth/*splat', (req, res, next) => {
   // Projects are organizations keyed by slug == directory. Only the server
   // may mint, rename or delete one: a slug chosen over HTTP could claim an
   // internal directory (gitsync/, federation/) or an orphaned project.
-  if (/^\/api\/auth\/organization\/(create|update|delete)\b/.test(req.path))
+  if (/^\/api\/auth\/organization\/(create|update|delete)\b/.test(new URL(req.originalUrl, 'http://h').pathname))
     return res.status(403).json({ error: 'projects are created and removed through tydig' })
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
@@ -451,7 +481,11 @@ app.all('/api/auth/*splat', (req, res, next) => {
       origin, trusted: TRUSTED,
     })
   }
-  req.headers['x-tydig-ip'] = req.ip
+  // a link visitor has no IP: its iroh id, as a private IPv6 address whose
+  // first 64 bits differ per visitor (rate limits group IPv6 by /64)
+  req.headers['x-tydig-ip'] = req.socket.link
+    ? (h => `fd${h.slice(0, 2)}:${h.slice(2, 14).match(/.{4}/g).join(':')}::1`)(createHash('sha256').update(String(req.socket.peer)).digest('hex'))
+    : req.ip
   next()
 }, toNodeHandler(auth))
 
@@ -539,7 +573,7 @@ app.get('/api/projects', async (req, res) => {
 app.post('/api/projects/:name', async (req, res) => {
   const n = req.params.name
   // gitsync/ and federation/ beside the projects hold the hub's own settings
-  if (!okName(n) || /^(gitsync|federation)$/i.test(n)) return res.status(400).json({ error: 'bad project name' })
+  if (!okName(n) || HUB_DIRS.test(n)) return res.status(400).json({ error: 'bad project name' })
   if (existsSync(proj(n))) return res.status(409).json({ error: 'a project with that name exists' })
   // Create the owning organization first; if the slug is taken globally, bail.
   const org = await auth.api.createOrganization({
@@ -581,7 +615,8 @@ app.post('/api/projects/:name', async (req, res) => {
 
 const p = express.Router({ mergeParams: true })
 app.use('/api/p/:proj', async (req, res, next) => {
-  if (!okName(req.params.proj) || !existsSync(proj(req.params.proj)))
+  // only a project: never the hub's own directories, whatever org claims the name
+  if (!isProj(req.params.proj))
     return res.status(404).json({ error: 'no such project' })
   if (!(req.org = await authorizeProject(req.authHeaders, req.params.proj)))
     return res.status(403).json({ error: 'you do not have access to this project' })
@@ -608,14 +643,16 @@ p.get('/files', async (req, res) => {
 p.get('/raw/*rel', async (req, res) => {
   const rel = wild(req)
   if (!/\.pdf$/i.test(rel)) res.set('Content-Security-Policy', 'sandbox')
-  res.sendFile(await safe(req.params.proj, rel))
+  const fh = await openIn(req.params.proj, rel)
+  res.type(path.extname(rel) || 'bin').set('Content-Length', (await fh.stat()).size)
+  fh.createReadStream().pipe(res)
 })
 
 // any body: browsers send no Content-Type for extensions they don't know (.dat, .npy, .h5)
 p.put('/raw/*rel', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const rel = wild(req)
   await mkdir(path.dirname(inProj(req.params.proj, rel)), { recursive: true })
-  await writeFile(await safe(req.params.proj, rel), req.body ?? '', { flag: NOFOLLOW })
+  await writeIn(req.params.proj, rel, req.body ?? '')
   res.json({ ok: true })
 })
 
@@ -647,14 +684,18 @@ p.post('/members', async (req, res) => {
   const email = String(req.body?.email || '').trim()
   const u = authDb.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(email)
   if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
-  else await auth.api.createInvitation({ headers: req.authHeaders, body: { email, role: 'member', organizationId: req.org.id } })
-  res.json({ ok: true, invited: !u })
+  // No account yet: an invitation, whose id is the one-time key the invite
+  // link carries; signing up as this address needs it (auth.mjs).
+  const inv = !u && await auth.api.createInvitation({ headers: req.authHeaders, body: { email, role: 'member', organizationId: req.org.id } })
+  res.json({ ok: true, invited: !u, invite: inv?.id ?? null })
 })
 // Removal through the hub, not better-auth directly, so it takes effect now:
 // every editor reconnects and re-authenticates, and the removed one cannot.
 p.delete('/members/:id', async (req, res) => {
   await auth.api.removeMember({ headers: req.authHeaders, body: { memberIdOrEmail: req.params.id, organizationId: req.org.id } })
+  // everyone reconnects and is checked again; the removed member is refused
   hocuspocus.closeConnections(req.params.proj)
+  lspOpen.get(req.params.proj)?.forEach(ws => ws.close())
   res.json({ ok: true })
 })
 
@@ -795,19 +836,23 @@ p.post('/restore/:hash', async (req, res) => {
 p.get('/info', (req, res) => res.json({ root: UNSAFE ? proj(req.params.proj) : '/work', tool: runnerTool(req.params.proj) }))
 
 // ---- federation: link this project to the same-named project on another hub ----
+// Where a project goes (a git remote, a peer hub) is the owner's call: a
+// member who could set it would keep a copy flowing after being removed.
+const admin = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
+  : res.status(403).json({ error: 'only the project owner or an admin can change where it syncs' })
 p.get('/federation', async (req, res) => res.json(await federation.status(req.params.proj)))
-p.post('/federation/invite', async (req, res) => {
+p.post('/federation/invite', admin, async (req, res) => {
   try { res.json({ invite: await federation.invite(req.params.proj) }) }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
-p.post('/federation/link', async (req, res) => {
+p.post('/federation/link', admin, async (req, res) => {
   try { res.json(await federation.link(req.params.proj, req.body?.invite)) }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 // ---- git remote: the project's durable home on any git host ----
 const withKey = async (n, st) => ({ ...st, key: existsSync(keyOf(n)) ? await deployKey(n) : null })
 p.get('/gitremote', async (req, res) => res.json(await withKey(req.params.proj, await gitsync.status(req.params.proj))))
-p.post('/gitremote', async (req, res) => {
+p.post('/gitremote', admin, async (req, res) => {
   try {
     const st = await gitsync.setRemote(req.params.proj, req.body?.url, req.body?.branch)
     if (sshUrl(req.body?.url)) await deployKey(req.params.proj)
@@ -815,13 +860,13 @@ p.post('/gitremote', async (req, res) => {
   }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
-p.delete('/gitremote', async (req, res) => res.json(await gitsync.clearRemote(req.params.proj)))
+p.delete('/gitremote', admin, async (req, res) => res.json(await gitsync.clearRemote(req.params.proj)))
 p.post('/gitremote/sync', async (req, res) => {
   try { res.json(await gitsync.syncNow(req.params.proj, { reason: 'requested' })) }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 
-p.post('/federation/rotate', async (req, res) => {
+p.post('/federation/rotate', admin, async (req, res) => {
   try { res.json(await federation.rotate(req.params.proj)) }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
@@ -864,7 +909,7 @@ const relayFile = path.join(DATA, 'link-relay')
 const RELAY = process.env.TYDIG_LINK_RELAY || (PAGE ? existsSync(relayFile) ? readFileSync(relayFile, 'utf8').trim()
   : await nearest().then(r => (r && writeFileSync(relayFile, r + '\n'), r)) : null)
 const LINK = PAGE && `${PAGE}#${LINK_SEED}${RELAY ? `;r=${RELAY}` : ''}`
-if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n')
+if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 const httpServer = app.listen(PORT, e => {
   if (e) throw e
   console.log(`http+sync+lsp on :${PORT} (ws /sync, /lsp)${SYNC_PORT ? `, legacy sync ws :${SYNC_PORT}` : ''}`)
@@ -908,6 +953,7 @@ const lspWss = new WebSocketServer({ noServer: true })
 const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8)
 let lsps = 0
 const syncWss = new WebSocketServer({ noServer: true })
+const lspOpen = new Map() // proj -> its open LSP sockets, closed when a member is removed
 httpServer.on('upgrade', async (req, sock, head) => {
   sock.on('error', () => {}) // a client reset while we await the session must not crash the hub
   const u = new URL(req.url, 'http://x')
@@ -916,7 +962,7 @@ httpServer.on('upgrade', async (req, sock, head) => {
   }
   if (u.pathname !== '/lsp') return sock.destroy()
   const name = u.searchParams.get('proj')
-  if (!okName(name) || !existsSync(proj(name))) return sock.destroy()
+  if (!isProj(name)) return sock.destroy()
   // Session via cookie (same-origin) or ?t= token (cross-port dev/ws).
   const headers = new Headers()
   if (req.headers.cookie) headers.set('cookie', req.headers.cookie)
@@ -924,6 +970,8 @@ httpServer.on('upgrade', async (req, sock, head) => {
   const sess = await sessionFrom(headers)
   if (!originOk(req.headers.origin) || !sess?.user || !await authorizeProject(headers, name) || lsps >= MAX_LSP) return sock.destroy()
   lspWss.handleUpgrade(req, sock, head, ws => {
+    const open = lspOpen.get(name) ?? lspOpen.set(name, new Set()).get(name)
+    open.add(ws); ws.on('close', () => open.delete(ws))
     // tinymist runs in the build sandbox, like any other project code: its
     // commands write files, so on the host it would be a way out of the project.
     const lsp = UNSAFE ? spawn('tinymist', ['lsp'], { cwd: proj(name), stdio: ['pipe', 'pipe', 'ignore'] })

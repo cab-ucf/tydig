@@ -1089,6 +1089,8 @@ async function showFederation() {
 async function showShare() {
   const dlg = $('share')
   const body = $('share-body'), share = await api('/link')
+  // the hub's link (or this page) with the invitation's one-time key
+  const inviteUrl = id => { const u = new URL(share.link || location.origin + location.pathname); u.search = `invite=${id}`; return u.href }
   body.innerHTML = '<p class="empty">loading...</p>'
   dlg.showModal()
   const orgs = await api('/projects')
@@ -1100,10 +1102,12 @@ async function showShare() {
   body.innerHTML = `
     <div class="share-list">
       ${(full?.members || []).map(m => row(m.user?.email || m.user?.name || m.userId, m.role, 'remove', m.id)).join('')}
-      ${(full?.invitations || []).filter(i => i.status === 'pending').map(i => row(i.email, 'invited', 'cancel', i.id)).join('')}
+      ${(full?.invitations || []).filter(i => i.status === 'pending').map(i => row(i.email, 'invited', 'cancel', i.id) +
+        (isOwner ? `<div class="share-row"><input readonly value="${esc(inviteUrl(i.id))}" title="their invite link"></div>` : '')).join('')}
     </div>
     ${isOwner ? `<form id="share-add"><input type="email" id="share-email" placeholder="collaborator@email" required /><button>add</button></form>
-      <p class="hint">An address with no account here is invited: it can then sign up, and the project is waiting.</p>`
+      <p class="hint">An address with no account here is invited: send them its invite link (below
+        it), which signs them up with the project waiting. The address alone cannot sign up.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
     ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p><input readonly value="${esc(share.link)}">` : ''}`
   body.querySelectorAll('[data-remove]').forEach(b => b.onclick = async () => {

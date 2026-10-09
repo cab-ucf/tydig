@@ -39,6 +39,9 @@ function explain(error, email) {
   return msg
 }
 
+// An invite link (?invite=<id>) opens on Create account and carries its key.
+const invite = new URLSearchParams(location.search).get('invite')
+
 async function loginScreen() {
   const cfg = await fetch('/api/auth-config').then(r => r.json()).catch(() => null)
   // tydig's static site with no hub code in the address: nothing to sign in to
@@ -95,19 +98,22 @@ async function loginScreen() {
       form.password.autocomplete = mode === 'in' ? 'current-password' : 'new-password'
       err.hidden = true
     })
+    if (invite) root.querySelector('[data-tab="up"]').click()
     form.onsubmit = async e => {
       e.preventDefault()
       err.hidden = true; submit.disabled = true
       const body = { email: form.email.value, password: form.password.value }
       const res = mode === 'in'
         ? await authClient.signIn.email(body)
-        : await authClient.signUp.email({ ...body, name: form.name.value || form.email.value.split('@')[0] })
+        : await authClient.signUp.email({ ...body, name: form.name.value || form.email.value.split('@')[0],
+          fetchOptions: invite ? { headers: { 'x-tydig-invite': invite } } : {} })
       submit.disabled = false
       if (res.error) {
         err.textContent = explain(res.error, form.email.value)
         err.hidden = false
         return
       }
+      if (invite) history.replaceState(null, '', location.href.replace(/[?&]invite=[^&#]*/, ''))
       root.remove(); resolve()
     }
   })

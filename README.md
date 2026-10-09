@@ -32,22 +32,28 @@ just
 ## Share it: a link, nothing to install
 
 `just` prints a link (and **Settings > Share** shows it):
-`https://cxn.pub/app/#<code>`. A collaborator opens it in any
-browser, creates an account with the address you shared a project to, and is
-editing. The page is the editor itself, served statically; it reaches your hub
+`https://cxn.pub/app/#<code>`. Share a project with someone's address
+(Settings > Share) and send them the invite link that appears under it: they
+open it in any browser, create their account, and are editing. The address
+alone cannot sign up, so nobody can claim an invitation by guessing it. The page is the editor itself, served statically; it reaches your hub
 over [iroh](https://iroh.computer) through irp's wasm client, end-to-end
 encrypted, through NAT, so the hub can be a laptop with no open port, domain or
 certificate. The code is the hub's address and is unguessable; sign-in and
 invitations still decide who gets in. A new code: delete `data/link-seed` and
 restart. The hub uses the nearest of n0's relays, measured once and named in
-the link (`;r=use1-1`); delete `data/link-relay` to measure again. Firefox is refused by n0's relays (its ECH GREASE): use another
-browser, or set `security.tls.ech.grease_probability` to 0 in `about:config`.
+the link (`;r=use1-1`); delete `data/link-relay` to measure again. Firefox
+is refused by n0's relays (its ECH GREASE): use another browser, or set
+`security.tls.ech.grease_probability` to 0 in `about:config`.
 
 The static site deploys from this repo (`.github/workflows/pages.yml`; Settings
 > Pages > Source: GitHub Actions). Give it a custom domain of its own: the
 editor keeps sign-ins and offline drafts in the browser, so it must not share
 an origin with sites run by others (irp's pages at `cab-ucf.github.io`).
-This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own.
+This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own. Whoever controls
+that site (its GitHub repo, its DNS) serves the page every link visitor
+runs, so it can read what they type and their sign-ins: the same trust you
+give any web app's host. A hub that should not rely on it sets `TYDIG_PAGE`
+to a copy of `client/dist` it serves itself.
 
 ## Templates
 

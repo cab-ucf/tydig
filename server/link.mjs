@@ -21,14 +21,14 @@ export async function startLink({ server, seed, relay }) {
   ;(async () => {
     for (let inc; (inc = await ep.acceptNext().catch(() => null));)
       (async () => {
-        const conn = await (await inc.accept()).connect()
-        for (;;) serve(server, await conn.acceptBi())
+        const conn = await (await inc.accept()).connect(), peer = conn.remoteId().toString()
+        for (;;) serve(server, await conn.acceptBi(), peer)
       })().catch(() => {})
   })()
   return { close: () => ep.close().catch(() => {}), online: () => ep.online() }
 }
 
-function serve(server, { send, recv }) {
+function serve(server, { send, recv }, peer) {
   // The browser half-closes after its request; Node's HTTP server would take
   // that end of input as a hang-up and drop the reply. So the end is never
   // passed on: the server answers, ends its side, and the stream closes then.
@@ -41,5 +41,6 @@ function serve(server, { send, recv }) {
     destroy(e, cb) { send.finish().catch(() => {}); cb(e) },
   })
   d.link = true // index.mjs: only our page can speak on these, so they need no origin check
+  d.peer = peer // the browser's iroh id: its own sign-in rate limit, not one shared by every visitor
   server.emit('connection', d)
 }

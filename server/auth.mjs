@@ -77,11 +77,20 @@ export const auth = betterAuth({
   advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } },
   hooks: {
     before: createAuthMiddleware(async ctx => {
+      // Projects are organizations keyed by slug == directory: only the hub
+      // itself (no HTTP request) creates, renames or deletes one. Checked on
+      // the routed path, which has had its ./ and ../ removed.
+      if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))
+        throw new APIError('FORBIDDEN', { message: 'projects are created and removed through tydig' })
+      // An invited address signs up with its invite link (x-tydig-invite: the
+      // invitation's id): knowing or guessing the address alone is not enough.
+      const key = ctx.headers?.get?.('x-tydig-invite')
       if (ctx.path === '/sign-up/email' && !OPEN && db.prepare('SELECT 1 FROM user').get() &&
-        !invitesFor(ctx.body?.email).length) throw new APIError('FORBIDDEN', {
-        message: 'This hub already has accounts and is invite-only. If one is yours, use Sign in ' +
-          '(forgotten password: run `just passwd` on the hub). Otherwise ask a project owner ' +
-          'to share a project with this address.' })
+        !invitesFor(ctx.body?.email).some(i => i.id === key)) throw new APIError('FORBIDDEN', {
+        message: key ? 'This invite link is not for that address (or has expired): sign up with the ' +
+          'address it was sent to, or ask for a new one.' : 'This hub already has accounts and is ' +
+          'invite-only. If one is yours, use Sign in (forgotten password: run `just passwd` on the ' +
+          'hub). Otherwise ask a project owner to share a project with your address and send you the invite link.' })
     }),
   },
   databaseHooks: { user: { create: { after: async u => {

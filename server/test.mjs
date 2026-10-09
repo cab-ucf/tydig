@@ -118,10 +118,13 @@ const recipes = await api('/p/demo/recipes')
 check('make targets listed', Array.isArray(recipes) && recipes.includes('report') && recipes.includes('analysis'))
 check('file targets and .PHONY not offered as recipes',
   Array.isArray(recipes) && !recipes.some(r => r.includes('/') || r.startsWith('.')))
+// a build may leave a nested repo (its config could run commands in the hub's git) or a symlink
+mkdirSync('data/demo/nest/.git', { recursive: true }); (await import('node:fs')).symlinkSync('/etc', 'data/demo/escape')
 const build = await api('/p/demo/build/analysis', { method: 'POST' })
 check('build recipe runs', build.ok === true)
 const filesAfter = await api('/p/demo/files')
 check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.json'))
+check('builds leave no nested repo or symlink behind', !ex('data/demo/nest/.git') && !(await import('node:fs')).existsSync('data/demo/escape'))
 await sleep(600)
 check('analysis output still not CRDT-managed', !fA.has('build/results.json'))
 const tarList = async q => {
