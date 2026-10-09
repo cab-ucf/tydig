@@ -25,7 +25,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, m: 'edit', treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -459,6 +459,7 @@ function renderTree() {
     el.querySelector('.fname').onclick = e => {
       if (e.ctrlKey || e.metaKey) { picked.has(p) ? picked.delete(p) : picked.add(p); return renderTree() }
       picked.clear(); yPaths.has(p) ? openFile(p) : openDisk(p)
+      if (phone()) { settings.m = /\.pdf$/i.test(p) ? settings.m : 'edit'; applyLayout() }
     }
     el.querySelector('.get').onclick = () => download(rawUrl(p), p)
     el.querySelector('.rn').onclick = () => renameFile(p)
@@ -734,7 +735,8 @@ const sideBody = $('side-body')
 let sidebarMode = null
 function openSidebar(mode) {
   sidebarMode = mode
-  settings.sideOpen = true; applyLayout()
+  settings.sideOpen = true; if (phone()) settings.m = 'side'
+  applyLayout()
   $('side-title').textContent = mode
   ;({ comments: renderComments, history: renderHistory, build: renderBuild, review: renderReview })[mode]()
 }
@@ -909,7 +911,11 @@ function renderReview() {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 // ---------- menubar, layout, shortcuts ----------
+// Phones show one pane at a time, picked in the bottom tab bar (#mtabs).
+const phoneQ = matchMedia('(max-width: 800px)'), phone = () => phoneQ.matches
 function applyLayout() {
+  document.body.dataset.m = settings.m
+  document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.m === settings.m))
   document.body.classList.toggle('no-tree', !settings.treeOpen)
   document.body.classList.toggle('no-side', !settings.sideOpen)
   // The markup ships the panel hidden so it doesn't flash before JS runs;
@@ -1246,6 +1252,13 @@ $('bar-build').onclick = () => openSidebar('build')
 $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()
 $('tgl-theme').onclick = () => actions.theme()
+$('mtabs').onclick = e => {
+  const m = e.target.dataset?.m
+  if (!m) return
+  if (m === 'side') return openSidebar(sidebarMode || 'comments')
+  settings.m = m; applyLayout(); if (m === 'preview') scheduleCompile()
+}
+phoneQ.onchange = applyLayout
 system.onchange = applyLayout
 
 // quick-open (Ctrl-P): subsequence filter over all project files

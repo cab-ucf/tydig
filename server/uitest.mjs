@@ -108,6 +108,13 @@ await page.evaluate(() => document.querySelector('[data-act="share"]').click());
 await page.type('#share-email', 'newcomer@example.com'); await page.click('#share-add button'); await sleep(1500)
 check('sharing with a new address lists it as invited', await page.evaluate(() =>
   /newcomer@example\.com\s*invited/.test(document.getElementById('share-body').innerText)))
+// a phone: the page fits the screen, and the tab bar shows one pane at a time
+await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
+const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
+  return page.evaluate(() => ['tree-pane', 'editor', 'preview', 'side'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')) }
+check('on a phone the page fits the screen', await page.evaluate(() => document.documentElement.scrollWidth <= 390))
+check('and its tabs show one pane each', (await shows('files')).join() === 'tree-pane' && (await shows('edit')).join() === 'editor' &&
+  (await shows('preview')).join() === 'preview' && (await shows('side')).join() === 'side')
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host (fonts are bundled)', external.length === 0)

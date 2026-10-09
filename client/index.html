@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <!-- The static site sends no CSP header (a hub does): no inline script, no
        javascript: URLs in the preview, on either. -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'" />
@@ -102,6 +102,7 @@
       <div id="side-body"></div>
     </aside>
   </main>
+  <nav id="mtabs"><button data-m="files">Files</button><button data-m="edit">Edit</button><button data-m="preview">Preview</button><button data-m="side">Panel</button></nav>
   <button id="focus-exit" title="exit focus mode (Alt-0)">⤢ exit focus</button>
   <dialog id="qo"><input id="qo-input" placeholder="open file..." /><div id="qo-list"></div></dialog>
   <dialog id="picker">
