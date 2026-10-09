@@ -15,6 +15,7 @@ import { randomBytes, createHash } from 'node:crypto'
 import path from 'node:path'
 import net from 'node:net'
 import { at } from './sandbox.mjs'
+import { unpack } from './unpack.mjs'
 
 const run = promisify(execFile)
 // Project store. TYDIG_DATA must be an absolute path when the server runs
@@ -686,10 +687,10 @@ app.post('/api/projects/:name', async (req, res) => {
     }
     return res.json({ ok: true, adopted: true })
   }
-  if (!invite) {
-    await scaffold(TEMPLATE_NAMES.includes(req.body?.template) ? req.body.template : 'report', req.body?.brand, proj(n))
+  if (!invite) { // empty: for an archive to fill (POST /p/:proj/import)
+    if (!req.body?.empty) await scaffold(TEMPLATE_NAMES.includes(req.body?.template) ? req.body.template : 'report', req.body?.brand, proj(n))
     await git(n, 'add', '-A')
-    await git(n, 'commit', '-q', '-m', 'checkpoint: project created')
+    await git(n, 'commit', '-q', '--allow-empty', '-m', 'checkpoint: project created')
   } else {
     await git(n, 'commit', '-q', '--allow-empty', '-m', 'checkpoint: joined federated project')
     try { await federation.link(n, invite) }
@@ -947,6 +948,10 @@ p.get('/federation', async (req, res) => res.json(await federation.status(req.pa
 // how much of the old version a new one keeps: the share of its lines still there
 const kept = (a, b) => { const have = new Set(b.split('\n')), l = a.split('\n'); return l.filter(x => have.has(x)).length / l.length }
 const recorded = async n => JSON.parse(await readFile(path.join(proj(n), '.collab', 'template.json'), 'utf8').catch(() => 'null'))
+// a file into the live project: text into the document (an edit everyone sees), the rest to disk
+const putFile = async (n, doc, rel, b) => { const t = textOf(b), files = doc.getMap('files')
+  if (t != null && !GENERATED.test(rel)) files.has(rel) ? setText(files.get(rel), t) : files.set(rel, new Y.Text(t))
+  else { await mkdir(path.dirname(inProj(n, rel)), { recursive: true }); await writeIn(n, rel, b) } }
 const fileNow = async (n, doc, rel) => { const t = doc.getMap('files').get(rel); return t ? Buffer.from(t.toString()) : readIn(n, rel).catch(() => null) }
 // a project from before templates were recorded: the one its files match best
 async function inferTemplate(n, doc) {
@@ -970,9 +975,7 @@ p.post('/template', admin, async (req, res) => {
   await live(n, async doc => {
     from = await recorded(n) || await inferTemplate(n, doc)
     const old = from ? await stack(from.template, from.brand) : new Map(), next = await stack(template, brand), files = doc.getMap('files')
-    const put = async (rel, b) => { const t = textOf(b)
-      if (t != null && !GENERATED.test(rel)) files.has(rel) ? setText(files.get(rel), t) : files.set(rel, new Y.Text(t))
-      else { await mkdir(path.dirname(inProj(n, rel)), { recursive: true }); await writeIn(n, rel, b) } }
+    const put = (rel, b) => putFile(n, doc, rel, b)
     for (const [rel, theirs] of next) {
       const base = old.get(rel), cur = await fileNow(n, doc, rel)
       if (!cur) { await put(rel, theirs); report.added.push(rel); continue }
@@ -997,6 +1000,33 @@ p.post('/template', admin, async (req, res) => {
   await git(n, 'add', '-A')
   await git(n, 'commit', '-q', '-m', `checkpoint: template ${from ? `${from.template}${from.brand ? '+' + from.brand : ''}` : 'none'} -> ${template}${brand ? '+' + brand : ''}`).catch(() => {})
   res.json({ from, ...report })
+})
+
+// An archive (.tar.gz, .tar, .zip) into the project, read in memory
+// (unpack.mjs): each file in it that differs lands, as an edit everyone sees
+// live; nothing it lacks is deleted. One checkpoint, so History undoes it.
+p.post('/import', idle, express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+  const n = req.params.proj, pre = okPath(req.query.dir) ? req.query.dir + '/' : ''
+  const what = String(req.query.name || 'an archive').replace(/[^\w. -]/g, '_').slice(0, 80)
+  let entries
+  try { entries = unpack(req.body ?? Buffer.alloc(0), QUOTA) } catch (e) {
+    return res.status(400).json({ error: `${what} is not an archive tydig reads (.tar.gz, .tar, .zip): ${e.message}` })
+  }
+  if (await used(n) + entries.reduce((a, f) => a + f.data.length, 0) > QUOTA)
+    return res.status(413).json({ error: `this would pass the project's ${QUOTA / 2 ** 20} MB limit (TYDIG_QUOTA_MB)` })
+  const report = { added: [], changed: [], same: 0, skipped: [] }
+  await live(n, async doc => {
+    for (const { path: rel, data } of entries.map(f => ({ ...f, path: pre + f.path }))) {
+      if (!okPath(rel)) { report.skipped.push(rel); continue }
+      const cur = await fileNow(n, doc, rel)
+      if (cur?.equals(data)) { report.same++; continue }
+      await putFile(n, doc, rel, data); (cur ? report.changed : report.added).push(rel)
+    }
+    await mirror(n, doc)
+  })
+  await git(n, 'add', '-A')
+  await git(n, 'commit', '-q', '--allow-empty', '-m', `checkpoint: imported ${what}`).catch(() => {}) // autosave may have the files already
+  res.json(report)
 })
 
 p.get('/agents', (req, res) => res.json(agentsOf(req.params.proj).map(({ name, created }) => ({ name, created }))))

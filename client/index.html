@@ -115,7 +115,8 @@
   <dialog id="picker">
     <h3>Projects</h3>
     <div id="proj-list"></div>
-    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w\-]{1,64}" required /><select id="proj-tpl" title="template"></select><select id="proj-brand" title="branding"></select><button>create</button></form>
+    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w\-]{1,64}" required /><select id="proj-tpl" title="template"></select><select id="proj-brand" title="branding"></select><button>create</button>
+      <button type="button" id="proj-zip" title="a new project from a .zip or .tar.gz (the name above, or the archive's)">from archive</button><input type="file" id="proj-zip-input" accept=".zip,.tgz,.tar.gz,.tar" hidden /></form>
     <form method="dialog" id="proj-join"><input id="proj-invite" placeholder="or paste a federation invite from another hub" /><button>join</button></form>
     <form method="dialog" id="proj-git"><input id="proj-git-url" placeholder="or a git URL to open a project stored on GitHub / GitLab / Codeberg" /><button>open</button></form>
     <form method="dialog" class="dlg-close"><button>close</button></form>

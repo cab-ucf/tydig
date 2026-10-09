@@ -67,6 +67,15 @@ const [chooser] = await Promise.all([page.waitForFileChooser(), page.click('#upl
 await chooser.accept([`${tmp}/ui-logo.png`, `${tmp}/ui-raw.dat`]); await sleep(2000)
 const shown = await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')].map(e => e.title))
 check('uploads land in the chosen folder and show in the tree', ['figures/ui-logo.png', 'figures/ui-raw.dat'].every(p => shown.includes(p)))
+// an archive uploaded is unpacked (when asked), out of the folder it came in
+const { execFileSync } = await import('node:child_process'), { mkdirSync } = await import('node:fs')
+mkdirSync(`${tmp}/ui-pkg/pkg`, { recursive: true }); writeFileSync(`${tmp}/ui-pkg/pkg/notes.typ`, '= Notes\n')
+execFileSync('tar', ['-czf', `${tmp}/ui-pkg.tar.gz`, '-C', `${tmp}/ui-pkg`, 'pkg'])
+yes = true
+const [ch2] = await Promise.all([page.waitForFileChooser(), page.click('#upload')])
+await ch2.accept([`${tmp}/ui-pkg.tar.gz`]); await sleep(2500); yes = false
+check('an uploaded .tar.gz unpacks into the project, and says what it added', await page.evaluate(() =>
+  [...document.querySelectorAll('#tree .tnode')].some(e => e.title === 'figures/notes.typ') && /1 added/.test(document.getElementById('toast')?.textContent)))
 
 // Ctrl-click picks several files; one x deletes them all
 const row = p => `#tree .tnode[title="${p}"]`

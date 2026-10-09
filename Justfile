@@ -246,7 +246,7 @@ test:
     npm install >/dev/null
     npm run build >/dev/null
     repo=$PWD
-    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest; do
+    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest importtest; do
         # each suite in a scratch dir of its own: never the real data/
         t=$(mktemp -d); cd "$t"
         echo "--- $suite"

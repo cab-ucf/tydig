@@ -64,6 +64,15 @@ async function openPicker() {
     if (r.error) return alert(r.error)
     location.search = `?proj=${n}`
   }
+  $('proj-zip-input').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = ''
+    if (!f) return
+    const n = $('proj-name').value || f.name.replace(ARCHIVE, '').replace(/[^\w-]/g, '-').slice(0, 64)
+    const r = await api(`/projects/${n}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ empty: true }) })
+    if (r.error) return alert(r.error)
+    if (!(await unpackInto(n, f)).error) location.search = `?proj=${n}`
+  }
+  $('proj-zip').onclick = () => $('proj-zip-input').click()
   $('proj-join').onsubmit = async () => {
     const invite = $('proj-invite').value.trim()
     const m = /^tydig-fed:([\w-]+):/.exec(invite)
@@ -572,6 +581,8 @@ $('tree').ondrop = e => { e.preventDefault(); dropUpload(e.dataTransfer.files, '
 async function dropUpload(files, dir) {
   const failed = []
   for (const f of files) {
+    if (ARCHIVE.test(f.name) && confirm(`Unpack ${f.name} into ${dir || 'this project'}? Each file in it that differs is updated,
+live; none is deleted, and History can undo it. (Cancel uploads it as a file.)`)) { await unpackInto(projName, f, dir); continue }
     const p = (dir ? dir + '/' : '') + f.name.replace(/[^\w.@ -]/g, '_'), t = filesMap.get(p)
     const s = okPath(p) && !GEN.test(p) ? await asText(f) : null
     if (s != null) {
@@ -584,6 +595,17 @@ async function dropUpload(files, dir) {
   dir.split('/').forEach((_, i, a) => a[0] && openDirs.add(a.slice(0, i + 1).join('/'))) // show where it went
   saveDirs(); refreshDisk()
   if (failed.length) alert(`Not uploaded:\n${failed.join('\n')}`)
+}
+// an archive, unpacked by the hub into a project: what changed, said
+const ARCHIVE = /\.(zip|tgz|tar\.gz|tar)$/i
+async function unpackInto(n, f, dir = '') {
+  const r = await api(`/p/${n}/import?name=${encodeURIComponent(f.name)}&dir=${encodeURIComponent(dir)}`, { method: 'POST', body: f,
+    headers: { 'content-type': 'application/octet-stream' } }).catch(e => ({ error: e.message }))
+  if (r.error) return alert(`${f.name}: ${r.error}`), r
+  const list = (t, xs) => xs.length ? `<br>${t}: ${xs.slice(0, 8).map(esc).join(', ')}${xs.length > 8 ? ` and ${xs.length - 8} more` : ''}` : ''
+  toast(`${esc(f.name)}: ${r.added.length} added, ${r.changed.length} updated, ${r.same} unchanged` +
+    list('updated', r.changed) + list('skipped (bad names)', r.skipped), true, 8000)
+  return r
 }
 function uploadTo(dir = '') {
   $('upload-input').dataset.dir = dir

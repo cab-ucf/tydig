@@ -137,6 +137,14 @@ journal are each named, with the published record one click away.
 File > Download gives the sources as a `.tar.gz` (enough to rebuild), or
 everything with the PDFs; any file downloads from its row in the tree.
 
+The other way, a `.zip` or `.tar.gz` (made anywhere: a folder you worked on
+offline, a colleague's draft): upload or drop it on the tree and tydig
+offers to unpack it. Each file in it that differs lands, live, as an edit
+everyone sees; nothing it lacks is deleted; the whole is one checkpoint, so
+History undoes it. Projects > **from archive** starts a new project from
+one. The archive is read in memory: a folder it all sits in is dropped, and
+its `.git`, symlinks and paths out of the project are skipped.
+
 A relative path in Typst starts from the file that names it, not from the
 document: `image("figure/sig.svg")` in `lib/letter.typ` reads
 `lib/figure/sig.svg`. Write `/figure/sig.svg` to start at the project root,
