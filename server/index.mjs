@@ -8,7 +8,7 @@ import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, writeFile, readFile, readdir, rm, stat, lstat, realpath, rename } from 'node:fs/promises'
-import { existsSync, readFileSync, readdirSync, writeFileSync, constants as FS } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, constants as FS } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 
@@ -114,10 +114,25 @@ const inProj = (n, p) => path.join(proj(n), p)
 const gitQ = new Map()
 // Never wait on a person (a credential prompt) or forever (a stalled remote):
 // the queue below is per project, so one stuck call would stop its autosaves.
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0',
-  GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' }
+const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+// Private remotes: each project gets its own SSH key (a deploy key: one repo,
+// nothing else), kept beside the projects, never in one, so no build can
+// read it. GitHub's host key is pinned; other hosts are trusted on first use.
+const KEYS = path.join(DATA, 'gitsync', 'keys'), KNOWN = path.join(DATA, 'gitsync', 'known_hosts')
+mkdirSync(KEYS, { recursive: true, mode: 0o700 })
+if (!existsSync(KNOWN)) writeFileSync(KNOWN,
+  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n')
+const keyOf = n => path.join(KEYS, n)
+const ssh = n => `ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile='${KNOWN}'` +
+  (existsSync(keyOf(n)) ? ` -i '${keyOf(n)}' -o IdentitiesOnly=yes` : '')
+const deployKey = async n => {
+  if (!existsSync(keyOf(n))) await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', `tydig:${n}`, '-f', keyOf(n)])
+  return (await readFile(keyOf(n) + '.pub', 'utf8')).trim()
+}
+const sshUrl = u => /^(git@|ssh:\/\/)/.test(String(u))
 const git = (n, ...a) => {
-  const r = (gitQ.get(n) || Promise.resolve()).then(() => run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28, timeout: 600_000, env: GIT_ENV }))
+  const r = (gitQ.get(n) || Promise.resolve()).then(() => run('git', ['-C', proj(n), ...a],
+    { maxBuffer: 1 << 28, timeout: 600_000, env: { ...GIT_ENV, GIT_SSH_COMMAND: ssh(n) } }))
   gitQ.set(n, r.catch(() => {}))
   return r.then(r => r.stdout)
 }
@@ -313,14 +328,17 @@ if (SYNC_PORT) hocuspocus.listen()
 // ---------- project templates ----------
 // server/templates/<name>/. A name is built in layers: nih-r21 is nih/ and
 // then nih-r21/ on top, so what NIH mechanisms share is written once. Only
-// names that are no other's layer are offered.
+// names that are no other's layer are offered. A brand-<name>/ (logos,
+// colours, letterhead) goes on last, over whichever template is chosen.
 import { cp } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 const TEMPLATES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'templates')
 const LAYERS = readdirSync(TEMPLATES).sort()
-const TEMPLATE_NAMES = ['report', ...LAYERS.filter(t => t !== 'report' && !LAYERS.some(u => u.startsWith(t + '-')))]
-const scaffold = async (t, dir) => {
-  for (const l of LAYERS.filter(l => t === l || t.startsWith(l + '-')))
+const BRANDS = LAYERS.filter(l => l.startsWith('brand-')).map(l => l.slice(6))
+const TEMPLATE_NAMES = ['report', ...LAYERS.filter(t => t !== 'report' && !t.startsWith('brand-') &&
+  !LAYERS.some(u => u.startsWith(t + '-')))]
+const scaffold = async (t, brand, dir) => {
+  for (const l of [...LAYERS.filter(l => t === l || t.startsWith(l + '-')), ...BRANDS.includes(brand) ? ['brand-' + brand] : []])
     await cp(path.join(TEMPLATES, l), dir, { recursive: true })
 }
 
@@ -467,7 +485,7 @@ app.get('/api/keys', (req, res) => res.json(keyStore.listFor(req.user.id)))
 app.get('/api/federation', async (req, res) => res.json(await federation.status()))
 
 // Projects the signed-in user can access (their organizations, slug == dir).
-app.get('/api/templates', (req, res) => res.json(TEMPLATE_NAMES))
+app.get('/api/templates', (req, res) => res.json({ templates: TEMPLATE_NAMES, brands: BRANDS }))
 app.get('/api/projects', async (req, res) => {
   const orgs = await userProjects(req.authHeaders)
   const names = (await readdir(DATA, { withFileTypes: true }).catch(() => []))
@@ -495,16 +513,19 @@ app.post('/api/projects/:name', async (req, res) => {
   if (gitUrl) {
     // Restore or join a project whose durable copy lives on a git host. This
     // is the path that needs no peer online at all.
+    // A private repo over SSH: the key is made first, and kept if the clone
+    // fails, so the person can add it to the repo and simply try again.
+    const key = sshUrl(gitUrl) ? await deployKey(n) : null
     try { await gitsync.adopt(n, gitUrl, req.body?.branch) }
     catch (e) { // leave nothing behind, so a corrected URL can be tried under the same name
       await rm(proj(n), { recursive: true, force: true })
       await auth.api.deleteOrganization({ headers: req.authHeaders, body: { organizationId: org.id } }).catch(() => {})
-      return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}` })
+      return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}`, key })
     }
     return res.json({ ok: true, adopted: true })
   }
   if (!invite) {
-    await scaffold(TEMPLATE_NAMES.includes(req.body?.template) ? req.body.template : 'report', proj(n))
+    await scaffold(TEMPLATE_NAMES.includes(req.body?.template) ? req.body.template : 'report', req.body?.brand, proj(n))
     await git(n, 'add', '-A')
     await git(n, 'commit', '-q', '-m', 'checkpoint: project created')
   } else {
@@ -558,6 +579,21 @@ p.put('/raw/*rel', express.raw({ type: () => true, limit: '50mb' }), async (req,
 p.delete('/raw/*rel', async (req, res) => {
   await rm(await safe(req.params.proj, wild(req)))
   res.json({ ok: true })
+})
+
+// The project as a .tar.gz: its sources (what git keeps, enough to rebuild
+// the rest) or, with ?all=1, everything on disk, builds and PDFs included.
+// Never .git or .collab. tar stores symlinks as links, never follows them.
+p.get('/archive', async (req, res) => {
+  const n = req.params.proj, all = req.query.all === '1'
+  const files = all ? ['.'] : (await git(n, 'ls-files', '-z', '-co', '--exclude-standard'))
+    .split('\0').filter(f => f && !/^\.collab\//.test(f))
+  const tar = spawn('tar', ['-czf', '-', '--exclude=./.git', '--exclude=./.collab', '--null', '-T', '-'],
+    { cwd: proj(n), stdio: ['pipe', 'pipe', 'ignore'] })
+  tar.stdin.end(files.join('\0'))
+  res.attachment(`${n}${all ? '' : '-src'}.tar.gz`).type('application/gzip')
+  tar.stdout.pipe(res)
+  res.on('close', () => tar.kill())
 })
 
 // Sharing: an owner or admin adds an account, or invites an address that has
@@ -667,7 +703,9 @@ p.post('/checkpoint', async (req, res) => {
     if (Object.keys(comments).length)
       await note(name, 'comments', JSON.stringify(comments).slice(0, 200_000))
   }
-  res.json({ ok: true, provenance: provenance && {
+  // Saving is committing and, with a remote, pushing.
+  const pushed = (await gitsync.status(name)).configured ? await gitsync.syncNow(name, { reason: 'save' }).catch(e => ({ ok: false, error: e.message })) : null
+  res.json({ ok: true, pushed: pushed && { ok: pushed.ok, error: pushed.error || null }, provenance: provenance && {
     keyId: provenance.keyId, verified: provenance.verified,
     sigOk: provenance.sigOk, stateOk: provenance.stateOk } })
 })
@@ -721,9 +759,14 @@ p.post('/federation/link', async (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 // ---- git remote: the project's durable home on any git host ----
-p.get('/gitremote', async (req, res) => res.json(await gitsync.status(req.params.proj)))
+const withKey = async (n, st) => ({ ...st, key: existsSync(keyOf(n)) ? await deployKey(n) : null })
+p.get('/gitremote', async (req, res) => res.json(await withKey(req.params.proj, await gitsync.status(req.params.proj))))
 p.post('/gitremote', async (req, res) => {
-  try { res.json(await gitsync.setRemote(req.params.proj, req.body?.url, req.body?.branch)) }
+  try {
+    const st = await gitsync.setRemote(req.params.proj, req.body?.url, req.body?.branch)
+    if (sshUrl(req.body?.url)) await deployKey(req.params.proj)
+    res.json(await withKey(req.params.proj, st))
+  }
   catch (e) { res.status(400).json({ error: e.message }) }
 })
 p.delete('/gitremote', async (req, res) => res.json(await gitsync.clearRemote(req.params.proj)))

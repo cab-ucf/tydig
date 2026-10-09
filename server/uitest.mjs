@@ -91,8 +91,11 @@ yes = true; await page.$eval('#tree .tnode.dir[title="out"] .del', b => b.click(
 check('a folder deletes with everything in it', !(await page.evaluate(async () =>
   (await (await fetch('/api/p/demo/files')).json()).some(f => f.path.startsWith('out/')))))
 
-// 4. Signed checkpoint via Ctrl-S then history pane
-await page.keyboard.down('Control'); await page.keyboard.press('s'); await page.keyboard.up('Control'); await sleep(4000)
+// 4. Ctrl-S saves (a signed commit) without asking; a named checkpoint asks for its name
+await page.keyboard.down('Control'); await page.keyboard.press('s'); await page.keyboard.up('Control')
+await page.waitForFunction(() => /saved/.test(document.getElementById('toast')?.textContent || ''), { timeout: 8000 }).catch(() => {})
+check('Ctrl-S saves and says so', /saved/.test(await page.evaluate(() => document.getElementById('toast')?.textContent || '')))
+await page.evaluate(() => document.querySelector('[data-act="checkpoint"]').click()); await sleep(4000)
 await page.keyboard.down('Alt'); await page.keyboard.press('h'); await page.keyboard.up('Alt'); await sleep(1500)
 const hist = await side(); check('history pane opens', !hist.hidden && hist.title === 'history')
 const signed = await page.evaluate(() => [...document.querySelectorAll('.commit')].map(c => c.innerText.replace(/\s+/g, ' ')).slice(0, 3))

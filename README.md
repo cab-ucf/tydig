@@ -61,6 +61,14 @@ A new project starts from one (Projects > the menu beside the name):
   letters, in `out/`.
 
 Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
+Branding is a layer of its own, chosen beside the template: `brand-ucf/`
+(black and gold, letterhead on letters from UCF) replaces `lib/brand.typ`.
+Another university copies it as `brand-<name>/`. Official logos are their
+owners' trademarks, so none ship here: put yours at `assets/brand/logo.svg`
+and set `logo` in `lib/brand.typ`.
+
+File > Download gives the sources as a `.tar.gz` (enough to rebuild), or
+everything with the PDFs; any file downloads from its row in the tree.
 
 A relative path in Typst starts from the file that names it, not from the
 document: `image("figure/sig.svg")` in `lib/letter.typ` reads
@@ -85,10 +93,11 @@ which is the root for every build.
   `TYDIG_MAX_BUILDS` at once (2). `TYDIG_BUILD_NET=0` cuts their network;
   do that on cloud hosts.
 - **Backups.** Everything lives in `data/`. Give each project a git remote
-  (Settings > Git remote) and it is pushed when idle and on shutdown. An
-  `https://` URL can carry a token; a `git@` URL uses the SSH keys in your
-  `~/.ssh` (mounted read-only into the hub; `TYDIG_SSH` picks another
-  directory), which need no passphrase, so a deploy key is ideal;
-  accounts are `data/auth.db`, copied while the hub is down.
+  (Settings > Git remote) and it is pushed on every save (Ctrl-S), when
+  idle and on shutdown. For a private repo, give the `git@` URL: the hub
+  makes a key for that project alone and shows it, with a link to add it
+  to the repo as a deploy key (tick write access). The private half stays
+  in `data/gitsync/keys/`, out of every build's reach. Accounts are
+  `data/auth.db`, copied while the hub is down.
 - **Updates.** `git pull && just serve`.
 

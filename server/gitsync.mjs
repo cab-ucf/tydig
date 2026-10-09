@@ -128,7 +128,11 @@ export function createGitSync({ hocuspocus, dataDir, proj, git, mirror, okName, 
         let why = ''
         const pushed = await git(p, 'push', c.url, branch, `refs/notes/*:refs/notes/${hubId()}/*`)
           .then(() => true)
-          .catch(async e => { why = redact(String(e.stderr || e.message).trim().split('\n').pop()); log(`gitsync: push to ${redact(c.url)} failed (${why})`); return false })
+          .catch(async e => {
+            const l = String(e.stderr || e.message).trim().split('\n')
+            why = redact(l.find(x => /denied|refused|rejected|not found|could not|fatal|error/i.test(x)) || l.pop())
+            log(`gitsync: push to ${redact(c.url)} failed (${why})`); return false
+          })
         c.lastSync = new Date().toISOString()
         // git's own words ("Permission denied (publickey)", "protected branch")
         c.lastError = pushed ? null : `push failed: ${why}`

@@ -54,3 +54,11 @@ letters:
       I am pleased to support your #G.mechanism.code application, "#G.title".
       Our core will provide instrument time and staff support for Aim 1 at no
       cost to the project.
+  - name: Grace Hopper
+    title: Chair, Department of Example Sciences
+    institution: University of Central Florida
+    date: January 6, 2026
+    signature: assets/signature.svg
+    body: |
+      The Department fully supports #pi.name's #G.mechanism.code application
+      and commits the protected time and laboratory space it describes.

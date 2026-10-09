@@ -32,13 +32,14 @@ const mk = () => {
 let pass = true
 const check = (name, cond) => { console.log((cond ? 'PASS' : 'FAIL'), name); pass &&= cond }
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ template: t }) }), (await api(`/p/${t}/files`)).map(f => f.path))
+  body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
 const [r21, r03] = [await nih('nih-r21'), await nih('nih-r03')]
 const { readFileSync: get } = await import('node:fs')
-check('templates are listed, report first', (await api('/templates'))[0] === 'report')
+check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
+  (await api('/templates')).brands.includes('ucf'))
 check('an NIH template is its shared layer plus its own grant.yaml',
   ['main.typ', 'lib/nih.typ', 'letters.typ', 'grant.yaml'].every(f => r21.includes(f) && r03.includes(f)) &&
-  /code: R21/.test(get('data/nih-r21/grant.yaml', 'utf8')) && /code: R03/.test(get('data/nih-r03/grant.yaml', 'utf8')))
+  /code: R21/.test(get('data/nih-r21/grant.yaml', 'utf8')) && /UCF Gold/.test(get('data/nih-r21/lib/brand.typ', 'utf8')) && /code: R03/.test(get('data/nih-r03/grant.yaml', 'utf8')))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -123,6 +124,15 @@ const filesAfter = await api('/p/demo/files')
 check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.json'))
 await sleep(600)
 check('analysis output still not CRDT-managed', !fA.has('build/results.json'))
+const tarList = async q => {
+  const b = Buffer.from(await (await fetch(`${B_URL}/api/p/demo/archive${q}`, { headers: { cookie: COOKIE } })).arrayBuffer())
+  return (await import('node:child_process')).execFileSync('tar', ['-tzf', '-'], { input: b }).toString().split('\n')
+}
+const [src, everything] = [await tarList(''), await tarList('?all=1')]
+check('sources archive: what git keeps, never .git or .collab', src.includes('main.typ') && src.includes('Makefile') &&
+  !src.some(f => /(^|\/)\.(git|collab)\//.test(f)))
+check('full archive adds build outputs', everything.some(f => /build\/results\.json$/.test(f)) &&
+  !everything.some(f => /(^|\/)\.(git|collab)\//.test(f)))
 
 // symlinks (planted by a build or a git checkout) never lead out of the project
 const { symlinkSync, writeFileSync, readFileSync } = await import('node:fs')

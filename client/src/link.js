@@ -13,10 +13,27 @@ const say = (html, fail) => {
   el.className = fail ? 'fail' : ''; el.innerHTML = html
   el.querySelector('button')?.addEventListener('click', () => location.reload())
 }
-// n0's relays refuse Firefox's WebSocket when its TLS hello carries ECH GREASE
-const FIREFOX = /Firefox\//.test(navigator.userAgent) ? `<br><b>In Firefox</b>, n0's relays
-  refuse the connection: open this link in Chrome, Edge or Safari, or in
-  <code>about:config</code> set <code>security.tls.ech.grease_probability</code> to 0.` : ''
+// Why a link fails, found by asking the relay directly: an HTTPS ping, then
+// the WebSocket iroh needs. n0's relays refuse Firefox's when its TLS hello
+// carries ECH GREASE, so a ping that works with a socket that does not is
+// usually that.
+const NativeWS = WebSocket
+async function why() {
+  const r = link.relay.replace(/\/?$/, '/'), host = new URL(r).host
+  const ping = await fetch(r + 'ping', { cache: 'no-store' }).then(x => x.ok, () => false)
+  const ws = ping && await new Promise(ok => {
+    const w = new NativeWS(r.replace(/^http/, 'ws') + 'relay', ['iroh-relay-v1'])
+    w.onopen = () => { w.close(); ok(true) }; w.onerror = () => ok(false); setTimeout(() => ok(false), 8000)
+  })
+  if (!ping) return `This network does not reach the relay (<code>${host}</code>): a firewall or
+    filter is blocking it. Try another network, a phone hotspot or a VPN.`
+  if (!ws) return /Firefox\//.test(navigator.userAgent) ? `The relay refuses Firefox's connection. Open
+    this link in Chrome, Edge or Safari, or in <code>about:config</code> set
+    <code>security.tls.ech.grease_probability</code> to 0.` : `The relay answers, but this network or
+    browser blocks its WebSocket (a proxy, filter or extension). Try another network or browser.`
+  return `The relay works from here, so the hub is not on it: is it running, and does its log say
+    <code>link: online</code>? Is this its current link (<code>just link</code> prints it)?`
+}
 let client
 const connect = () => client ??= new Promise((ok, no) => {
   say('Connecting to the hub&hellip;')
@@ -28,9 +45,9 @@ const connect = () => client ??= new Promise((ok, no) => {
   document.head.append(s)
 }).then(c => { document.getElementById('link-status')?.remove(); return c }, e => {
   client = null
-  say(`<b>Could not reach the hub</b> (${String(e?.message || e).replace(/[<&]/g, '')}).<br>
-    The hub must be running and online, and this link must be its current one
-    (<code>just link</code> prints it).${FIREFOX} <button>try again</button>`, true)
+  say('Could not reach the hub; checking why&hellip;', true)
+  why().then(w => say(`<b>Could not reach the hub</b> (${String(e?.message || e).replace(/[<&]/g, '')}).<br>
+    ${w} <button>try again</button>`, true))
   throw e
 })
 

@@ -5,6 +5,7 @@
 //
 // Paths here start with "/": a relative path resolves from the file that
 // names it (this one, in lib/), not from the document being compiled.
+#import "/lib/brand.typ": letterhead
 #let G = yaml("/grant.yaml")
 #let pi = G.investigators.first()
 #let name(p) = p.name + if p.at("degrees", default: none) != none [, #p.degrees]
@@ -38,9 +39,11 @@
 }
 
 // A letter of support, from an entry under letters: in grant.yaml.
+// On the institution's letterhead when its author is at the institution.
 #let letter(l) = {
   pagebreak(weak: true)
   set par(justify: false)
+  if l.institution == G.institution.name { letterhead(G.institution) }
   align(right)[#l.date]
   v(1em)
   [#name(pi) \ #pi.title \ #G.institution.name]

@@ -11,8 +11,9 @@ export TYDIG_DATA := justfile_directory() / "data"
 export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
-# SSH keys for git@ remotes, mounted read-only into the hub (compose.yml).
-export TYDIG_SSH := env_var_or_default("TYDIG_SSH", `d="$HOME/.ssh"; [ -d "$d" ] || { d="$PWD/data/.ssh"; mkdir -p "$d"; }; echo "$d"`)
+# git@ remotes use a deploy key the hub makes per project. TYDIG_SSH=~/.ssh
+# lends the hub your own keys instead, and with them every repo they reach.
+export TYDIG_SSH := env_var_or_default("TYDIG_SSH", `mkdir -p data/.ssh && echo "$PWD/data/.ssh"`)
 export TYDIG_PODMAN_SOCK := env_var_or_default("TYDIG_PODMAN_SOCK", "/run/user/" + `id -u` + "/podman/podman.sock")
 
 # Do everything: build both images, start the server, wait for it, open sesame.

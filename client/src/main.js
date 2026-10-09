@@ -52,11 +52,13 @@ async function openPicker() {
     if (n === projName) a.className = 'current'
     return a
   }))
-  $('proj-tpl').replaceChildren(...(await api('/templates')).map(t => new Option(t)))
+  const { templates, brands } = await api('/templates')
+  $('proj-tpl').replaceChildren(...templates.map(t => new Option(t)))
+  $('proj-brand').replaceChildren(new Option('no branding', ''), ...brands.map(b => new Option(b)))
   $('proj-new').onsubmit = async () => {
     const n = $('proj-name').value
     const r = await api(`/projects/${n}`, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ template: $('proj-tpl').value }) })
+      body: JSON.stringify({ template: $('proj-tpl').value, brand: $('proj-brand').value }) })
     if (r.error) return alert(r.error)
     location.search = `?proj=${n}`
   }
@@ -75,6 +77,8 @@ async function openPicker() {
     const name = prompt('Open as project name:', guess)
     if (!name) return
     const r = await api(`/projects/${name}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ gitUrl: url }) })
+    if (r.error && r.key) return prompt(`${r.error}\n\nIf the repo is private, add this deploy key to it (repo settings > deploy keys` +
+      `${keysPage(url) ? `: ${keysPage(url)}` : ''}), then open it again:`, r.key)
     if (r.error) return alert(r.error)
     location.search = `?proj=${name}`
   }
@@ -87,11 +91,20 @@ const rawUrl = rel => `/api${P('/raw/' + rel)}`
 // A link visitor's tab cannot load the hub's URLs itself: fetch, then show.
 // Anything but a PDF is downloaded: opened from a blob: URL it would run in
 // this page's origin, outside the sandbox the hub serves raw files under.
-const saveAs = (blob, p, type) => {
-  const a = document.createElement('a'), pdf = type === 'application/pdf'
+const saveAs = (blob, p, type, view = type === 'application/pdf') => {
+  const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([blob], { type }))
-  pdf ? a.target = '_blank' : a.download = p.split('/').pop()
+  view ? a.target = '_blank' : a.download = p.split('/').pop()
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000)
+}
+const toast = (html, ok = true) => {
+  const t = $('toast') ?? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'toast' }))
+  t.innerHTML = html; t.className = ok ? '' : 'bad'; clearTimeout(t.timer)
+  t.timer = setTimeout(() => t.remove(), ok ? 2500 : 8000)
+}
+const download = async (url, name) => {
+  const r = await fetch(url)
+  r.ok ? saveAs(await r.blob(), name, 'application/octet-stream', false) : alert(`download failed: ${r.status}`)
 }
 // Text is UTF-8 with no NUL byte, under 1 MB, whatever the file is called.
 const asText = async blob => {
@@ -421,7 +434,7 @@ function renderTree() {
     const el = document.createElement('div')
     el.className = 'tnode' + (p === currentPath ? ' active' : '') + (picked.has(p) ? ' picked' : '') + (yPaths.has(p) ? ' text' : ' bin')
     el.style.paddingLeft = `${0.5 + depth * 0.85}rem`
-    el.innerHTML = `<span class="fname"></span><span class="dots"></span><span class="ops"><button class="rn" title="rename">~</button><button class="del" title="delete">x</button></span>`
+    el.innerHTML = `<span class="fname"></span><span class="dots"></span><span class="ops"><button class="get" title="download">&darr;</button><button class="rn" title="rename">~</button><button class="del" title="delete">x</button></span>`
     el.querySelector('.fname').textContent = p.split('/').pop()
     el.title = p
     el.querySelector('.dots').replaceChildren(...(peersByFile[p] ?? []).map(u => {
@@ -432,6 +445,7 @@ function renderTree() {
       if (e.ctrlKey || e.metaKey) { picked.has(p) ? picked.delete(p) : picked.add(p); return renderTree() }
       picked.clear(); yPaths.has(p) ? openFile(p) : openDisk(p)
     }
+    el.querySelector('.get').onclick = () => download(rawUrl(p), p)
     el.querySelector('.rn').onclick = () => renameFile(p)
     el.querySelector('.del').onclick = () => remove(picked.has(p) ? [...picked] : [p])
     return el
@@ -942,6 +956,16 @@ $('split').onpointerdown = e => {
 }
 $('split').ondblclick = () => { settings.split = 0.5; applyLayout() }
 
+// Where a repo takes deploy keys, from its SSH URL (GitHub, GitLab, Gitea/Forgejo).
+const keysPage = url => {
+  const m = /^(?:ssh:\/\/)?git@([^:/]+)[:/](.+?)(?:\.git)?$/.exec(url || '')
+  return m && `https://${m[1]}/${m[2]}/` + (/gitlab/.test(m[1]) ? '-/settings/repository' : /github/.test(m[1]) ? 'settings/keys/new' : 'settings/keys')
+}
+const keyBox = (key, url) => `<div class="git-key"><b>This project's deploy key</b>
+  <textarea readonly rows="2">${esc(key)}</textarea>
+  ${keysPage(url) ? `<a href="${esc(keysPage(url))}" target="_blank" rel="noopener">add it to the repo &rarr;</a>` : 'Add it to the repo as a deploy key'}
+  (paste, tick <i>write access</i>), then push.</div>`
+
 // Git remote: the project's durable home on a git host you control. The hub
 // pushes when it goes idle and when it shuts down, so no machine here has to
 // stay up for the work to survive.
@@ -961,9 +985,10 @@ async function showGitRemote() {
       <label>Repository URL
         <div class="fed-row"><input id="git-url" placeholder="https://github.com/lab/paper.git" value="${st.configured ? esc(st.url) : ''}" />
         <input id="git-branch" style="flex:0 0 6rem" placeholder="main" value="${esc(st.branch || 'main')}" /></div></label>
-      <p class="fed-explain">For a private repo over HTTPS, include a token
-        (<code>https://user:TOKEN@host/lab/paper.git</code>) -- it is stored on this hub only, never
-        committed, and shown redacted here. An SSH URL uses this hub's key instead.</p>
+      <p class="fed-explain">Private repo: give its SSH URL (<code>git@github.com:lab/paper.git</code>).
+        This hub makes a key for this project alone; add it to the repo as a deploy key with write
+        access, and Ctrl-S commits and pushes.</p>
+      ${st.key ? keyBox(st.key, st.url) : ''}
       <div class="fed-row"><button id="git-save">${st.configured ? 'update' : 'set remote'}</button>
         ${st.configured ? '<button id="git-sync">push now</button><button id="git-clear" class="danger">forget remote</button>' : ''}</div>
       <div class="fed-status">
@@ -1085,9 +1110,12 @@ const actions = {
   'new-file': newFile,
   upload: () => uploadTo(),
   projects: openPicker,
-  checkpoint: async () => {
-    const message = prompt('Checkpoint name:')
+  // Ctrl-S: commit (signed) and, with a git remote, push; Checkpoint... names it
+  save: () => actions.checkpoint('save'),
+  checkpoint: async (named) => {
+    const message = typeof named === 'string' ? named : prompt('Checkpoint name:')
     if (message == null) return
+    toast('saving&hellip;')
     // Sign the checkpoint with this device's post-quantum key; fall back to
     // an unsigned checkpoint if signing is unavailable.
     let signed = {}
@@ -1096,8 +1124,10 @@ const actions = {
       const files = [...filesMap.entries()].filter(([p]) => okPath(p) && !GEN.test(p)).map(([p, t]) => [p, t.toString()])
       signed = await signCheckpoint({ user: me.id, project: projName, message, files })
     } catch (e) { console.warn('checkpoint will be unsigned:', e) }
-    await api(P('/checkpoint'), { method: 'POST', headers: { 'content-type': 'application/json' },
+    const r = await api(P('/checkpoint'), { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message, ...signed }) })
+    toast(r.error ? `not saved: ${esc(r.error)}` : !r.pushed ? 'saved (committed; no git remote to push to)'
+      : r.pushed.ok ? 'saved and pushed' : `saved, but the push failed: ${esc(r.pushed.error || '')}`, !r.error && r.pushed?.ok !== false)
     if (sidebarMode === 'history') renderHistory()
   },
   'export-pdf': exportPdf,
@@ -1128,10 +1158,12 @@ const actions = {
     const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true })
     alert(error ? error.message : 'Password changed; other sessions are signed out.')
   },
+  'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
+  'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
   'quick-open': () => quickOpen(),
   shortcuts: () => alert(
 `Ctrl-P    open file (fuzzy)
-Ctrl-S    checkpoint
+Ctrl-S    save: commit, and push to the git remote
 Alt-N     new file
 Alt-E     export preview PDF
 Ctrl-Alt-M  comment on selection
@@ -1170,7 +1202,7 @@ const KEYMAP = {
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
-  'C-KeyP': 'quick-open', 'C-KeyS': 'checkpoint', 'C-A-KeyM': 'comment',
+  'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment',
 }
 document.addEventListener('keydown', e => {
   const combo = (e.ctrlKey || e.metaKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey ? 'S-' : '') + e.code
