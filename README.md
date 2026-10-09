@@ -80,6 +80,16 @@ A new project starts from one (Projects > the menu beside the name):
   with a `package.yaml` gets it, so another funder's is a list away.
 
 Add one as a folder in `server/templates/`; `a-b` is `a/` with `a-b/` on top.
+
+**Switching template** (Settings > Project template): an R21 becomes an R03,
+a report becomes a grant, a project gains UCF's branding. Each file is
+merged three ways, from the old template's version to the new one's into
+yours: what the template changes lands, what you wrote stays (yours wins
+where both changed the same lines, and you are told where). A file the new
+template rewrites stays yours, with the template's beside it
+(`main.nih-r21.typ`) for you, or an @agent member, to move your writing
+into. Old template files you never changed go. It is one checkpoint, so
+History undoes it.
 Branding is a layer of its own, chosen beside the template: `brand-ucf/`
 (black and gold, letterhead on letters from UCF) replaces `lib/brand.typ`,
 and carries UCF's budget workbook: put it at `brand-ucf/docs/budget-template.xlsx`

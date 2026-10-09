@@ -53,7 +53,7 @@ const GENERATED = /^(out|build|figures)\//
 const TEXT = /\.(typ|bib|csv|tsv|py|jl|r|toml|yaml|yml|json|md|txt|tex|just|mk)$|(^|\/)(justfile|Makefile|makefile|GNUmakefile|\.gitignore)$/i
 async function* walk(dir, base = dir) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
-    if (e.name === '.git') continue
+    if (e.name === '.git' || e.name === '.collab') continue // as the hub: its machinery, not the project
     const p = path.join(dir, e.name)
     if (e.isDirectory()) yield* walk(p, base)
     else yield path.relative(base, p).replaceAll('\\', '/')

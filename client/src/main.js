@@ -801,7 +801,7 @@ function openSidebar(mode) {
   settings.sideOpen = true; if (phone()) settings.m = 'side'
   applyLayout()
   $('side-title').textContent = mode
-  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, cite: () => renderCite(sideBody, citeCtx), history: renderHistory, build: renderBuild, review: renderReview })[mode]()
+  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, template: renderTemplate, cite: () => renderCite(sideBody, citeCtx), history: renderHistory, build: renderBuild, review: renderReview })[mode]()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; sidebarMode = null; applyLayout() }
 
@@ -916,6 +916,32 @@ function checklistBadge() {
   const need = items.filter(i => i.when === 'always' && i.file)
   b.textContent = `checklist ${need.filter(i => i.have?.length).length}/${need.length}`
   if (sidebarMode === 'checklist') renderChecklist()
+}
+
+// The project's template, and switching it: R21 to R03, a report to a grant.
+async function renderTemplate() {
+  const t = await api(P('/template'))
+  if (sidebarMode !== 'template') return
+  const pick = (id, opts, v, none) => `<select id="${id}">${none ? `<option value="">${none}</option>` : ''}${opts.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+  sideBody.innerHTML = `<p class="hint">This project ${t.template ? `${t.recorded ? 'uses' : 'looks like it came from'} <b>${esc(t.template)}</b>${t.brand ? ` with <b>${esc(t.brand)}</b> branding` : ''}` : 'has no template'}.
+      Switching merges the new template into it: what the template changes lands, what you wrote stays; where both
+      changed a file, yours stays and the template's is put beside it.</p>
+    <div class="cite-bar">${pick('tpl-to', t.templates, t.template)}${pick('tpl-brand', t.brands, t.brand, 'no branding')}<button id="tpl-go">switch</button></div>
+    <div id="tpl-out"></div>`
+  $('tpl-go').onclick = async () => {
+    const to = $('tpl-to').value, brand = $('tpl-brand').value || null
+    if (!confirm(`Switch this project to ${to}${brand ? ' + ' + brand : ''}? It is committed as a checkpoint, so it can be undone from History.`)) return
+    $('tpl-go').disabled = true
+    const r = await api(P('/template'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ template: to, brand }) })
+    if (r.error) { $('tpl-go').disabled = false; return alert(r.error) }
+    const list = (title, xs) => xs.length ? `<p><b>${title}</b> ${xs.map(x => Array.isArray(x) ? `${esc(x[0])} (the template's: ${esc(x[1])})` : esc(x)).join(', ')}</p>` : ''
+    $('tpl-out').innerHTML = list('Added:', r.added) + list('Updated (you had not changed them):', r.updated) + list('Merged with your changes:', r.merged) +
+      list('Where you and the template both changed the same lines, yours was kept:', r.kept.map(([f, n]) => `${f} (${n} place${n > 1 ? 's' : ''}; check it)`)) +
+      list('Kept yours, the template\'s beside it:', r.beside) + list('Removed (old template files you had not changed):', r.removed) +
+      (r.beside.length ? `<p class="hint">To move your writing into the new structure, ask an agent member in the Discussion, e.g.
+        "@claude move the text of ${esc(r.beside[0][0])} into the sections of ${esc(r.beside[0][1])}".</p>` : '')
+    refreshDisk()
+  }
 }
 
 async function renderHistory() {
@@ -1344,6 +1370,7 @@ const actions = {
   comments: () => openSidebar('comments'),
   chat: () => openSidebar('chat'),
   checklist: () => openSidebar('checklist'),
+  template: () => openSidebar('template'),
   // Cite: search on the selected words; the citation goes after them
   cite: () => {
     const sel = view && !view.state.selection.main.empty && view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)

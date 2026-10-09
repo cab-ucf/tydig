@@ -218,11 +218,16 @@ const mirrored = new Map() // proj -> Map path -> the text we last wrote: the ba
 async function merge3(base, ours, theirs) {
   if (theirs === base || theirs === ours) return ours
   if (ours === base) return theirs
+  return (await mergeFile(base, ours, theirs, '--ours')).text
+}
+// git merge-file: the merged text, and how many places both sides changed
+async function mergeFile(base, ours, theirs, ...flags) {
   const d = await mkdtemp(path.join(tmpdir(), 'tydig-'))
   try {
     const f = ['ours', 'base', 'theirs'].map(n => path.join(d, n))
     await Promise.all([ours, base, theirs].map((t, i) => writeFile(f[i], t)))
-    return (await run('git', ['merge-file', '-p', '--ours', ...f]).catch(e => e)).stdout
+    const r = await run('git', ['merge-file', '-p', ...flags, ...f]).catch(e => e)
+    return { text: r.stdout, conflicts: typeof r.code === 'number' ? r.code : 0 }
   } finally { rm(d, { recursive: true, force: true }) }
 }
 
@@ -412,9 +417,17 @@ const LAYERS = readdirSync(TEMPLATES).sort()
 const BRANDS = LAYERS.filter(l => l.startsWith('brand-')).map(l => l.slice(6))
 const TEMPLATE_NAMES = ['report', ...LAYERS.filter(t => t !== 'report' && !t.startsWith('brand-') &&
   !LAYERS.some(u => u.startsWith(t + '-')))]
+const layersOf = (t, brand) => [...LAYERS.filter(l => t === l || t.startsWith(l + '-')), ...BRANDS.includes(brand) ? ['brand-' + brand] : []]
 const scaffold = async (t, brand, dir) => {
-  for (const l of [...LAYERS.filter(l => t === l || t.startsWith(l + '-')), ...BRANDS.includes(brand) ? ['brand-' + brand] : []])
-    await cp(path.join(TEMPLATES, l), dir, { recursive: true })
+  for (const l of layersOf(t, brand)) await cp(path.join(TEMPLATES, l), dir, { recursive: true })
+  await mkdir(path.join(dir, '.collab'), { recursive: true })
+  await writeFile(path.join(dir, '.collab', 'template.json'), JSON.stringify({ template: t, brand: brand || null }))
+}
+// every file a template (with a brand) gives a project: path -> bytes, later layers winning
+async function stack(t, brand) {
+  const files = new Map()
+  for (const l of layersOf(t, brand)) for await (const rel of walk(path.join(TEMPLATES, l))) files.set(rel, await readFile(path.join(TEMPLATES, l, rel)))
+  return files
 }
 
 // ---------- REST ----------
@@ -915,6 +928,71 @@ p.get('/info', (req, res) => res.json({ root: UNSAFE ? proj(req.params.proj) : '
 const admin = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
   : res.status(403).json({ error: 'only the project owner or an admin can change where it syncs' })
 p.get('/federation', async (req, res) => res.json(await federation.status(req.params.proj)))
+// ---- a project's template, and switching it (R21 to R03, a report to a grant) ----
+// Each template file is merged three ways: from the old template's version
+// (base) to the new one's, into the project's own (yours). What the new
+// template changes lands; what you changed stays, and where both changed the
+// same lines, yours wins (and is reported). A file the new template rewrites
+// (most of its lines new), or one that was never the template's, stays
+// yours, with the new template's beside it (main.nih-r21.typ): mixing two
+// different documents line by line would make a third that is neither.
+// Old template files you never touched go (git history keeps them). Moving
+// prose into a new structure is writing: ask an @agent member for that.
+// how much of the old version a new one keeps: the share of its lines still there
+const kept = (a, b) => { const have = new Set(b.split('\n')), l = a.split('\n'); return l.filter(x => have.has(x)).length / l.length }
+const recorded = async n => JSON.parse(await readFile(path.join(proj(n), '.collab', 'template.json'), 'utf8').catch(() => 'null'))
+const fileNow = async (n, doc, rel) => { const t = doc.getMap('files').get(rel); return t ? Buffer.from(t.toString()) : readIn(n, rel).catch(() => null) }
+// a project from before templates were recorded: the one its files match best
+async function inferTemplate(n, doc) {
+  let best = null, most = 0
+  for (const template of TEMPLATE_NAMES) for (const brand of [null, ...BRANDS]) {
+    let k = 0
+    for (const [rel, b] of await stack(template, brand)) if ((await fileNow(n, doc, rel))?.equals(b)) k++
+    if (k > most) { most = k; best = { template, brand } }
+  }
+  return best
+}
+p.get('/template', async (req, res) => {
+  const n = req.params.proj, r = await recorded(n)
+  res.json({ ...(r || await live(n, doc => inferTemplate(n, doc)) || {}), recorded: !!r, templates: TEMPLATE_NAMES, brands: BRANDS })
+})
+p.post('/template', admin, async (req, res) => {
+  const n = req.params.proj, { template, brand = null } = req.body || {}
+  if (!TEMPLATE_NAMES.includes(template) || (brand && !BRANDS.includes(brand))) return res.status(400).json({ error: 'no such template or brand' })
+  const report = { added: [], updated: [], merged: [], kept: [], beside: [], removed: [] }
+  let from
+  await live(n, async doc => {
+    from = await recorded(n) || await inferTemplate(n, doc)
+    const old = from ? await stack(from.template, from.brand) : new Map(), next = await stack(template, brand), files = doc.getMap('files')
+    const put = async (rel, b) => { const t = textOf(b)
+      if (t != null && !GENERATED.test(rel)) files.has(rel) ? setText(files.get(rel), t) : files.set(rel, new Y.Text(t))
+      else { await mkdir(path.dirname(inProj(n, rel)), { recursive: true }); await writeIn(n, rel, b) } }
+    for (const [rel, theirs] of next) {
+      const base = old.get(rel), cur = await fileNow(n, doc, rel)
+      if (!cur) { await put(rel, theirs); report.added.push(rel); continue }
+      if (cur.equals(theirs)) continue
+      if (base?.equals(cur)) { await put(rel, theirs); report.updated.push(rel); continue }
+      const [b, y, t] = [base, cur, theirs].map(x => x && textOf(x))
+      if (b != null && y != null && t != null && files.has(rel) && kept(b, t) >= 0.5) {
+        const { conflicts } = await mergeFile(b, y, t)
+        setText(files.get(rel), await merge3(b, y, t)); report.merged.push(rel)
+        if (conflicts) report.kept.push([rel, conflicts])
+        continue
+      }
+      const side = rel.replace(/(\.[^./]+)?$/, `.${template}$1`)
+      await put(side, theirs); report.beside.push([rel, side])
+    }
+    for (const [rel, b] of old) if (!next.has(rel) && (await fileNow(n, doc, rel))?.equals(b)) {
+      files.has(rel) ? files.delete(rel) : await rm(inProj(n, rel), { force: true }); report.removed.push(rel)
+    }
+    await mirror(n, doc)
+  })
+  await writeFile(path.join(proj(n), '.collab', 'template.json'), JSON.stringify({ template, brand }))
+  await git(n, 'add', '-A')
+  await git(n, 'commit', '-q', '-m', `checkpoint: template ${from ? `${from.template}${from.brand ? '+' + from.brand : ''}` : 'none'} -> ${template}${brand ? '+' + brand : ''}`).catch(() => {})
+  res.json({ from, ...report })
+})
+
 p.get('/agents', (req, res) => res.json(agentsOf(req.params.proj).map(({ name, created }) => ({ name, created }))))
 p.post('/agents', admin, (req, res) => {
   const name = String(req.body?.name || '').trim().toLowerCase(), list = agentsOf(req.params.proj)
