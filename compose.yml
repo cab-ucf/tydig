@@ -119,6 +119,8 @@ services:
     image: localhost/tydig-scope
     profiles: [scope]
     networks: [assist]
+    # /dev/null (nothing), or the GPU with TYDIG_SCOPE_GPU=1
+    devices: ["${TYDIG_SCOPE_DEVICE:-/dev/null}"]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

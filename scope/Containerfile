@@ -1,17 +1,20 @@
 # The surprise engine the hub serves its members (TYDIG_SCOPE=1): Perplexiscope
-# (perplexiscope/, by Chase Brown, GPL-3.0-or-later), on the CPU, its model
-# baked in at build, so the running container needs no network at all.
+# (perplexiscope/, by Chase Brown, GPL-3.0-or-later), its model baked in at
+# build, so the running container needs no network at all. TORCH=cu130 for an
+# NVIDIA GPU (TYDIG_SCOPE_GPU=1).
 #   podman build -t tydig-scope -f scope/Containerfile scope   (`just` does it)
 FROM docker.io/library/python:3.12-slim
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.14.1 \
+ARG TORCH=cpu
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/$TORCH torch==2.14.1 \
  && pip install --no-cache-dir transformers==5.19.0 tokenizers numpy pysbd fastapi "uvicorn[standard]" watchfiles
-ARG MODEL=gpt2
+ARG MODEL=Qwen/Qwen3.5-0.8B-Base
 ENV HF_HOME=/opt/hf PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 MODEL=$MODEL
 RUN python -c "import transformers as t; t.AutoTokenizer.from_pretrained('$MODEL'); t.AutoModelForCausalLM.from_pretrained('$MODEL')" \
  && chmod -R a+rX /opt/hf
 ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 COPY perplexiscope /app/perplexiscope
 WORKDIR /app
-USER 1000:1000
+# nobody: nothing owned, nothing writable but /tmp
+USER nobody
 # a calibration (for percentages, not z-scores): mount it at /app/perplexiscope/calib/
 CMD ["sh", "-c", "exec python -m perplexiscope.serve --model \"$MODEL\" --host 0.0.0.0 --port 8000"]

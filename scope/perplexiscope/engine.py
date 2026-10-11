@@ -36,16 +36,19 @@ def calfile(name): return Path(name, "ai.json") if Path(name).is_dir() else CAL 
 
 
 class Engine:
-    def __init__(s, name, device=None, ctx=1024, dtype=torch.float32):
+    def __init__(s, name, device=None, ctx=1024, dtype=None):
         s.dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
         s.tk = AutoTokenizer.from_pretrained(name); s.tk.model_max_length = 1 << 30  # we window long texts ourselves
+        dtype = dtype or (torch.bfloat16 if s.dev == "cuda" else torch.float32)
         s.m = AutoModelForCausalLM.from_pretrained(name, attn_implementation="sdpa", dtype=dtype).to(s.dev).eval()
-        c, s.name = s.m.config, name
-        s.T = getattr(c, "ps_temperature", 1.0)  # post-hoc calibration [guo2017calibration]
+        c, s.name = s.m.config.get_text_config(), name
+        s.cut = set(getattr(c, "layer_types", None) or ["full_attention"]) == {"full_attention"}
+        s.T = getattr(s.m.config, "ps_temperature", 1.0)  # post-hoc calibration [guo2017calibration]
         s.C = min(getattr(c, "n_positions", 0) or c.max_position_embeddings, ctx); s.S = s.C // 2
-        s.bos, V = s.tk.eos_token_id, s.m.get_output_embeddings().weight.shape[0]
+        s.eos, V = s.tk.eos_token_id, s.m.get_output_embeddings().weight.shape[0]
         s.B = torch.zeros(V, dtype=torch.bool, device=s.dev)  # tokens that open a new word (or end the text)
-        s.B[:len(s.tk)] = torch.tensor([s.tk.decode([i])[:1].isspace() for i in range(len(s.tk))]); s.B[s.bos] = True
+        s.B[:len(s.tk)] = torch.tensor([s.tk.decode([i])[:1].isspace() for i in range(len(s.tk))]); s.B[s.eos] = True
+        s.bos = s.eos if s.tk.bos_token_id is None else s.tk.bos_token_id  # what a text starts after
         s.win, s.doc, s.last, s.seg = {}, None, None, pysbd.Segmenter(char_span=True)
         s.W = json.loads(calfile(name).read_text())["w"] if calfile(name).exists() else None
 
@@ -61,6 +64,7 @@ class Engine:
         old = s.win.get(st)
         l = next((i for i, (a, b) in enumerate(zip(old[0], ids)) if a != b), min(len(old[0]), len(ids))) if old else 0
         if old and l == len(ids) == len(old[0]): return old
+        if not s.cut: old, l = None, 0  # a recurrent or sliding-window cache has no prefix to keep
         l = max(l, 1)
         lp, cache = s.fwd(ids[l - 1:], sub(old[1], l - 1) if old else None)
         g = lp[:-1].gather(1, torch.tensor(ids[l:], dtype=torch.long, device=s.dev)[:, None])[:, 0]
@@ -208,7 +212,7 @@ class Engine:
             lp = (D / T).log_softmax(-1); lq = s.keep(lp, m, mu if m == "mirostat" else a)
             t = int(torch.multinomial(lq.exp(), 1)); piece = s.tk.decode([t])
             if piece[:1].isspace() and has: n += 1
-            if t == s.bos or n == words: break
+            if t == s.eos or n == words: break
             has = bool(piece.strip()) or (has and not piece[:1].isspace())
             if m == "mirostat": mu -= .1 * (-lp[t].item() / LN2 - a)
             out.append(dict(t=piece, p=math.exp(D[t].item()), q=math.exp(lq[t].item())))

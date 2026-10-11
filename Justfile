@@ -23,8 +23,13 @@ export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
 # TYDIG_SCOPE=1: the surprise overlay for every member, from the scope
-# container (a CPU language model, ~2 GB of image); the hub finds it there.
+# container (Qwen3.5 on the CPU, ~3 GB of image); the hub finds it there.
+# TYDIG_SCOPE_GPU=1 gives it the NVIDIA GPU (CDI, nvidia-container-toolkit).
 export TYDIG_SCOPE := env_var_or_default("TYDIG_SCOPE", "")
+gpu := env_var_or_default("TYDIG_SCOPE_GPU", "")
+export TYDIG_SCOPE_DEVICE := if gpu == "" { "/dev/null" } else { "nvidia.com/gpu=all" }
+torch := if gpu == "" { "cpu" } else { "cu130" }
+model := env_var_or_default("TYDIG_SCOPE_MODEL", "Qwen/Qwen3.5-0.8B-Base")
 export TYDIG_PERPLEXISCOPE := if TYDIG_SCOPE == "" { env_var_or_default("TYDIG_PERPLEXISCOPE", "") } else { "http://scope:8000" }
 prof := if TYDIG_SCOPE == "" { "" } else { "--profile scope" }
 
@@ -207,9 +212,10 @@ help:
 sandbox:
     {{as}} podman build -t tydig-build -f sandbox/Containerfile .
 
-# The surprise engine's image (TYDIG_SCOPE=1; TYDIG_SCOPE_MODEL, default gpt2).
+# The surprise engine's image (TYDIG_SCOPE=1; TYDIG_SCOPE_MODEL, any causal LM
+# on Hugging Face, default Qwen/Qwen3.5-0.8B-Base).
 scope:
-    {{ if TYDIG_SCOPE == "" { "true" } else { as + " podman build -t tydig-scope --build-arg MODEL=" + env_var_or_default("TYDIG_SCOPE_MODEL", "gpt2") + " -f scope/Containerfile scope" } }}
+    {{ if TYDIG_SCOPE == "" { "true" } else { as + " podman build -t tydig-scope --build-arg MODEL=" + model + " --build-arg TORCH=" + torch + " -f scope/Containerfile scope" } }}
 
 # The app server image (client build + Node runtime).
 image:

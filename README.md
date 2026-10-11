@@ -206,9 +206,15 @@ TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b                 # on the hub's machine
 ```
 
 `TYDIG_SCOPE=1` builds and runs the surprise engine (Perplexiscope, in
-`scope/`) as a fourth container: GPT-2 on the CPU, baked into its ~2 GB
-image (`TYDIG_SCOPE_MODEL` for another), with no network but the hub's, a
-read-only system and no capabilities. For percentages instead of z-scores,
+`scope/`) as a fourth container: Qwen3.5-0.8B-Base (Feb. 2026) on the CPU,
+baked into its ~3 GB image, with no network but the hub's, a read-only
+system, no capabilities, and a uid that owns nothing on the host. On 4 CPU
+cores a page takes ~25 s; `TYDIG_SCOPE_GPU=1` gives it an NVIDIA GPU (CDI:
+`hardware.nvidia-container-toolkit.enable` on NixOS). `TYDIG_SCOPE_MODEL`
+picks another base model: `Qwen/Qwen3.5-2B-Base` or `google/gemma-4-E2B`
+are stronger and want that GPU (Gemma's image is 10 GB);
+`Qwen/Qwen3-0.6B-Base` is the fastest on a CPU, rescoring only what follows
+an edit (Qwen3.5 and Gemma 4 rescore the whole window). For percentages instead of z-scores,
 mount a calibration (see `compose.yml`). Ghost text comes from an Ollama on
 the host, which must listen beyond `127.0.0.1` with the firewall keeping it
 off the network (NixOS: `services.ollama.host = "0.0.0.0"`,
@@ -225,7 +231,7 @@ on the bar's `ppl` readout recolours each sentence by how AI-like it reads
 (Fast-DetectGPT's criterion: teal reads human, violet reads AI). Hover a word
 for its bits, rank and the model's uncertainty. The model is the
 hub's (above), or a Perplexiscope engine on your own machine (`just` in its
-folder serves GPT-2 at `http://localhost:8000`). Typst files are
+folder serves one at `http://localhost:8000`). Typst files are
 scored as the prose they typeset: code, math, citations and markup are left
 out. The AI reading is a z-score until the engine is calibrated (`just
 calib` there), then a percentage; it is evidence, not a verdict: short,

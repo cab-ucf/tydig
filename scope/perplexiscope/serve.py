@@ -57,7 +57,7 @@ async def ws(ws: WebSocket):
             await wake.wait(); wake.clear(); r, box[0] = box[0], None
             h = await asyncio.to_thread(heat, r)
             await say(ws, type="heat", seq=r["seq"], **h)
-            if box[0] is None and r.get("cursor") is not None:
+            if box[0] is None and r.get("cursor") is not None and E.cut:  # a tree needs a cache it can branch
                 t = await asyncio.to_thread(tree, r, lambda *x: {"sampler": E.overlay(*x)})
                 if box[0] is None: await say(ws, type="tree", seq=r["seq"], **t)
 
@@ -67,7 +67,7 @@ async def ws(ws: WebSocket):
     try:
         while True:
             r = json.loads(await ws.receive_text())
-            if r.get("type") == "sample": asyncio.create_task(sample(r))
+            if r.get("type") == "sample": E.cut and asyncio.create_task(sample(r))
             else: box[0] = r; wake.set()
     except WebSocketDisconnect: pass
     finally: w.cancel(); clients.discard(ws)
