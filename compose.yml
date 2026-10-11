@@ -37,10 +37,10 @@ services:
       TYDIG_TRUST_PROXY: "${TYDIG_TRUST_PROXY:-}"
       TYDIG_MAX_BUILDS: "${TYDIG_MAX_BUILDS:-2}"
       # Models this hub serves its members (a toggle for them, nothing to
-      # install): ghost text from Ollama, the surprise overlay from a
-      # Perplexiscope engine, on the host (listening beyond 127.0.0.1):
+      # install): the surprise overlay from the scope container below
+      # (TYDIG_SCOPE=1 in .env; `just` sets the address), ghost text from an
+      # Ollama on the host, listening beyond 127.0.0.1:
       #   TYDIG_OLLAMA=http://host.containers.internal:11434 TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b
-      #   TYDIG_PERPLEXISCOPE=http://host.containers.internal:8000
       TYDIG_OLLAMA: "${TYDIG_OLLAMA:-}"
       TYDIG_GHOST_MODEL: "${TYDIG_GHOST_MODEL:-}"
       TYDIG_PERPLEXISCOPE: "${TYDIG_PERPLEXISCOPE:-}"
@@ -65,7 +65,7 @@ services:
     volumes:
       # Projects, accounts, keys, git history. Identical path both sides.
       - "${TYDIG_DATA:-/var/lib/tydig/data}:${TYDIG_DATA:-/var/lib/tydig/data}:z"
-    networks: [default, ctl]
+    networks: [default, ctl, assist]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -113,6 +113,20 @@ services:
     healthcheck: { disable: true }
     restart: unless-stopped
 
+  # the surprise engine (Perplexiscope, scope/), only with TYDIG_SCOPE=1: its
+  # model is in the image, so it has no network but the hub's
+  scope:
+    image: localhost/tydig-scope
+    profiles: [scope]
+    networks: [assist]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    restart: unless-stopped
+    # a calibration, for percentages instead of z-scores:
+    # volumes: ["./calib:/app/perplexiscope/calib:ro"]
+
 networks:
   # the hub's and egress's way out (podman-compose wants it named)
   default: {}
@@ -120,3 +134,5 @@ networks:
   ctl: { internal: true }
   # builds <-> egress; the name is what sandbox.mjs attaches builds to
   build: { internal: true, name: tydig-build }
+  # hub <-> scope
+  assist: { internal: true }

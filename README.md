@@ -195,22 +195,26 @@ An agent can also work like any collaborator, on its own copy:
 
 Where an agent and a person change the same lines, the person's text wins.
 
-**Served by the hub.** Put the models on the hub's machine and every member
-gets ghost text and the surprise overlay as a toggle, through the link too,
-with nothing to install. In `.env`:
+**Served by the hub.** Every member gets ghost text and the surprise
+overlay as a toggle, through the link too, with nothing to install. In
+`.env`, then `just`:
 
 ```sh
-TYDIG_OLLAMA=http://host.containers.internal:11434
-TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b
-TYDIG_PERPLEXISCOPE=http://host.containers.internal:8000
+TYDIG_SCOPE=1        # the surprise overlay: tydig's own container (scope/)
+TYDIG_OLLAMA=http://host.containers.internal:11434   # ghost text: an Ollama
+TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b                 # on the hub's machine
 ```
 
-then `just`. The hub runs in a container, so both must listen beyond
-`127.0.0.1`, with the firewall keeping them off the network (NixOS:
-`services.ollama.host = "0.0.0.0"`, `loadModels = [ "qwen2.5-coder:1.5b" ]`;
-Perplexiscope: `serve --host 0.0.0.0`). Members reach them only through the
-hub, signed in and in the project, as fixed requests: a continuation of a
-line from the hub's model and settings, or a text to score. One ask at a
+`TYDIG_SCOPE=1` builds and runs the surprise engine (Perplexiscope, in
+`scope/`) as a fourth container: GPT-2 on the CPU, baked into its ~2 GB
+image (`TYDIG_SCOPE_MODEL` for another), with no network but the hub's, a
+read-only system and no capabilities. For percentages instead of z-scores,
+mount a calibration (see `compose.yml`). Ghost text comes from an Ollama on
+the host, which must listen beyond `127.0.0.1` with the firewall keeping it
+off the network (NixOS: `services.ollama.host = "0.0.0.0"`,
+`loadModels = [ "qwen2.5-coder:1.5b" ]`). Members reach both only through
+the hub, signed in and in the project, as fixed requests: a continuation of
+a line from the hub's model and settings, or a text to score. One ask at a
 time each; a newer one replaces it. The text is the project's, already on
 the hub. Without these, each person can still point Settings at a model on
 their own machine.
@@ -219,10 +223,9 @@ their own machine.
 language model, every sentence underlined by its own surprise, and one click
 on the bar's `ppl` readout recolours each sentence by how AI-like it reads
 (Fast-DetectGPT's criterion: teal reads human, violet reads AI). Hover a word
-for its bits, rank and the model's uncertainty. The model is a
-Perplexiscope engine on your own machine
-(`just` in its folder serves GPT-2 at `http://localhost:8000`; a GPU box:
-`ssh -L 8000:localhost:8000 gpu-box`), so nothing leaves it. Typst files are
+for its bits, rank and the model's uncertainty. The model is the
+hub's (above), or a Perplexiscope engine on your own machine (`just` in its
+folder serves GPT-2 at `http://localhost:8000`). Typst files are
 scored as the prose they typeset: code, math, citations and markup are left
 out. The AI reading is a z-score until the engine is calibrated (`just
 calib` there), then a percentage; it is evidence, not a verdict: short,

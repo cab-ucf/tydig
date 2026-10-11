@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perplexiscope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wdth,wght@90,400;90,600&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#E9EEEA;--sheet:#FBFCFA;--ink:#16212A;--quiet:#5B6A70;--rule:#C7D1CE;--probe:#1C5D8C;
+  --doc:19px/36px Literata,Georgia,serif;--ui:'Instrument Sans',system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px var(--ui);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;gap:.6rem 2rem;align-items:center;padding:.9rem 2rem;border-bottom:1px solid var(--rule)}
+h1{font:600 1.25rem var(--ui);margin:0 1rem 0 0;letter-spacing:-.01em}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:none;font:inherit;color:var(--quiet);padding:.3rem .7rem;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--probe);color:var(--sheet)}
+.seg button:disabled{opacity:.35;cursor:default}
+label{color:var(--quiet);display:inline-flex;gap:.45rem;align-items:center}
+input[type=range]{width:74px;accent-color:var(--probe)}
+.read{margin-left:auto;display:flex;gap:1.6rem}
+.read div{color:var(--quiet);font-size:.78rem}
+.read b{display:block;color:var(--ink);font-size:1.35rem;font-weight:600;line-height:1.1}
+:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
+.legend{display:flex;gap:.8rem;align-items:center;padding:.55rem 2rem;color:var(--quiet);font-size:.8rem}
+.ramp{width:190px;height:9px;border-radius:5px}
+main{display:flex;justify-content:center;padding:2rem 1rem 12rem}
+.sheet{position:relative;width:min(760px,100%);background:var(--sheet);border:1px solid var(--rule);border-radius:3px;
+  box-shadow:0 18px 40px -28px #16212A55;padding:3rem 3.4rem 5rem}
+.pad{position:relative}
+#bd,#ed{font:var(--doc);white-space:pre-wrap;overflow-wrap:break-word;margin:0;padding:0;letter-spacing:0}
+#bd{min-height:180px}
+#bd .w{border-radius:3px;transition:background-color .2s}
+#bd .s{border-bottom:3px solid transparent;padding-bottom:2px}
+.sk i{display:inline-block;width:26px;border-bottom:3px solid rgb(233,128,58);margin-right:.4rem;vertical-align:middle}
+#tip .st:not(:first-child){margin-top:.4rem;padding-top:.35rem;border-top:1px solid #ffffff30}
+#ed{position:absolute;inset:0;width:100%;height:100%;border:0;resize:none;outline:0;background:none;color:transparent;
+  caret-color:var(--probe);overflow:hidden}
+#ed::selection{background:#1C5D8C2a}
+#lens{position:absolute;inset:0;pointer-events:none;z-index:2}
+#lens svg{position:absolute;left:0;top:0;overflow:visible}
+.panel{position:absolute;background:var(--sheet);border:1px solid var(--rule);border-radius:6px;box-shadow:0 16px 34px -18px #16212A66}
+.n{position:absolute;font:var(--doc);line-height:28px;height:30px;padding:0 6px;border-radius:4px;white-space:nowrap;
+  pointer-events:auto;cursor:pointer;border:1px solid transparent}
+.n:hover{border-color:var(--probe);background:var(--sheet)}
+.n.act{color:transparent;border:1.5px solid var(--probe);cursor:default;background:none;padding:0 1.5px}
+.n.act.off{color:var(--probe);background:var(--sheet)}
+.n.tuned i{background:#D0661F;color:#fff}
+.n i{position:absolute;left:-2px;top:-9px;font:600 10px/12px var(--ui);color:var(--probe);background:var(--sheet);padding:0 3px;border-radius:3px;font-style:normal}
+.n.act i{color:var(--sheet);background:var(--probe)}
+.gap{position:absolute;font:600 16px var(--ui);color:var(--quiet)}
+.cap{position:absolute;font-size:.75rem;color:var(--quiet);white-space:nowrap}
+#tip{position:fixed;z-index:9;pointer-events:none;display:none;background:var(--ink);color:var(--sheet);border-radius:6px;
+  padding:.6rem .75rem;font-size:.8rem;line-height:1.45;max-width:320px;transform:translate(-50%,calc(-100% - 14px))}
+#tip b{font:600 1rem Literata,serif}
+#tip .t{display:inline-block;margin:.3rem .25rem 0 0;padding:0 .35rem;border:1px solid #ffffff40;border-radius:4px;white-space:pre}
+.deco{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;align-items:center;padding:.6rem 2rem;border-bottom:1px solid var(--rule)}
+select,.deco button{font:inherit;color:var(--ink);background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:.28rem .5rem}
+.deco button{background:var(--probe);border-color:var(--probe);color:var(--sheet);cursor:pointer}
+#dx{color:var(--quiet);font-size:.8rem;flex:1 1 260px}
+.key{display:inline-block;width:14px;height:10px;margin-right:.3rem;vertical-align:-1px;border-radius:2px}
+.n.cut{text-decoration:line-through 1.5px #D0661F}
+.n.act.tuned i{background:#D0661F}
+.n.picked{outline:2.5px solid #E9803A;outline-offset:1px}
+.strip{position:absolute;display:flex;gap:4px;align-items:flex-end;white-space:nowrap;pointer-events:auto}
+.strip em{font-style:normal;font-size:.75rem;color:var(--quiet);margin-right:4px}
+.strip span{position:relative;font:17px/26px Literata,serif;padding:0 5px;border-radius:4px;border:1px solid #E9803A;white-space:pre}
+.strip span i{position:absolute;left:-2px;top:-11px;font:600 10px/12px var(--ui);color:#fff;background:#E9803A;padding:0 3px;border-radius:3px;font-style:normal}
+#hint{position:absolute;left:3.4rem;bottom:1.6rem;color:var(--quiet);font-size:.8rem}
+.dark{--paper:#111;--sheet:#1B1B1B;--ink:#EEE;--quiet:#9BA3A6;--rule:#333;--probe:#FFC904}
+.deck{--paper:transparent}.deck :is(h1,#src,#dx,#hint,.legend>span:last-child){display:none}
+.deck :is(header,.deco,.legend){padding:.35rem 1rem;border:0}.deck main{padding:0}.deck .sheet{width:100%;background:none;border:0;box-shadow:none;padding:1rem}
+@media (prefers-reduced-motion:reduce){#bd .w{transition:none}}
+@media (max-width:720px){#hint{left:1.2rem}header,.legend{padding-inline:1rem}.sheet{padding:1.6rem 1.2rem 4rem}.read{margin-left:0}}
+</style>
+<header>
+  <h1>Perplexiscope</h1>
+  <div class="seg" id="src"><button aria-pressed="true" data-v="type">Typing</button><button data-v="watch" disabled title="Start the server with --watch FILE">Watched file</button></div>
+  <label>Color by <span class="seg" id="mode"><button aria-pressed="true" data-v="bits">Surprise</button><button data-v="rank">Rank</button><button data-v="ent">Uncertainty</button><button data-v="ai">AI-likeness</button></span></label>
+  <label>Branches <input id="k" type="range" min="2" max="5" value="3"><span id="kv">3</span></label>
+  <label>Depth <input id="d" type="range" min="1" max="5" value="3"><span id="dv">3</span></label>
+  <div class="read"><div>Perplexity<b id="ppl">–</b></div><div>Bits per token<b id="bpt">–</b></div><div title="How AI-like the whole text reads: a probability once this model is calibrated, otherwise Fast-DetectGPT's z">AI-likeness<b id="aiv">–</b></div><div>Model<b id="mdl">connecting</b></div></div>
+</header>
+<div class="deco">
+  <label>Decoding <select id="m"><option value="none">Plain sampling</option><option value="topk">Top-k</option><option value="topp">Top-p (nucleus)</option>
+    <option value="minp">Min-p</option><option value="typical">Typical</option><option value="eta">η-sampling</option><option value="nsigma">Top-nσ</option><option value="mirostat">Mirostat</option></select></label>
+  <label id="al"><span id="an"></span><input id="a" type="range"><span id="av"></span></label>
+  <label>Temperature <input id="T" type="range" min="0.1" max="2" step="0.05" value="1"><span id="Tv">1.00</span></label>
+  <button id="go">Sample a continuation</button>
+  <span id="dx"></span>
+</div>
+<div class="legend"><span id="lo"></span><div class="ramp" id="ramp"></div><span id="hi"></span><span class="sk"><i></i>Underline: sentence average</span><span style="margin-left:auto">Hover a word for its numbers. Put the caret on a word to see what the model expected there.</span></div>
+<main><div class="sheet"><div class="pad"><pre id="bd"></pre><textarea id="ed" spellcheck="false" aria-label="Document">The transformer is a neural network built entirely on attention. Each token looks back at every earlier token, and the model assigns a probability to whatever comes next.</textarea><div id="lens"></div></div><div id="hint">Esc closes the tree. Click a faded branch to rewrite the text that way.</div></div></main>
+<div id="tip"></div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id), sheet=document.querySelector(".sheet"), ed=$("ed"), bd=$("bd"), lens=$("lens"), tip=$("tip");
+const DEC={none:[,,,,,"Draws from the model's probabilities as they are. Temperature below 1 sharpens them, above 1 flattens them."],
+  topk:["k",1,50,1,10,"Keeps the k most likely tokens and redistributes their probability.","Top-k"],
+  topp:["p",.05,1,.01,.9,"Keeps the fewest most likely tokens whose probabilities add up to p.","Top-p"],
+  minp:["min-p",.01,.5,.01,.1,"Keeps every token at least min-p times as likely as the top token.","Min-p"],
+  typical:["mass",.05,1,.01,.9,"Keeps tokens whose surprise is closest to the average surprise, until they cover the mass.","Typical"],
+  eta:["η ×10⁻⁴",1,40,1,9,"Drops tokens under a floor that rises as the model grows more certain.","η-sampling"],
+  nsigma:["n",.2,4,.1,1,"Keeps tokens whose score is within n standard deviations of the best one.","Top-nσ"],
+  mirostat:["target bits",1,10,.5,5,"Keeps tokens under a surprise ceiling, then steers the ceiling toward the target as it writes. The tree shows the starting ceiling, twice the target.","Mirostat"]};
+const aval=()=>S.m=="eta"?S.a*1e-4:S.a;
+const S={m:"none",a:0,T:1,seq:0,words:[],sents:[],wtext:"",tree:null,mode:"bits",k:3,d:3,src:"type",watched:null,ws:null};
+const RAMP=[[242,193,78],[233,128,58],[194,45,86]];
+const mix=t=>{const u=Math.min(1.999,t*2),i=u|0,f=u-i;return RAMP[i].map((v,j)=>Math.round(v+(RAMP[i+1][j]-v)*f))};
+const COLOR={ // surprise is ink: expected words stay unmarked
+  bits:w=>{const t=Math.min(1,w.bits/16);return t<.12?"":`rgba(${mix(t)},${(.72*t**1.6).toFixed(2)})`},
+  rank:w=>w.rank<=10?"":w.rank<=100?`rgba(${RAMP[0]},.5)`:w.rank<=1000?`rgba(${RAMP[1]},.55)`:`rgba(${RAMP[2]},.6)`,
+  ent:w=>`rgba(28,93,140,${Math.min(.6,w.ent/12*.6).toFixed(2)})`,
+  ai:(w,z)=>{if(!z)return"";const t=lean(z);return Math.abs(t)<.1?"":`rgba(${t>0?"123,79,214":"42,157,143"},${(.55*Math.abs(t)**1.3).toFixed(2)})`}};
+const lean=a=>"p"in a?2*a.p-1:Math.max(-1,Math.min(1,a.z/4)); // a sentence: -1 reads human, +1 reads AI
+const aitxt=a=>"p"in a?`${pct(a.p)} likely AI`:`z ${a.z>=0?"+":"−"}${Math.abs(a.z).toFixed(1)}`;
+const SENT=z=>{const t=Math.min(1,z.bits/z.w/16);return t<.12?"transparent":`rgb(${mix(t)})`}; // same scale as a word
+const LEG={bits:["Expected","Surprising (16+ bits)",`linear-gradient(90deg,transparent,rgba(${RAMP[0]},.4),rgba(${RAMP[1]},.55),rgba(${RAMP[2]},.75))`],
+  rank:["Top 10","Top 100 / 1000 / beyond",`linear-gradient(90deg,transparent 25%,rgba(${RAMP[0]},.5) 25% 50%,rgba(${RAMP[1]},.55) 50% 75%,rgba(${RAMP[2]},.6) 75%)`],
+  ent:["Model was sure","Model was unsure (12 bits)","linear-gradient(90deg,transparent,rgba(28,93,140,.6))"],
+  ai:["Reads human","Reads AI (per sentence)","linear-gradient(90deg,rgba(42,157,143,.55),transparent 40% 60%,rgba(123,79,214,.55))"]};
+const pct=p=>p>=.1?(p*100).toFixed(0)+"%":p>=.01?(p*100).toFixed(1)+"%":p>=1e-4?(p*100).toFixed(2)+"%":"<0.01%";
+
+/* ---------- transport ---------- */
+function connect(){
+  const ws=S.ws=new WebSocket(location.origin.replace(/^http/,"ws")+"/ws");
+  ws.onopen=()=>send(0,false); ws.onclose=()=>{$("mdl").textContent="reconnecting";setTimeout(connect,800)};
+  ws.onmessage=e=>{const m=JSON.parse(e.data);
+    if(m.type=="hello"){$("mdl").textContent=m.model.split("/").pop();if(m.watching){S.watched=m.watching;$("src").children[1].disabled=false}}
+    else if(m.type=="doc"){S.doctext=m.text;if(S.src=="watch"){setText(m.text);send(0,!!S.tree)}}
+    else if(m.seq!==S.seq)return;
+    else if(m.type=="heat"){S.words=m.words;S.sents=m.sents;S.wtext=S.sent;render();$("ppl").textContent=m.ppl.toFixed(1);$("bpt").textContent=m.bpt.toFixed(2);$("aiv").textContent=!m.ntok?"–":"p"in m.ai?pct(m.ai.p):aitxt(m.ai)}
+    else if(m.type=="tree"){S.tree=m;S.sample=null;drawTree()}
+    else if(m.type=="sample"){S.sample=m.tokens;drawTree()}};
+}
+let timer;
+function send(delay,caret=true){clearTimeout(timer);timer=setTimeout(()=>{if(S.ws?.readyState!==1)return;
+  S.sent=ed.value;S.req={seq:++S.seq,text:ed.value,cursor:caret?ed.selectionStart:null,k:S.k,depth:S.d,m:S.m,a:aval(),T:S.T};if(caret)S.creq=S.req;S.ws.send(JSON.stringify(S.req))},delay)}
+
+/* ---------- page ---------- */
+function setText(t){ed.value=t;render();fit()}
+function fit(){ed.style.height="auto";bd.style.minHeight=ed.scrollHeight+"px";ed.style.height="100%"}
+function render(){ // words keep their color up to the first edited character while a fresh score is on its way
+  const t=ed.value;let l=0;while(l<t.length&&t[l]===S.wtext[l])l++;
+  const f=document.createDocumentFragment();let at=0,box=f,k=0;
+  for(const w of S.words){if(w.e>l)break;const z=S.sents[k];
+    if(z&&w.s===z.s){f.append(t.slice(at,w.s));at=w.s;box=document.createElement("span");box.className="s";
+      box.style.borderBottomColor=SENT(z);box.z=z;f.append(box)} // the underline spans whole words, never the gap between sentences
+    box.append(t.slice(at,w.s));const s=document.createElement("span");s.className="w";s.textContent=t.slice(w.s,w.e);
+    s.style.backgroundColor=COLOR[S.mode](w,box.z);s.w=w;box.append(s);at=w.e;
+    if(z&&w.e===z.e){box=f;k++}}
+  f.append(t.slice(at)+"\u200b");bd.replaceChildren(f);
+}
+function loc(i,end){const it=document.createTreeWalker(bd,NodeFilter.SHOW_TEXT);let n,p=0,last;
+  while(n=it.nextNode()){last=n;if(end?p+n.length>=i:p+n.length>i)return[n,i-p];p+=n.length}return[last,last.length-1]}
+function box(s,e){const r=document.createRange(),o=bd.getBoundingClientRect();r.setStart(...loc(s));r.setEnd(...loc(Math.max(s,e),1));
+  const b=r.getClientRects()[0]||r.getBoundingClientRect();return{x:b.left-o.left,y:b.top-o.top,w:e>s?b.width:0,h:b.height||24}}
+
+/* ---------- the tree ---------- */
+const meas=document.createElement("canvas").getContext("2d");
+function drawTree(){
+  lens.replaceChildren();const T=S.tree;if(!T||T.nodes.length<2||ed.value!==S.wtext)return;
+  const LH=36,ROW=34,GAP=18,ns=new Map(T.nodes.map(n=>[n.id,{...n,kids:[]}]));
+  for(const n of ns.values())if(n.parent!=null)ns.get(n.parent).kids.push(n);
+  let row=0;const rows=n=>{n.kids.sort((a,b)=>b.actual-a.actual||b.p-a.p);n.kids.forEach(rows);n.row=n.kids.length?n.kids[0].row:row++};
+  const root=ns.get(0);rows(root);
+  const A=T.actual.map(([s,e])=>box(s,e)),c=A[0]||box(T.at,T.at),line=c.y+c.h/2-15,below=line+15+LH/2+8;
+  meas.font=getComputedStyle(bd).font;
+  const ax={},r0=root.kids[0]?.actual?1:0;let prev=null,off=false;
+  for(let n=root.kids[0],d=0;n&&n.actual;n=n.kids[0],d++){ // the true continuation rides on the page
+    off=off||!A[d]||Math.abs(A[d].y-c.y)>4;
+    n.w=off?meas.measureText(n.word).width+6:A[d].w+6;n.x=off?prev.x+prev.w+GAP:A[d].x-3;
+    n.gap=off&&!prev.off;n.off=off;n.y=line;ax[n.depth]=n.x;prev=n}
+  root.x=c.x-3;root.w=0;root.y=line;
+  const all=[...ns.values()].filter(n=>n!==root),alt=all.filter(n=>!n.actual),X=[root.x],W=[0],FAN=44;
+  for(const n of alt){n.w=meas.measureText((n.nl?"↵ ":"")+n.word).width+12;n.y=below+(n.row-r0)*ROW}
+  for(const n of all)W[n.depth]=Math.max(W[n.depth]||0,n.w);
+  for(let d=1;d<W.length;d++)X[d]=Math.max(ax[d]??0,X[d-1]+W[d-1]+FAN);
+  for(const n of alt)n.x=X[n.depth];
+  const cap=document.createElement("div");cap.className="cap";
+  if(alt.length){const P=document.createElement("div");P.className="panel";
+    const x0=Math.min(...alt.map(n=>n.x))-12,x1=Math.max(...alt.map(n=>n.x+n.w))+12,y1=Math.max(...alt.map(n=>n.y))+ROW+6;
+    Object.assign(P.style,{left:x0+"px",top:below-8+"px",width:x1-x0+"px",height:y1-below+8+"px"});lens.append(P);
+    Object.assign(cap.style,{left:x0+"px",top:y1+4+"px"});lens.append(cap)}
+  const NS="http://www.w3.org/2000/svg",svg=document.createElementNS(NS,"svg");lens.append(svg);
+  const tuned=S.m!="none"||S.T!=1,op=v=>(.35+.65*Math.sqrt(v)).toFixed(2); // wider, bolder = likelier
+  for(const n of all){const p=ns.get(n.parent),mx=p===root?p.x:p.x+p.w,my=p.y+15,cy=n.y+15,h=Math.max(10,(n.x-mx)/2),e=document.createElementNS(NS,"path");
+    const q=n.q=T.sampler.chance[n.id]??0,v=tuned?q:n.p;
+    e.setAttribute("d",n.y===p.y?`M${mx} ${my}H${n.x}`:`M${mx} ${my}C${mx+h} ${my} ${n.x-h} ${cy} ${n.x} ${cy}`);
+    Object.assign(e.style,{fill:"none",stroke:n.actual?"var(--probe)":"var(--ink)",strokeWidth:1+14*v,strokeOpacity:n.actual?.8:op(v)*.5,strokeLinecap:"round"});
+    if(n.gap)e.style.strokeDasharray="3 4";svg.append(e);
+    if(n.gap){const g=document.createElement("div");g.className="gap";g.textContent="…";Object.assign(g.style,{left:n.x-14+"px",top:n.y-2+"px"});lens.append(g)}
+    const el=document.createElement("div");el.className="n"+(n.actual?" act":"")+(n.off?" off":"");
+    el.textContent=(n.nl?"↵ ":"")+n.word;el.style.cssText=`left:${n.x}px;top:${n.y}px;opacity:${n.actual?1:tuned&&!q?.15:op(v)}`;
+    const b=document.createElement("i");b.textContent=tuned?(q?pct(q):"never"):pct(n.p);el.append(b);
+    if(tuned)el.classList.add("tuned",...q?[]:["cut"]);
+    el.onmouseenter=()=>keep(n);el.onmouseleave=()=>keep(root);
+    el.title=`${n.word}: the model gives it ${pct(n.p)} after the words before it (${pct(n.cum)} for the whole branch). The sampler writes it ${pct(q)} of the time.`;n.el=el;
+    if(!n.actual&&S.src=="type")el.onclick=()=>take(n,ns);lens.append(el)}
+  function keep(p){cap.textContent=(p===root?`Uncertainty here: ${T.ent.toFixed(1)} bits`:`After “${p.word}”`)+
+    (S.m=="none"||!p.kids.length?"":` · ${DEC[S.m][6]} keeps ${T.sampler.kept[p.id].toLocaleString()} ways to start the next word`)}
+  keep(root);
+  if(S.sample){ // the sampled path: its tokens, and the tree branch it followed
+    let at=root,word="";const ws=[];for(const t of S.sample){if(/^\s/.test(t.t)&&word.trim()){ws.push(word);word=""}word+=t.t}ws.push(word);
+    for(const w of ws){at=at.kids.find(c=>c.word===w.trim());if(!at)break;at.el.classList.add("picked")}
+    const st=document.createElement("div");st.className="strip";st.innerHTML="<em>Sampled</em>";
+    for(const t of S.sample){const c=document.createElement("span");c.textContent=t.t.replace(/\n/g,"↵");
+      const i=document.createElement("i");i.textContent=pct(t.q);c.append(i);c.title=`model ${pct(t.p)}, sampler ${pct(t.q)}`;st.append(c)}
+    const yb=Math.max(line+40,...all.map(n=>n.y))+ROW+34;Object.assign(st.style,{left:c.x+"px",top:yb+"px"});lens.append(st)}
+  sheet.style.minHeight=Math.max(...all.map(n=>n.y))+ROW+220+"px"; // the page grows to hold the tree
+}
+function take(n,ns){ // rewrite the page along this branch
+  const path=[];for(let a=n;a.id;a=ns.get(a.parent))path.unshift((a.nl?"\n":"")+a.word);
+  const A=S.tree.actual,s=S.tree.at,e=A.length?A[Math.min(path.length,A.length)-1][1]:s,t=ed.value;
+  ed.value=t.slice(0,s)+path.join(" ").replace(/ \n/g,"\n")+t.slice(e);ed.setSelectionRange(s,s);ed.focus();onInput()}
+
+/* ---------- tooltip ---------- */
+bd.parentElement.addEventListener("mousemove",ev=>{
+  ed.style.pointerEvents="none";const u=document.elementFromPoint(ev.clientX,ev.clientY);ed.style.pointerEvents="";
+  const w=u?.w,z=u?.closest(".s")?.z;if(!w&&!z){tip.style.display="none";return}
+  tip.replaceChildren();if(w){const p=2**-w.bits;tip.innerHTML=`<b></b> ${w.bits.toFixed(1)} bits<br>p = ${pct(p)}, about 1 in ${Math.round(1/p).toLocaleString()}<br>Rank of its first piece: ${w.rank.toLocaleString()}<br>Uncertainty before it: ${w.ent.toFixed(1)} bits<br>`;
+  tip.firstChild.textContent=u.textContent;
+  for(const[s,b]of w.toks){const c=document.createElement("span");c.className="t";c.textContent=`${s.replace(/\n/g,"↵")} ${b.toFixed(1)}`;tip.append(c)}}
+  if(z){const m=z.bits/z.n,d=document.createElement("div");d.className="st";
+    d.textContent=`Sentence: perplexity ${(2**m).toFixed(1)} (${m.toFixed(2)} bits per token), ${(z.bits/z.w).toFixed(1)} bits per word. AI-likeness: ${aitxt(z)}`;tip.append(d)}
+  Object.assign(tip.style,{display:"block",left:ev.clientX+"px",top:ev.clientY+"px"})});
+bd.parentElement.addEventListener("mouseleave",()=>tip.style.display="none");
+
+/* ---------- controls ---------- */
+function onInput(){lens.replaceChildren();render();fit();send(140)}
+ed.addEventListener("input",onInput);
+const caret=()=>{lens.replaceChildren();send(60)};
+ed.addEventListener("click",caret);
+ed.addEventListener("keyup",e=>{if(e.key.startsWith("Arrow")||e.key=="Home"||e.key=="End")caret()});
+addEventListener("keydown",e=>{if(e.key=="Escape"){S.tree=null;lens.replaceChildren()}});
+addEventListener("resize",()=>{fit();drawTree()});
+const seg=(id,f)=>$(id).onclick=e=>{const b=e.target.closest("button");if(!b||b.disabled)return;
+  for(const x of $(id).children)x.setAttribute("aria-pressed",x===b);f(b.dataset.v)};
+seg("mode",v=>{S.mode=v;const[l,h,g]=LEG[v];$("lo").textContent=l;$("hi").textContent=h;$("ramp").style.background=g;render()});
+seg("src",v=>{S.src=v;ed.readOnly=v=="watch";if(v=="watch"&&S.doctext!=null){setText(S.doctext);send(0,false)}});
+for(const[id,key]of[["k","k"],["d","d"]])$(id).oninput=e=>{S[key]=+e.target.value;$(id+"v").textContent=S[key];send(120)};
+function dec(){const[n,lo,hi,st,v,x]=DEC[S.m];$("al").style.display=n?"":"none";$("dx").textContent=x;
+  if(n){Object.assign($("a"),{min:lo,max:hi,step:st,value:v});$("an").textContent=n;S.a=v;$("av").textContent=v}}
+$("m").onchange=e=>{S.m=e.target.value;dec();send(0,!!S.tree)};
+$("a").oninput=e=>{S.a=+e.target.value;$("av").textContent=S.a;send(80,!!S.tree)};
+$("T").oninput=e=>{S.T=+e.target.value;$("Tv").textContent=S.T.toFixed(2);send(80,!!S.tree)};
+$("go").onclick=()=>{if(!S.tree||S.ws?.readyState!==1)return;S.ws.send(JSON.stringify({...S.creq,type:"sample",m:S.m,a:aval(),T:S.T}))};
+addEventListener("keydown",e=>/^Page/.test(e.key)&&parent.postMessage(JSON.stringify({method:e.key<"PageE"?"next":"prev"}),"*"));
+const U=new URLSearchParams(location.search);ed.value=U.get("text")||ed.value;
+if(U.has("deck")){document.documentElement.className="deck "+U.get("deck");$("d").value=$("dv").textContent=S.d=2}
+dec();$("mode").children[0].click();fit();connect();
+</script>
+</html>

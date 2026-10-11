@@ -22,13 +22,18 @@ export TYDIG_DATA := home / "data"
 export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
+# TYDIG_SCOPE=1: the surprise overlay for every member, from the scope
+# container (a CPU language model, ~2 GB of image); the hub finds it there.
+export TYDIG_SCOPE := env_var_or_default("TYDIG_SCOPE", "")
+export TYDIG_PERPLEXISCOPE := if TYDIG_SCOPE == "" { env_var_or_default("TYDIG_PERPLEXISCOPE", "") } else { "http://scope:8000" }
+prof := if TYDIG_SCOPE == "" { "" } else { "--profile scope" }
 
 # Do everything: build both images, start the server, wait for it, open sesame.
 # This is what plain `just` runs.
 default: serve
 
 # Build both images, start the server, wait for it, print the URL.
-serve: preflight account sandbox image up
+serve: preflight account sandbox image scope up
     #!/usr/bin/env bash
     set -uo pipefail
     printf 'waiting for the server'
@@ -103,11 +108,13 @@ account:
         echo "note: no systemd, so $u's podman lasts until a reboot (then: just)"
         sudo install -d -o "$u" -m 700 /run/user/$uid
         printf '[engine]\ncgroup_manager="cgroupfs"\nevents_logger="file"\n' |
-            sudo -u "$u" sh -c "mkdir -p '$h/.config/containers' && cat > '$h/.config/containers/containers.conf'"
+            sudo -u "$u" sh -c "mkdir -p '$h/.config/containers/containers.conf.d' && cat > '$h/.config/containers/containers.conf.d/tydig.conf'"
     fi
-    if [ ! -S $sock ]; then
+    # a socket that is there but answers nothing (a crash, a killed service) counts as none
+    up() { {{as}} podman --remote --url unix://$sock version >/dev/null 2>&1; }
+    if ! up; then
         {{as}} sh -c 'nohup podman system service --time=0 >/dev/null 2>&1 &'
-        for i in $(seq 20); do [ -S $sock ] && break; sleep 0.5; done
+        for i in $(seq 20); do up && break; sleep 0.5; done
     fi
     {{as}} podman info >/dev/null 2>&1 || { echo "podman does not work for $u (try: {{as}} podman info)"
         [ -e /etc/NIXOS ] && printf '\nOn NixOS, declare the account in configuration.nix:\n\n%s\n' "$nix"; exit 1; }
@@ -177,6 +184,7 @@ help:
     @echo "Pieces, one at a time:"
     @echo "  just sandbox        build the recipe sandbox image (typst/just/make/python)"
     @echo "  just image          build the app server image"
+    @echo "  just scope          build the surprise engine's image (TYDIG_SCOPE=1)"
     @echo "  just up             start the server (assumes images exist)"
     @echo "  just paper P [T]    run a project's make targets with no app:"
     @echo "                        just paper my-project all"
@@ -199,6 +207,10 @@ help:
 sandbox:
     {{as}} podman build -t tydig-build -f sandbox/Containerfile .
 
+# The surprise engine's image (TYDIG_SCOPE=1; TYDIG_SCOPE_MODEL, default gpt2).
+scope:
+    {{ if TYDIG_SCOPE == "" { "true" } else { as + " podman build -t tydig-scope --build-arg MODEL=" + env_var_or_default("TYDIG_SCOPE_MODEL", "gpt2") + " -f scope/Containerfile scope" } }}
+
 # The app server image (client build + Node runtime).
 image:
     {{as}} podman build --format docker -t tydig -f Containerfile.server .
@@ -209,10 +221,10 @@ image:
 # you debug code that isn't deployed.
 up: account
     {{as}} mkdir -p "{{TYDIG_DATA}}"
-    TYDIG_PODMAN_SOCK=${TYDIG_PODMAN_SOCK:-/run/user/$(id -u)/podman/podman.sock} {{as}} podman compose up -d --force-recreate
+    TYDIG_PODMAN_SOCK=${TYDIG_PODMAN_SOCK:-/run/user/$(id -u)/podman/podman.sock} {{as}} podman compose {{prof}} up -d --force-recreate
 
 down:
-    {{as}} podman compose down
+    {{as}} podman compose {{prof}} down
 
 restart: down up
 
