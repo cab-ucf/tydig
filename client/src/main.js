@@ -295,17 +295,20 @@ const ghostPlugin = ViewPlugin.fromClass(class {
     // fill-in-the-middle where the model can; otherwise raw, so a chat model
     // continues the text rather than answering it; thinking models not to think
     const gen = async fim => {
-      const r = await fetch(`${url}/api/generate`, { method: 'POST', body: JSON.stringify({
-        model, prompt: doc.sliceString(Math.max(0, head - 2000), head), ...fim ? { suffix: doc.sliceString(head, head + 800) } : { raw: true },
-        think: false, stream: false, keep_alive: '30m', options: { temperature: 0.2, num_predict: 40, stop: ['\n'] } }) })
+      const prompt = doc.sliceString(Math.max(0, head - 2000), head), suffix = fim ? doc.sliceString(head, head + 800) : undefined
+      const r = settings.ghost.hub // the hub's model, which sets the rest itself
+        ? await fetch(`/api/p/${projName}/ghost`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, suffix }) })
+        : await fetch(`${url}/api/generate`, { method: 'POST', body: JSON.stringify({ model, prompt, ...fim ? { suffix } : { raw: true },
+          think: false, stream: false, keep_alive: '30m', options: { temperature: 0.2, num_predict: 40, stop: ['\n'] } }) })
       return { ok: r.ok, status: r.status, ...await r.json().catch(() => ({})) }
     }
-    let r = await gen(!noFim.has(model)).catch(() => ({ status: 0 }))
-    if (r.status === 400 && /insert|suffix/i.test(r.error)) { noFim.add(model); r = await gen(false).catch(() => ({ status: 0 })) }
+    let r = await gen(!noFim.has(model ?? 'hub')).catch(() => ({ status: 0 }))
+    if (r.status === 400 && /insert|suffix/i.test(r.error)) { noFim.add(model ?? 'hub'); r = await gen(false).catch(() => ({ status: 0 })) }
     this.busy = false
     if (v.state.field(ghostField, false)?.wait) v.dispatch({ effects: setGhost.of(null) })
     // Ollama refusing this page's origin looks, from here, like no Ollama at all
-    if (!r.ok) return ghostSay(r.status ? `Ollama: ${esc(r.error || `error ${r.status}`)}` : `No answer from Ollama at ${esc(url)}.
+    if (!r.ok) return r.status === 409 ? null : ghostSay(r.status ? `${settings.ghost.hub ? 'The hub\'s model' : 'Ollama'}: ${esc(r.error || `error ${r.status}`)}` :
+      settings.ghost.hub ? 'The hub did not answer for ghost text.' : `No answer from Ollama at ${esc(url)}.
       If it is running, it refuses this page: set <code>OLLAMA_ORIGINS=${location.origin}</code> in Ollama's own
       environment (Linux service: <code>systemctl edit ollama</code>, add
       <code>Environment="OLLAMA_ORIGINS=${location.origin}"</code>; Mac: <code>launchctl setenv OLLAMA_ORIGINS
@@ -325,11 +328,15 @@ const ghostPlugin = ViewPlugin.fromClass(class {
 const noFim = new Set(), said = new Set()
 const ghostSay = m => said.has(m) || (said.add(m), toast(m, false, 15000))
 // Surprise and AI-likeness, from a Perplexiscope engine on this machine
+// the models this hub serves its members, if any (TYDIG_OLLAMA, TYDIG_PERPLEXISCOPE)
+const assist = await api('/assist').catch(() => ({}))
 const scope = surprise({
-  url: () => settings.scope?.url, by: () => settings.scope?.by, typst: () => !!currentPath?.endsWith('.typ'),
+  url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api/p/${projName}/surprise`,
+  by: () => settings.scope?.by, typst: () => !!currentPath?.endsWith('.typ'),
   report: r => { const b = $('scope'); b.hidden = !settings.scope
-    b.textContent = r.error ? 'surprise: no engine' : `ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
-    b.title = r.error ? `No Perplexiscope engine at ${r.error}: start it there (just, in its folder)` :
+    if (r.error === 'replaced by a newer ask') return
+    b.textContent = r.error ? 'surprise: unavailable' : `ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
+    b.title = r.error ? r.error :
       `perplexity of this file's prose ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token); AI-likeness of the whole: ${aiText(r.ai)}. Hover a word or sentence.` },
 })
 const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
@@ -1444,6 +1451,7 @@ const actions = {
   build: () => openSidebar('build'),
   review: () => openSidebar('review'),
   ghost: () => {
+    if (assist.ghost) { settings.ghost = settings.ghost ? null : { hub: true }; return applyLayout() }
     const model = prompt('Ghost suggestions from a model on your own computer, through Ollama (ollama.com). ' +
       'Model to use (e.g. qwen2.5-coder:1.5b), or empty to turn them off. Ollama must allow this page: ' +
       `OLLAMA_ORIGINS=${location.origin}`, settings.ghost?.model || 'qwen2.5-coder:1.5b')
@@ -1452,6 +1460,7 @@ const actions = {
     applyLayout()
   },
   scope: () => {
+    if (assist.surprise) { settings.scope = settings.scope ? null : { hub: true, by: 'bits' }; applyLayout(); return scope.refresh() }
     const url = prompt('Show how surprising each word is to a language model, and how AI-like each sentence reads, from a ' +
       'Perplexiscope engine on your computer (run `just` in its folder). Its address, or empty to turn this off:', settings.scope?.url || 'http://localhost:8000')
     if (url == null) return

@@ -51,19 +51,24 @@ const scopeField = StateField.define({
   provide: f => EditorView.decorations.from(f),
 })
 
-// opts: { url: () => the engine's address or null, by: () => 'bits' | 'ai', typst: () => is this a .typ,
+// opts: { url: () => an engine's address on this machine, or null; hub: () => the hub's route, or null, by: () => 'bits' | 'ai', typst: () => is this a .typ,
 //         report: ({ ppl, ai } | { error }) => void }
 export function surprise(opts) {
   let ws, seq = 0, sent = null, view
   const ask = () => {
-    const url = opts.url()
-    if (!url || !view) return
+    const url = opts.url(), hub = opts.hub()
+    if (!(url || hub) || !view) return
     const p = prose(view.state.doc.toString(), opts.typst())
+    if (hub) { // the hub's own engine: the newest ask wins there too
+      const n = ++seq; sent = p
+      return fetch(hub, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: p.text }).then(r => r.json())
+        .then(h => n === seq && (h.error ? opts.report({ error: h.error }) : show(h)), e => opts.report({ error: e.message }))
+    }
     if (ws?.readyState !== 1) {
       if (ws?.readyState === 0) return
       ws = new WebSocket(url.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws')
       ws.onopen = ask
-      ws.onerror = () => opts.report({ error: url })
+      ws.onerror = () => opts.report({ error: `no Perplexiscope engine at ${url}: start it there (just, in its folder)` })
       ws.onmessage = e => { const m = JSON.parse(e.data); if (m.type === 'heat' && m.seq === seq) show(m) }
       return
     }
@@ -99,6 +104,6 @@ export function surprise(opts) {
       return { dom }
     } }
   })
-  const refresh = () => { if (!opts.url()) view?.dispatch({ effects: setScope.of(Decoration.none) }); else ask() }
+  const refresh = () => { if (!opts.url() && !opts.hub()) view?.dispatch({ effects: setScope.of(Decoration.none) }); else ask() }
   return { extension: [scopeField, plugin, hover], refresh }
 }

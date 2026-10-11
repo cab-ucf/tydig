@@ -36,6 +36,14 @@ services:
       # rate limits key on (1 for one proxy), or 'loopback' / its address.
       TYDIG_TRUST_PROXY: "${TYDIG_TRUST_PROXY:-}"
       TYDIG_MAX_BUILDS: "${TYDIG_MAX_BUILDS:-2}"
+      # Models this hub serves its members (a toggle for them, nothing to
+      # install): ghost text from Ollama, the surprise overlay from a
+      # Perplexiscope engine, on the host (listening beyond 127.0.0.1):
+      #   TYDIG_OLLAMA=http://host.containers.internal:11434 TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b
+      #   TYDIG_PERPLEXISCOPE=http://host.containers.internal:8000
+      TYDIG_OLLAMA: "${TYDIG_OLLAMA:-}"
+      TYDIG_GHOST_MODEL: "${TYDIG_GHOST_MODEL:-}"
+      TYDIG_PERPLEXISCOPE: "${TYDIG_PERPLEXISCOPE:-}"
       TYDIG_SANDBOX: sandbox:7000
       # The link collaborators open (`just link`): tydig's static site plus a
       # seed this hub keeps in data/. Reached over iroh, so no domain or open

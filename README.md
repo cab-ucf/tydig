@@ -195,6 +195,26 @@ An agent can also work like any collaborator, on its own copy:
 
 Where an agent and a person change the same lines, the person's text wins.
 
+**Served by the hub.** Put the models on the hub's machine and every member
+gets ghost text and the surprise overlay as a toggle, through the link too,
+with nothing to install. In `.env`:
+
+```sh
+TYDIG_OLLAMA=http://host.containers.internal:11434
+TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b
+TYDIG_PERPLEXISCOPE=http://host.containers.internal:8000
+```
+
+then `just`. The hub runs in a container, so both must listen beyond
+`127.0.0.1`, with the firewall keeping them off the network (NixOS:
+`services.ollama.host = "0.0.0.0"`, `loadModels = [ "qwen2.5-coder:1.5b" ]`;
+Perplexiscope: `serve --host 0.0.0.0`). Members reach them only through the
+hub, signed in and in the project, as fixed requests: a continuation of a
+line from the hub's model and settings, or a text to score. One ask at a
+time each; a newer one replaces it. The text is the project's, already on
+the hub. Without these, each person can still point Settings at a model on
+their own machine.
+
 **Surprise overlay** (View): every word tinted by how much it surprised a
 language model, every sentence underlined by its own surprise, and one click
 on the bar's `ppl` readout recolours each sentence by how AI-like it reads

@@ -259,7 +259,7 @@ test:
     npm install >/dev/null
     npm run build >/dev/null
     repo=$PWD
-    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest importtest; do
+    for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest importtest assisttest; do
         # each suite in a scratch dir of its own: never the real data/
         t=$(mktemp -d); cd "$t"
         echo "--- $suite"
@@ -272,6 +272,7 @@ test:
             TYDIG_URL=http://localhost:3000 \
             TYDIG_ORIGINS=http://localhost:3000 \
             TYDIG_UNSAFE_BUILDS=1 \
+            TYDIG_OLLAMA=http://127.0.0.1:11500 TYDIG_GHOST_MODEL=fake TYDIG_PERPLEXISCOPE=http://127.0.0.1:8766 \
             node "$repo/server/index.mjs" >/tmp/tc-$suite.log 2>&1 &
         srv=$!
         sleep 5

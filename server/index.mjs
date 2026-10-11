@@ -1039,6 +1039,48 @@ p.post('/template', admin, async (req, res) => {
   res.json({ from, ...report })
 })
 
+// ---------- assist: the hub's own models, for every member ----------
+// Ghost text (an Ollama model) and the surprise overlay (a Perplexiscope
+// engine) beside the hub, so nobody installs anything. Members reach them only
+// here, as fixed requests (a continuation of at most a line; a text to
+// score), one at a time each: a newer ask from the same person replaces theirs.
+const OLLAMA = process.env.TYDIG_OLLAMA?.replace(/\/$/, ''), GHOST = process.env.TYDIG_GHOST_MODEL
+const SCOPE = process.env.TYDIG_PERPLEXISCOPE?.replace(/\/$/, '')
+const asking = new Map() // user + what -> the AbortController of their ask in flight
+const ask = (req, what) => { const k = req.user.id + what, a = new AbortController(); asking.get(k)?.abort(); asking.set(k, a)
+  return [a.signal, () => asking.get(k) === a && asking.delete(k)] }
+app.get('/api/assist', (req, res) => res.json({ ghost: OLLAMA && GHOST ? GHOST : null, surprise: !!SCOPE }))
+p.post('/ghost', async (req, res) => {
+  const { prompt, suffix } = req.body || {}
+  if (!OLLAMA || !GHOST) return res.status(404).json({ error: 'this hub serves no ghost model (TYDIG_OLLAMA, TYDIG_GHOST_MODEL)' })
+  if (typeof prompt !== 'string' || prompt.length > 4000 || (suffix != null && (typeof suffix !== 'string' || suffix.length > 2000)))
+    return res.status(400).json({ error: 'a prompt of at most 4000 characters' })
+  const [signal, done] = ask(req, 'ghost')
+  try { // fill in the middle where the model can; raw, so a chat model continues the text; never thinking
+    const r = await fetch(`${OLLAMA}/api/generate`, { method: 'POST', signal, body: JSON.stringify({ model: GHOST, prompt,
+      ...suffix != null ? { suffix } : { raw: true }, think: false, stream: false, keep_alive: '30m',
+      options: { temperature: 0.2, num_predict: 40, stop: ['\n'] } }) })
+    const j = await r.json().catch(() => ({}))
+    res.status(r.status).json(r.ok ? { response: j.response } : { error: j.error || `the model answered ${r.status}` })
+  } catch (e) { res.status(e.name === 'AbortError' ? 409 : 502).json({ error: e.name === 'AbortError' ? 'replaced by a newer ask' : `the hub's model is not answering (${e.cause?.code || e.message})` }) }
+  finally { done() }
+})
+p.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
+  if (!SCOPE) return res.status(404).json({ error: 'this hub serves no surprise engine (TYDIG_PERPLEXISCOPE)' })
+  if (typeof req.body !== 'string') return res.status(400).json({ error: 'the text to score, as text/plain' })
+  const [signal, done] = ask(req, 'surprise'), ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws')
+  try {
+    const h = await new Promise((ok, no) => {
+      signal.onabort = () => no(Object.assign(new Error('replaced by a newer ask'), { status: 409 }))
+      setTimeout(() => no(new Error('no answer in 60 s')), 60_000).unref()
+      ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 })))
+      ws.on('message', m => { const j = JSON.parse(m); if (j.type === 'heat') ok(j) }).on('error', no)
+    })
+    const { words, sents, ai, ppl, bpt, ntok } = h; res.json({ words, sents, ai, ppl, bpt, ntok })
+  } catch (e) { res.status(e.status || 502).json({ error: e.status ? e.message : `the hub's surprise engine is not answering (${e.code || e.message})` }) }
+  finally { ws.terminate(); done() }
+})
+
 // An archive (.tar.gz, .tar, .zip) into the project, read in memory
 // (unpack.mjs): each file in it that differs lands, as an edit everyone sees
 // live; nothing it lacks is deleted. One checkpoint, so History undoes it.
