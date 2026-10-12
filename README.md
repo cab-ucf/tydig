@@ -227,17 +227,22 @@ newer one replaces it. The text is the project's, already on the hub.
 Without these, each person can still point Settings at a model on their own
 machine.
 
-**Surprise overlay** (View): every word tinted by how much it surprised a
-language model, every sentence underlined by its own surprise, and one click
-on the bar's `ppl` readout recolours each sentence by how AI-like it reads
-(Fast-DetectGPT's criterion: teal reads human, violet reads AI). Hover a word
-for its bits, rank and the model's uncertainty. The model is the
-hub's (above), or a Perplexiscope engine on your own machine (`just` in its
-folder serves one at `http://localhost:8000`). Typst files are
-scored as the prose they typeset: code, math, citations and markup are left
-out. The AI reading is a z-score until the engine is calibrated (`just
-calib` there), then a percentage; it is evidence, not a verdict: short,
-edited or translated text, and non-native writers, fool such detectors.
+**Surprise overlay** (Settings): the text highlighted three ways; one click
+on the bar's readout moves to the next. *Surprise*: each word tinted by how
+unexpected it was to a language model, warm for more. *Flatness*: by how
+unsure the model was just before it, blue for more: a flat guess means many
+words could have come next, so a surprising word there says less about the
+writing. *AI-likeness*: each sentence tinted by how AI-like it reads
+(Fast-DetectGPT's criterion: teal reads human, violet AI). In the first two,
+each sentence is underlined on the same scale. Hover a word for what its
+numbers mean: its chance, its rank among the model's guesses, how many
+equally likely words its flatness amounts to. The model is the hub's
+(above), or a Perplexiscope engine on your own machine (`just` in its folder
+serves one at `http://localhost:8000`). Typst files are scored as the prose
+they typeset: code, math, citations and markup are left out. The AI reading
+is a z-score until the engine is calibrated (`just calib` there), then a
+percentage; it is evidence, not a verdict: short, edited or translated text,
+and non-native writers, fool such detectors.
 
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.

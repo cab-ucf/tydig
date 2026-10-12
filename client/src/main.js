@@ -20,7 +20,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
 import { renderCite } from './cite.js'
-import { surprise, aiText } from './surprise.js'
+import { surprise, aiText, MODES } from './surprise.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -327,17 +327,19 @@ const ghostPlugin = ViewPlugin.fromClass(class {
 })
 const noFim = new Set(), said = new Set()
 const ghostSay = m => said.has(m) || (said.add(m), toast(m, false, 15000))
-// Surprise and AI-likeness, from a Perplexiscope engine on this machine
+// Surprise, flatness and AI-likeness, from a Perplexiscope engine
 // the models this hub serves its members, if any (TYDIG_OLLAMA, TYDIG_PERPLEXISCOPE)
 const assist = await api('/assist').catch(() => ({}))
+const nextBy = () => { const k = Object.keys(MODES); return k[(k.indexOf(settings.scope?.by) + 1) % k.length] }
 const scope = surprise({
   url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api/p/${projName}/surprise`,
   by: () => settings.scope?.by, typst: () => !!currentPath?.endsWith('.typ'),
   report: r => { const b = $('scope'); b.hidden = !settings.scope
     if (r.error === 'replaced by a newer ask') return
-    b.textContent = r.error ? 'surprise: unavailable' : `ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
-    b.title = r.error ? r.error :
-      `perplexity of this file's prose ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token); AI-likeness of the whole: ${aiText(r.ai)}. Hover a word or sentence.` },
+    const [name, what] = MODES[settings.scope?.by] || MODES.bits, next = MODES[nextBy()][0]
+    b.textContent = r.error ? 'surprise: unavailable' : `${name} · ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
+    b.title = r.error ? r.error : `Highlighting ${name}: ${what}. Click for ${next}.\n` +
+      `This file reads at perplexity ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token); as a whole, ${aiText(r.ai)}. Hover a word for its numbers.` },
 })
 const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
   const g = v.state.field(ghostField, false)
@@ -1182,7 +1184,7 @@ function applyLayout() {
   $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
   for (const m of ['editor', 'preview']) document.body.classList.toggle('max-' + m, settings.max === m)
   document.querySelectorAll('[data-check]').forEach(b =>
-    b.classList.toggle('checked', b.dataset.check === 'scope-ai' ? settings.scope?.by === 'ai' : !!settings[b.dataset.check]))
+    b.classList.toggle('checked', b.dataset.check.startsWith('scope-') ? settings.scope?.by === b.dataset.check.slice(6) : !!settings[b.dataset.check]))
   saveSettings()
 }
 document.querySelectorAll('.sect-head[data-sect]').forEach(h => {
@@ -1467,7 +1469,10 @@ const actions = {
     settings.scope = url.trim() ? { url: url.trim(), by: settings.scope?.by || 'bits' } : null
     applyLayout(); scope.refresh()
   },
-  'scope-ai': () => { if (!settings.scope) return actions.scope(); settings.scope.by = settings.scope.by === 'ai' ? 'bits' : 'ai'; applyLayout(); scope.refresh() },
+  ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => { // highlight by surprise, flatness or AI-likeness
+    if (!settings.scope) actions.scope()
+    if (settings.scope) { settings.scope.by = by; applyLayout(); scope.refresh() }
+  }])),
   vim: () => { settings.vim = !settings.vim; applyLayout(); view?.dispatch({ effects: vimComp.reconfigure(settings.vim ? vim() : []) }) },
   lsp: () => { settings.lsp = !settings.lsp; lspDead = false; lspClient = null; applyLayout(); if (currentPath) openFile(currentPath) },
   share: showShare,
@@ -1544,7 +1549,7 @@ document.addEventListener('keydown', e => {
   actions[act]?.()
 }, true)
 $('focus-exit').onclick = () => actions.focus()
-$('scope').onclick = () => actions['scope-ai']() // surprise <-> AI-likeness
+$('scope').onclick = () => actions['scope-' + nextBy()]() // surprise, flatness, AI-likeness, again
 $('bar-comment').onclick = () => addComment()
 $('bar-build').onclick = () => openSidebar('build')
 $('bar-check').onclick = () => openSidebar('checklist')
