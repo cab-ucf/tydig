@@ -23,12 +23,14 @@ export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
 # TYDIG_SCOPE=1: the surprise overlay for every member, from the scope
-# container (Qwen3.5 on the CPU, ~3 GB of image); the hub finds it there.
-# TYDIG_SCOPE_GPU=1 gives it the NVIDIA GPU (CDI, nvidia-container-toolkit).
+# container (Qwen3.5); the hub finds it there. It gets the NVIDIA GPU when
+# podman can hand it over (a CDI spec, from nvidia-container-toolkit), else
+# runs on the CPU; TYDIG_SCOPE_GPU=0 or 1 decides instead.
 export TYDIG_SCOPE := env_var_or_default("TYDIG_SCOPE", "")
-gpu := env_var_or_default("TYDIG_SCOPE_GPU", "")
-export TYDIG_SCOPE_DEVICE := if gpu == "" { "/dev/null" } else { "nvidia.com/gpu=all" }
-torch := if gpu == "" { "cpu" } else { "cu130" }
+cdi := `grep -qs nvidia.com/gpu /etc/cdi/* /var/run/cdi/* && echo 1 || echo 0`
+gpu := env_var_or_default("TYDIG_SCOPE_GPU", cdi)
+export TYDIG_SCOPE_DEVICE := if gpu == "1" { "nvidia.com/gpu=all" } else { "/dev/null" }
+torch := if gpu == "1" { "cu130" } else { "cpu" }
 model := env_var_or_default("TYDIG_SCOPE_MODEL", "Qwen/Qwen3.5-0.8B-Base")
 export TYDIG_PERPLEXISCOPE := if TYDIG_SCOPE == "" { env_var_or_default("TYDIG_PERPLEXISCOPE", "") } else { "http://scope:8000" }
 prof := if TYDIG_SCOPE == "" { "" } else { "--profile scope" }

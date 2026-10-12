@@ -206,24 +206,26 @@ TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b                 # on the hub's machine
 ```
 
 `TYDIG_SCOPE=1` builds and runs the surprise engine (Perplexiscope, in
-`scope/`) as a fourth container: Qwen3.5-0.8B-Base (Feb. 2026) on the CPU,
-baked into its ~3 GB image, with no network but the hub's, a read-only
-system, no capabilities, and a uid that owns nothing on the host. On 4 CPU
-cores a page takes ~25 s; `TYDIG_SCOPE_GPU=1` gives it an NVIDIA GPU (CDI:
-`hardware.nvidia-container-toolkit.enable` on NixOS). `TYDIG_SCOPE_MODEL`
-picks another base model: `Qwen/Qwen3.5-2B-Base` or `google/gemma-4-E2B`
-are stronger and want that GPU (Gemma's image is 10 GB);
-`Qwen/Qwen3-0.6B-Base` is the fastest on a CPU, rescoring only what follows
-an edit (Qwen3.5 and Gemma 4 rescore the whole window). For percentages instead of z-scores,
+`scope/`) as a fourth container: Qwen3.5-0.8B-Base (Feb. 2026) baked into
+its image, with no network but the hub's, a read-only system, no
+capabilities, and a uid that owns nothing on the host. It runs on the NVIDIA
+GPU where podman can hand one over (a CDI spec: on NixOS,
+`hardware.nvidia-container-toolkit.enable = true`; an 8 GB image, CUDA and
+all), else on the CPU, where a page takes ~25 s on 4 cores;
+`TYDIG_SCOPE_GPU=0` or `1` decides instead. `TYDIG_SCOPE_MODEL` picks
+another base model: `Qwen/Qwen3.5-2B-Base` or `google/gemma-4-E2B` are
+stronger and want that GPU (Gemma adds 10 GB); `Qwen/Qwen3-0.6B-Base`
+is the fastest on a CPU, rescoring only what follows an edit (Qwen3.5 and
+Gemma 4 rescore the whole window). For percentages instead of z-scores,
 mount a calibration (see `compose.yml`). Ghost text comes from an Ollama on
 the host, which must listen beyond `127.0.0.1` with the firewall keeping it
-off the network (NixOS: `services.ollama.host = "0.0.0.0"`,
-`loadModels = [ "qwen2.5-coder:1.5b" ]`). Members reach both only through
-the hub, signed in and in the project, as fixed requests: a continuation of
-a line from the hub's model and settings, or a text to score. One ask at a
-time each; a newer one replaces it. The text is the project's, already on
-the hub. Without these, each person can still point Settings at a model on
-their own machine.
+off the network (NixOS: `services.ollama.host = "0.0.0.0"`, `loadModels = [
+"qwen2.5-coder:1.5b" ]`). Members reach both only through the hub, signed in
+and in the project, as fixed requests: a continuation of a line from the
+hub's model and settings, or a text to score. One ask at a time each; a
+newer one replaces it. The text is the project's, already on the hub.
+Without these, each person can still point Settings at a model on their own
+machine.
 
 **Surprise overlay** (View): every word tinted by how much it surprised a
 language model, every sentence underlined by its own surprise, and one click

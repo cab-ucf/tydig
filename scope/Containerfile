@@ -1,7 +1,7 @@
 # The surprise engine the hub serves its members (TYDIG_SCOPE=1): Perplexiscope
 # (perplexiscope/, by Chase Brown, GPL-3.0-or-later), its model baked in at
 # build, so the running container needs no network at all. TORCH=cu130 for an
-# NVIDIA GPU (TYDIG_SCOPE_GPU=1).
+# NVIDIA GPU (`just` picks it when podman has one to give).
 #   podman build -t tydig-scope -f scope/Containerfile scope   (`just` does it)
 FROM docker.io/library/python:3.12-slim
 ARG TORCH=cpu
