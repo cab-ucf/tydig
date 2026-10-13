@@ -1160,6 +1160,10 @@ if (/iP(hone|ad|od)/.test(navigator.userAgent)) document.querySelector('meta[nam
 // Phones, narrow or on their side (short, touch), show one pane at a time,
 // picked in the bottom tab bar (#mtabs); a turned phone gets a wide preview.
 const phoneQ = matchMedia('(max-width: 800px), (max-height: 500px) and (pointer: coarse)'), phone = () => phoneQ.matches
+// which file to compile: a phone's bar has no room, so above its preview
+const mainHome = [$('main-label').parentNode, $('main-label').nextSibling]
+const placeMain = () => phone() ? $('zoomctl').prepend($('main-label')) : mainHome[0].insertBefore($('main-label'), mainHome[1])
+phoneQ.addEventListener('change', placeMain); placeMain()
 function applyLayout() {
   document.body.dataset.m = settings.m
   document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.m === settings.m))

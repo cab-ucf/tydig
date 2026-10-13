@@ -105,6 +105,9 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
   #brand, #peers, #main-label, #bar-comment, #bar-cite, #bar-build, #bar-check, #wordcount, #tgl-tree, #tgl-side, #split, .spacer { display: none !important; }
   #bar { gap: .25rem; padding: 0 .35rem; padding-top: env(safe-area-inset-top); }
   #projname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* which file to compile: above the preview (main.js moves it there) */
+  #zoomctl #main-label { display: block !important; font-size: 0; margin-right: 4px; }
+  #zoomctl #main-sel { max-width: 15rem; height: 100%; }
   .menu > button { padding: .45rem .5rem; }
   .dropdown { max-width: calc(100vw - 1rem); }
   #status { flex: none; width: .65rem; height: .65rem; padding: 0; font-size: 0; background: currentColor; }

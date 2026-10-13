@@ -200,6 +200,11 @@ const shows = async m => { await page.evaluate(m => document.querySelector(`#mta
 check('on a phone the page fits the screen', await page.evaluate(() => document.documentElement.scrollWidth <= 390))
 check('and its tabs show one pane each', (await shows('files')).join() === 'tree-pane' && (await shows('edit')).join() === 'editor' &&
   (await shows('preview')).join() === 'preview' && (await shows('side')).join() === 'side')
+await shows('preview')
+check('the Preview tab picks which file to compile, and still fits', await page.evaluate(() => {
+  const sel = document.getElementById('main-sel'), r = sel.getBoundingClientRect()
+  return r.width > 40 && r.right <= 390 && [...sel.options].some(o => o.value === 'summary.typ') && document.documentElement.scrollWidth <= 390 }))
+check('the other tabs leave it out', (await shows('edit')) && await page.evaluate(() => !document.getElementById('main-sel').getBoundingClientRect().width))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)
