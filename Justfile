@@ -121,8 +121,14 @@ account:
     fi
     # a socket that is there but answers nothing (a crash, a killed service) counts as none
     up() { {{as}} podman --remote --url unix://$sock version >/dev/null 2>&1; }
+    # conmon dies ("conmon failed: exit status 1") in a folder that is gone,
+    # and it starts in podman's: a service left in an old src/ is restarted,
+    # and one started here runs from /
+    for p in $(pgrep -u "$u" -f 'podman system service' || true); do
+        sudo readlink "/proc/$p/cwd" | grep -q ' (deleted)$' && sudo kill "$p" || true
+    done
     if ! up; then
-        {{as}} sh -c 'nohup podman system service --time=0 >/dev/null 2>&1 &'
+        {{as}} sh -c 'cd / && nohup podman system service --time=0 >/dev/null 2>&1 &'
         for i in $(seq 20); do up && break; sleep 0.5; done
     fi
     {{as}} podman info >/dev/null 2>&1 || { echo "podman does not work for $u (try: {{as}} podman info)"
