@@ -68,7 +68,7 @@ const serve = sock => {
     p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
     p.on('close', code => {
       // podman --remote says only that conmon failed; the service's log says why
-      if (/conmon failed/.test(out.stderr)) out.stderr += '\n(why: `just podman-log` on the hub)\n'
+      if (/conmon failed/.test(out.stderr)) out.stderr += '\n(on the hub, `just` restarts a podman left in a deleted folder; why else: `just podman-log`)\n'
       sock.end(JSON.stringify({ code, ...out }) + '\n')
     })
   })
