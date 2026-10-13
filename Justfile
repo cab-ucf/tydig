@@ -23,7 +23,8 @@ export TYDIG_PORT := env_var_or_default("TYDIG_PORT", "8080")
 export TYDIG_URL := env_var_or_default("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_ORIGINS := env_var_or_default("TYDIG_ORIGINS", TYDIG_URL)
 # TYDIG_SCOPE=1: the surprise overlay for every member, from the scope
-# container (Qwen3.5); the hub finds it there. It gets the NVIDIA GPU when
+# container (Qwen3 for surprise, MELD for AI-likeness; TYDIG_SCOPE_MELD=0
+# leaves MELD out); the hub finds it there. It gets the NVIDIA GPU when
 # podman can hand it over (a CDI spec, from nvidia-container-toolkit), else
 # runs on the CPU; TYDIG_SCOPE_GPU=0 or 1 decides instead.
 export TYDIG_SCOPE := env_var_or_default("TYDIG_SCOPE", "")
@@ -31,7 +32,8 @@ cdi := `grep -qs nvidia.com/gpu /etc/cdi/* /var/run/cdi/* && echo 1 || echo 0`
 gpu := env_var_or_default("TYDIG_SCOPE_GPU", cdi)
 export TYDIG_SCOPE_DEVICE := if gpu == "1" { "nvidia.com/gpu=all" } else { "/dev/null" }
 torch := if gpu == "1" { "cu130" } else { "cpu" }
-model := env_var_or_default("TYDIG_SCOPE_MODEL", "Qwen/Qwen3.5-0.8B-Base")
+model := env_var_or_default("TYDIG_SCOPE_MODEL", "Qwen/Qwen3-0.6B-Base")
+detector := if env_var_or_default("TYDIG_SCOPE_MELD", "1") == "0" { "" } else { "meld" }
 export TYDIG_PERPLEXISCOPE := if TYDIG_SCOPE == "" { env_var_or_default("TYDIG_PERPLEXISCOPE", "") } else { "http://scope:8000" }
 prof := if TYDIG_SCOPE == "" { "" } else { "--profile scope" }
 
@@ -214,10 +216,10 @@ help:
 sandbox:
     {{as}} podman build -t tydig-build -f sandbox/Containerfile .
 
-# The surprise engine's image (TYDIG_SCOPE=1; TYDIG_SCOPE_MODEL, any causal LM
-# on Hugging Face, default Qwen/Qwen3.5-0.8B-Base).
+# The surprise engine's image (TYDIG_SCOPE=1; TYDIG_SCOPE_MODEL, an
+# attention-only base model, default Qwen/Qwen3-0.6B-Base).
 scope:
-    {{ if TYDIG_SCOPE == "" { "true" } else { as + " podman build -t tydig-scope --build-arg MODEL=" + model + " --build-arg TORCH=" + torch + " -f scope/Containerfile scope" } }}
+    {{ if TYDIG_SCOPE == "" { "true" } else { as + " podman build -t tydig-scope --build-arg MODEL=" + model + " --build-arg TORCH=" + torch + " --build-arg DETECTOR=" + detector + " -f scope/Containerfile scope" } }}
 
 # The app server image (client build + Node runtime).
 image:

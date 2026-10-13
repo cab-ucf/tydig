@@ -79,7 +79,7 @@ select,.deco button{font:inherit;color:var(--ink);background:var(--sheet);border
   <label>Color by <span class="seg" id="mode"><button aria-pressed="true" data-v="bits">Surprise</button><button data-v="rank">Rank</button><button data-v="ent">Uncertainty</button><button data-v="ai">AI-likeness</button></span></label>
   <label>Branches <input id="k" type="range" min="2" max="5" value="3"><span id="kv">3</span></label>
   <label>Depth <input id="d" type="range" min="1" max="5" value="3"><span id="dv">3</span></label>
-  <div class="read"><div>Perplexity<b id="ppl">–</b></div><div>Bits per token<b id="bpt">–</b></div><div title="How AI-like the whole text reads: a probability once this model is calibrated, otherwise Fast-DetectGPT's z">AI-likeness<b id="aiv">–</b></div><div>Model<b id="mdl">connecting</b></div></div>
+  <div class="read"><div>Perplexity<b id="ppl">–</b></div><div>Bits per token<b id="bpt">–</b></div><div>AI-likeness<b id="aiv">–</b></div><div>Model<b id="mdl">connecting</b></div></div>
 </header>
 <div class="deco">
   <label>Decoding <select id="m"><option value="none">Plain sampling</option><option value="topk">Top-k</option><option value="topp">Top-p (nucleus)</option>
@@ -111,14 +111,14 @@ const COLOR={ // surprise is ink: expected words stay unmarked
   bits:w=>{const t=Math.min(1,w.bits/16);return t<.12?"":`rgba(${mix(t)},${(.72*t**1.6).toFixed(2)})`},
   rank:w=>w.rank<=10?"":w.rank<=100?`rgba(${RAMP[0]},.5)`:w.rank<=1000?`rgba(${RAMP[1]},.55)`:`rgba(${RAMP[2]},.6)`,
   ent:w=>`rgba(28,93,140,${Math.min(.6,w.ent/12*.6).toFixed(2)})`,
-  ai:(w,z)=>{if(!z)return"";const t=lean(z);return Math.abs(t)<.1?"":`rgba(${t>0?"123,79,214":"42,157,143"},${(.55*Math.abs(t)**1.3).toFixed(2)})`}};
-const lean=a=>"p"in a?2*a.p-1:Math.max(-1,Math.min(1,a.z/4)); // a sentence: -1 reads human, +1 reads AI
-const aitxt=a=>"p"in a?`${pct(a.p)} likely AI`:`z ${a.z>=0?"+":"−"}${Math.abs(a.z).toFixed(1)}`;
+  ai:(w,z)=>{const r=z&&z.ai?rare(z.ai.tail):0;return r?`rgba(123,79,214,${(.6*r).toFixed(2)})`:""}};
+const rare=t=>Math.max(0,Math.min(1,Math.log10(.1/t)/2)); // 0 at 1 in 10 human texts scoring this high, 1 at 1 in 1,000
+const tailtxt=(t,of)=>t>=.1?`typical of human ${of}`:`at most ${(100*t).toFixed(t<.01?1:0)}% of human ${of} score this AI-like`;
 const SENT=z=>{const t=Math.min(1,z.bits/z.w/16);return t<.12?"transparent":`rgb(${mix(t)})`}; // same scale as a word
 const LEG={bits:["Expected","Surprising (16+ bits)",`linear-gradient(90deg,transparent,rgba(${RAMP[0]},.4),rgba(${RAMP[1]},.55),rgba(${RAMP[2]},.75))`],
   rank:["Top 10","Top 100 / 1000 / beyond",`linear-gradient(90deg,transparent 25%,rgba(${RAMP[0]},.5) 25% 50%,rgba(${RAMP[1]},.55) 50% 75%,rgba(${RAMP[2]},.6) 75%)`],
   ent:["Model was sure","Model was unsure (12 bits)","linear-gradient(90deg,transparent,rgba(28,93,140,.6))"],
-  ai:["Reads human","Reads AI (per sentence)","linear-gradient(90deg,rgba(42,157,143,.55),transparent 40% 60%,rgba(123,79,214,.55))"]};
+  ai:["Typical of human writing","1 in 1,000 human sentences (MELD)","linear-gradient(90deg,transparent,rgba(123,79,214,.6))"]};
 const pct=p=>p>=.1?(p*100).toFixed(0)+"%":p>=.01?(p*100).toFixed(1)+"%":p>=1e-4?(p*100).toFixed(2)+"%":"<0.01%";
 
 /* ---------- transport ---------- */
@@ -126,10 +126,14 @@ function connect(){
   const ws=S.ws=new WebSocket(location.origin.replace(/^http/,"ws")+"/ws");
   ws.onopen=()=>send(0,false); ws.onclose=()=>{$("mdl").textContent="reconnecting";setTimeout(connect,800)};
   ws.onmessage=e=>{const m=JSON.parse(e.data);
-    if(m.type=="hello"){$("mdl").textContent=m.model.split("/").pop();if(m.watching){S.watched=m.watching;$("src").children[1].disabled=false}}
+    if(m.type=="error"){$("hint").textContent=m.message;return}
+    if(m.type=="hello"){$("mdl").textContent=m.model.split("/").pop();$("aiv").textContent=m.detector?"…":"off";if(m.watching){S.watched=m.watching;$("src").children[1].disabled=false}}
     else if(m.type=="doc"){S.doctext=m.text;if(S.src=="watch"){setText(m.text);send(0,!!S.tree)}}
     else if(m.seq!==S.seq)return;
-    else if(m.type=="heat"){S.words=m.words;S.sents=m.sents;S.wtext=S.sent;render();$("ppl").textContent=m.ppl.toFixed(1);$("bpt").textContent=m.bpt.toFixed(2);$("aiv").textContent=!m.ntok?"–":"p"in m.ai?pct(m.ai.p):aitxt(m.ai)}
+    else if(m.type=="heat"){S.words=m.words;S.sents=m.sents;S.ai=null;S.wtext=S.sent;render();$("ppl").textContent=m.ppl.toFixed(1);$("bpt").textContent=m.bpt.toFixed(2)}
+    else if(m.type=="ai"){m.sents.forEach((a,i)=>S.sents[i]&&(S.sents[i].ai=a));S.ai=m;if(S.mode=="ai")render();
+      $("aiv").textContent=m.words<100?"too short":m.tail<=.01?"flagged":m.tail<.1?"unusual":"typical";
+      $("aiv").parentElement.title=`MELD: ${m.words<100?"needs 100+ words to judge; ":""}${tailtxt(m.tail,"documents")}. Closest family ${m.family}, task ${m.task}.${m.calibrated?"":" Sentence shading uses document thresholds until 'just calib' runs."}`}
     else if(m.type=="tree"){S.tree=m;S.sample=null;drawTree()}
     else if(m.type=="sample"){S.sample=m.tokens;drawTree()}};
 }
@@ -222,7 +226,7 @@ bd.parentElement.addEventListener("mousemove",ev=>{
   tip.firstChild.textContent=u.textContent;
   for(const[s,b]of w.toks){const c=document.createElement("span");c.className="t";c.textContent=`${s.replace(/\n/g,"↵")} ${b.toFixed(1)}`;tip.append(c)}}
   if(z){const m=z.bits/z.n,d=document.createElement("div");d.className="st";
-    d.textContent=`Sentence: perplexity ${(2**m).toFixed(1)} (${m.toFixed(2)} bits per token), ${(z.bits/z.w).toFixed(1)} bits per word. AI-likeness: ${aitxt(z)}`;tip.append(d)}
+    d.textContent=`Sentence: perplexity ${(2**m).toFixed(1)} (${m.toFixed(2)} bits per token), ${(z.bits/z.w).toFixed(1)} bits per word. AI-likeness: ${z.ai?tailtxt(z.ai.tail,"sentences"):S.ai?"too short to judge":"waiting for MELD"}.`;tip.append(d)}
   Object.assign(tip.style,{display:"block",left:ev.clientX+"px",top:ev.clientY+"px"})});
 bd.parentElement.addEventListener("mouseleave",()=>tip.style.display="none");
 

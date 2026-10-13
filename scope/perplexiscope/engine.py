@@ -7,16 +7,12 @@ words form a proper distribution. Long documents are scored in half-overlapping
 windows; the tree reuses the window's KV cache and grows every branch at once with
 tree attention [miao2024specinfer]. Rank and entropy views follow GLTR [gehrmann2019gltr].
 A sentence [sadvilkar2020pysbd] is whole words, so its bits are its words' bits and the
-boundaries inside it cancel [pimentel2024word]. How AI-like a span reads is Fast-DetectGPT's analytic
-criterion [bao2024fastdetectgpt]: how much likelier its tokens are than the model's own samples, in standard
-deviations; once calibrated on labelled text [dugan2024raid] it is also a probability."""
-import json, math, pysbd, torch
+boundaries inside it cancel [pimentel2024word]."""
+import math, pysbd, torch
 from bisect import bisect
-from itertools import accumulate
-from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 
-NEG, LN2, CAL = float("-inf"), math.log(2), Path(__file__).parent / "calib"
+NEG, LN2 = float("-inf"), math.log(2)
 
 
 def sub(cache, n):  # zero-copy prefix view of a KV cache; appends never touch the original
@@ -28,29 +24,22 @@ def sub(cache, n):  # zero-copy prefix view of a KV cache; appends never touch t
 def ent(lp): return -(lp.exp() * lp.clamp_min(-1e4)).sum(-1) / LN2
 
 
-def var(lp):  # Var[log2 p] under p, two-pass so it survives flat distributions
-    q = lp.clamp_min(-1e4); return (lp.exp() * (q - (lp.exp() * q).sum(-1, keepdim=True)) ** 2).sum(-1) / LN2 ** 2
-
-
-def calfile(name): return Path(name, "ai.json") if Path(name).is_dir() else CAL / (name.strip("/").replace("/", "--") + ".json")
-
-
 class Engine:
     def __init__(s, name, device=None, ctx=1024, dtype=None):
         s.dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        dtype = dtype or (torch.bfloat16 if s.dev == "cuda" else torch.float32)  # bf16 rounds logits; pass float32 for exact bits
+        load = lambda n: AutoModelForCausalLM.from_pretrained(n, attn_implementation="sdpa", dtype=dtype).to(s.dev).eval()
         s.tk = AutoTokenizer.from_pretrained(name); s.tk.model_max_length = 1 << 30  # we window long texts ourselves
-        dtype = dtype or (torch.bfloat16 if s.dev == "cuda" else torch.float32)
-        s.m = AutoModelForCausalLM.from_pretrained(name, attn_implementation="sdpa", dtype=dtype).to(s.dev).eval()
-        c, s.name = s.m.config.get_text_config(), name
-        s.cut = set(getattr(c, "layer_types", None) or ["full_attention"]) == {"full_attention"}
-        s.T = getattr(s.m.config, "ps_temperature", 1.0)  # post-hoc calibration [guo2017calibration]
+        s.m = load(name)  # edits and the tree cut and branch the KV cache; recurrent state cannot be
+        bad = set(getattr(s.m.config.get_text_config(), "layer_types", None) or []) - {"full_attention"}
+        if bad: raise ValueError(f"{name} has {', '.join(sorted(bad))} layers; Perplexiscope needs attention-only models")
+        c, s.name = s.m.config, name
+        s.T = getattr(c, "ps_temperature", 1.0)  # post-hoc calibration [guo2017calibration]
         s.C = min(getattr(c, "n_positions", 0) or c.max_position_embeddings, ctx); s.S = s.C // 2
-        s.eos, V = s.tk.eos_token_id, s.m.get_output_embeddings().weight.shape[0]
+        s.bos, V = s.tk.eos_token_id, s.m.get_output_embeddings().weight.shape[0]
         s.B = torch.zeros(V, dtype=torch.bool, device=s.dev)  # tokens that open a new word (or end the text)
-        s.B[:len(s.tk)] = torch.tensor([s.tk.decode([i])[:1].isspace() for i in range(len(s.tk))]); s.B[s.eos] = True
-        s.bos = s.eos if s.tk.bos_token_id is None else s.tk.bos_token_id  # what a text starts after
+        s.B[:len(s.tk)] = torch.tensor([s.tk.decode([i])[:1].isspace() for i in range(len(s.tk))]); s.B[s.bos] = True
         s.win, s.doc, s.last, s.seg = {}, None, None, pysbd.Segmenter(char_span=True)
-        s.W = json.loads(calfile(name).read_text())["w"] if calfile(name).exists() else None
 
     @torch.no_grad()
     def fwd(s, ids, cache=None, pos=None, mask=None):
@@ -64,12 +53,11 @@ class Engine:
         old = s.win.get(st)
         l = next((i for i, (a, b) in enumerate(zip(old[0], ids)) if a != b), min(len(old[0]), len(ids))) if old else 0
         if old and l == len(ids) == len(old[0]): return old
-        if not s.cut: old, l = None, 0  # a recurrent or sliding-window cache has no prefix to keep
         l = max(l, 1)
         lp, cache = s.fwd(ids[l - 1:], sub(old[1], l - 1) if old else None)
         g = lp[:-1].gather(1, torch.tensor(ids[l:], dtype=torch.long, device=s.dev)[:, None])[:, 0]
         z = g.new_zeros(1)
-        new = [torch.cat([g, z]), torch.cat([(lp[:-1] > g[:, None]).sum(1) + 1., z]), ent(lp), s.lB(lp), var(lp)]
+        new = [torch.cat([g, z]), torch.cat([(lp[:-1] > g[:, None]).sum(1) + 1., z]), ent(lp), s.lB(lp)]
         s.win[st] = w = (ids, cache, [torch.cat([o[:l - 1], x]) for o, x in zip(old[2], new)] if old else new)
         return w
 
@@ -82,9 +70,7 @@ class Engine:
         s.win = {st: w for st, w in s.win.items() if st < K * s.S}
         W = [s.window(k * s.S, ids[k * s.S:k * s.S + s.C]) for k in range(K)]
         seg = [(k * s.S, 1 if k == 0 else (k + 1) * s.S, min(k * s.S + s.C, n + 1)) for k in range(K)]
-        lp, rk, en, lb, q = [torch.cat([W[k][2][i][lo - st - 1:hi - st - 1] for k, (st, lo, hi) in enumerate(seg)]).tolist() for i in range(5)]
-        D = [*accumulate((x / LN2 + h for x, h in zip(lp[:n - 1], en)), initial=0.)]  # log2 p(token) - E log2 p, summed
-        V = [*accumulate(q[:n - 1], initial=0.)]  # and its variance
+        lp, rk, en, lb = [torch.cat([W[k][2][i][lo - st - 1:hi - st - 1] for k, (st, lo, hi) in enumerate(seg)]).tolist() for i in range(4)]
         groups = []  # [char start, t0, t1, char end]: whitespace-only tokens join the following word
         for t in range(1, n):
             a, b = off[t]
@@ -99,18 +85,12 @@ class Engine:
                               toks=[[text[off[t][0]:off[t][1]], -lp[t - 1] / LN2] for t in range(t0, t1)]))
         at = [w["s"] for w in words]  # each sentence starts at the word holding its first character
         cut = sorted({0, *(max(0, bisect(at, z.start) - 1) for z in s.seg.segment(text))}) if words else []
-        ai = lambda a, b: s.ai(D[b - 1] - D[a - 1], V[b - 1] - V[a - 1], b - a)
         sents = [dict(s=words[i]["s"], e=words[j - 1]["e"], w=j - i, n=words[j - 1]["t1"] - words[i]["t0"],
-                      bits=sum(w["bits"] for w in words[i:j]), **ai(words[i]["t0"], words[j - 1]["t1"]))
-                 for i, j in zip(cut, cut[1:] + [len(words)])]
+                      bits=sum(w["bits"] for w in words[i:j])) for i, j in zip(cut, cut[1:] + [len(words)])]
         s.doc = dict(ids=ids, words=words, n=n, text=text)
         nll = -sum(lp[:n - 1]) / max(1, n - 1)
         return dict(words=[{k: w[k] for k in ("s", "e", "bits", "rank", "ent", "toks")} for w in words],
-                    sents=sents, ai=ai(1, n), ppl=math.exp(nll), bpt=nll / LN2, ntok=n - 1)
-
-    def ai(s, d, v, n):  # z, and P(AI) = logistic(w . [z sqrt(n), n, 1]): the Gaussian likelihood ratio's shape
-        z = d / math.sqrt(max(v, 1e-12))
-        return dict(z=z) if s.W is None else dict(z=z, p=.5 + .5 * math.tanh((s.W[0] * z * math.sqrt(n) + s.W[1] * n + s.W[2]) / 2))
+                    sents=sents, ppl=math.exp(nll), bpt=nll / LN2, ntok=n - 1)
 
     @torch.no_grad()
     def tree(s, cursor, k=3, depth=4, budget=40, min_cum=1e-4):
@@ -212,7 +192,7 @@ class Engine:
             lp = (D / T).log_softmax(-1); lq = s.keep(lp, m, mu if m == "mirostat" else a)
             t = int(torch.multinomial(lq.exp(), 1)); piece = s.tk.decode([t])
             if piece[:1].isspace() and has: n += 1
-            if t == s.eos or n == words: break
+            if t == s.bos or n == words: break
             has = bool(piece.strip()) or (has and not piece[:1].isspace())
             if m == "mirostat": mu -= .1 * (-lp[t].item() / LN2 - a)
             out.append(dict(t=piece, p=math.exp(D[t].item()), q=math.exp(lq[t].item())))

@@ -167,8 +167,10 @@ const engine = new (await import('ws')).WebSocketServer({ port: 8765 })
 engine.on('connection', ws => { ws.send(JSON.stringify({ type: 'hello', model: 'fake' })); ws.on('message', m => {
   const r = JSON.parse(m); seen.push(r.text)
   const words = [...r.text.matchAll(/\S+/g)].map(x => ({ s: x.index, e: x.index + x[0].length, bits: x[0].length * 2, rank: 5, ent: 2 + x[0].length, toks: [[x[0], x[0].length * 2]] }))
-  ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words, sents: [{ s: 0, e: r.text.trimEnd().length, w: words.length, n: words.length, bits: words.length * 6, z: 3 }],
-    ai: { z: 3 }, ppl: 42, bpt: 5.4, ntok: words.length }))
+  ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words, sents: [{ s: 0, e: r.text.trimEnd().length, w: words.length, n: words.length, bits: words.length * 6 }],
+    ppl: 42, bpt: 5.4, ntok: words.length }))
+  ws.send(JSON.stringify({ type: 'ai', seq: r.seq, score: 3, tail: 0.004, words: words.length, calibrated: false, family: 'gpt', task: 'write',
+    sents: [{ score: 3, tail: 0.004 }] }))
 }) })
 answer = 'http://localhost:8765'
 await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(2500); answer = null
@@ -182,13 +184,13 @@ check('it scores the prose, not the markup', seen.length && !/#(let|set)|@\w|\$/
   sc.words.every(w => !/^[#$@]/.test(w)))
 await (await page.$('.cm-content [style*="background"]')).hover(); await sleep(800)
 check('hovering a word says what its numbers mean', await page.evaluate(() =>
-  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness.*reads more like AI/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
+  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness.*0\.4% of human sentences score this AI-like/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
 await page.mouse.move(0, 0); await page.click('#scope'); await sleep(800)
 check('one click tints by flatness instead, from the same scores', (await tinted()).length > 20 && (await tinted()).every(w => w.cool) &&
   await page.evaluate(() => document.getElementById('scope').textContent.startsWith('flatness')) && seen.length === 1)
 await page.click('#scope'); await sleep(800)
 check('another shows AI-likeness per sentence', await page.evaluate(() => document.querySelectorAll('.scope-ai').length > 0 &&
-  /AI z \+3\.0/.test(document.getElementById('scope').textContent)))
+  /AI: flagged/.test(document.getElementById('scope').textContent)))
 answer = ''; await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(500); answer = null
 check('and it turns off', await page.evaluate(() => !document.querySelector('.scope-ai') && document.getElementById('scope').hidden))
 engine.close()

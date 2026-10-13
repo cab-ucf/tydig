@@ -114,7 +114,7 @@ services:
     restart: unless-stopped
 
   # the surprise engine (Perplexiscope, scope/), only with TYDIG_SCOPE=1: its
-  # model is in the image, so it has no network but the hub's
+  # models (Qwen3, MELD) are in the image, so it has no network but the hub's
   scope:
     image: localhost/tydig-scope
     profiles: [scope]
@@ -126,7 +126,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges]
     restart: unless-stopped
-    # a calibration, for percentages instead of z-scores:
+    # MELD's sentence calibration (`python -m perplexiscope.bench calib`), so
+    # sentences are judged against human sentences, not documents:
     # volumes: ["./calib:/app/perplexiscope/calib:ro"]
 
 networks:

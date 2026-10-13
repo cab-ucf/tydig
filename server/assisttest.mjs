@@ -18,9 +18,11 @@ http.createServer((q, r) => { let b = ''; q.on('data', d => b += d); q.on('end',
     j.prompt === 'slow' ? 1500 : 10)
 }) }).listen(11500)
 const scored = []
-new WebSocketServer({ port: 8766 }).on('connection', ws => { ws.send(JSON.stringify({ type: 'hello' })); ws.on('message', m => {
+new WebSocketServer({ port: 8766 }).on('connection', ws => { ws.send(JSON.stringify({ type: 'hello', detector: 'meld' })); ws.on('message', m => {
   const r = JSON.parse(m); scored.push(r)
-  ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words: [{ s: 0, e: 3, bits: 4 }], sents: [], ai: { z: 1 }, ppl: 9, bpt: 3, ntok: 1, secret: 'x' }))
+  if (r.text === 'too long') return ws.send(JSON.stringify({ type: 'error', message: 'Text is over 100,000 characters; shorten it to score it.' }))
+  ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words: [{ s: 0, e: 3, bits: 4 }], sents: [{ s: 0, e: 3, w: 1, bits: 4 }], ppl: 9, bpt: 3, ntok: 1, secret: 'x' }))
+  ws.send(JSON.stringify({ type: 'ai', seq: r.seq, score: 2, tail: 0.004, words: 120, calibrated: false, family: 'gpt', task: 'write', sents: [{ score: 2, tail: 0.004 }], secret: 'x' }))
 }) })
 
 const ann = await signup('ann@example.com'), bob = await signup('bob@example.com')
@@ -43,6 +45,11 @@ const big = 'Heat flowed. '.repeat(25000)
 const h = await (await as(ann, '/p/paper/surprise', big, 'text/plain')).json()
 check('surprise: the text goes to the engine, its scores come back, nothing else', h.ppl === 9 && h.words.length === 1 && !('secret' in h) &&
   scored.at(-1).text === big && scored.at(-1).cursor === null)
+const a = await (await as(ann, '/p/paper/surprise?ai', big, 'text/plain')).json()
+check('and with ?ai, the detector\'s reading of it, per sentence and whole', a.ai.tail === 0.004 && a.ai.sents[0].tail === 0.004 &&
+  a.ai.family === 'gpt' && !('secret' in a.ai) && Object.keys(a).join() === 'ai')
+const long = await as(ann, '/p/paper/surprise', 'too long', 'text/plain')
+check('what the engine refuses, it says why', long.status === 422 && /100,000 characters/.test((await long.json()).error))
 check('a non-member cannot have text scored', (await as(bob, '/p/paper/surprise', 'x', 'text/plain')).status === 403)
 
 console.log(pass ? '\nASSIST ALL PASS' : '\nASSIST FAILURES')

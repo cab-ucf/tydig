@@ -20,7 +20,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
 import { renderCite } from './cite.js'
-import { surprise, aiText, MODES, prose } from './surprise.js'
+import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -339,7 +339,7 @@ const scope = surprise({
     const [name, what] = MODES[settings.scope?.by] || MODES.bits, next = MODES[nextBy()][0]
     b.textContent = r.error ? 'surprise: unavailable' : `${name} · ppl ${r.ppl.toFixed(1)} · ${aiText(r.ai)}`
     b.title = r.error ? r.error : `Highlighting ${name}: ${what}. Click for ${next}.\n` +
-      `This file reads at perplexity ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token); as a whole, ${aiText(r.ai)}. Hover a word for its numbers.` },
+      `This file reads at perplexity ${r.ppl.toFixed(1)} (${r.bpt.toFixed(2)} bits a token). ${aiAbout(r.ai)} Hover a word for its numbers.` },
 })
 const ghostKeys = Prec.highest(keymap.of([{ key: 'Tab', run: v => {
   const g = v.state.field(ghostField, false)

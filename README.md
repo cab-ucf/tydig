@@ -205,47 +205,51 @@ TYDIG_OLLAMA=http://host.containers.internal:11434   # ghost text: an Ollama
 TYDIG_GHOST_MODEL=qwen2.5-coder:1.5b                 # on the hub's machine
 ```
 
-`TYDIG_SCOPE=1` builds and runs the surprise engine (Perplexiscope, in
-`scope/`) as a fourth container: Qwen3.5-0.8B-Base (Feb. 2026) baked into
-its image, with no network but the hub's, a read-only system, no
-capabilities, and a uid that owns nothing on the host. It runs on the NVIDIA
-GPU where podman can hand one over (a CDI spec: on NixOS,
-`hardware.nvidia-container-toolkit.enable = true`; an 8 GB image, CUDA and
-all), else on the CPU, where a page takes ~25 s on 4 cores;
+`TYDIG_SCOPE=1` builds and runs the surprise engine (Perplexiscope 1.1, in
+`scope/`) as a fourth container, its two models baked into its ~7 GB image:
+Qwen3-0.6B-Base for surprise and flatness, and MELD, an open (MIT) AI-text
+detector, for AI-likeness (`TYDIG_SCOPE_MELD=0` leaves MELD out: 4 GB of
+image and ~5 GB of memory less). It has no network but the hub's, a
+read-only system, no capabilities, and a uid that owns nothing on the host.
+It runs on the NVIDIA GPU where podman can hand one over (a CDI spec: on
+NixOS, `hardware.nvidia-container-toolkit.enable = true`), else on the CPU,
+where a page's words take a few seconds on 4 cores and MELD a few more;
 `TYDIG_SCOPE_GPU=0` or `1` decides instead. `TYDIG_SCOPE_MODEL` picks
-another base model: `Qwen/Qwen3.5-2B-Base` or `google/gemma-4-E2B` are
-stronger and want that GPU (Gemma adds 10 GB); `Qwen/Qwen3-0.6B-Base`
-is the fastest on a CPU, rescoring only what follows an edit (Qwen3.5 and
-Gemma 4 rescore the whole window). For percentages instead of z-scores,
-mount a calibration (see `compose.yml`). Ghost text comes from an Ollama on
-the host, which must listen beyond `127.0.0.1` with the firewall keeping it
-off the network (NixOS: `services.ollama.host = "0.0.0.0"`, `loadModels = [
-"qwen2.5-coder:1.5b" ]`). Members reach both only through the hub, signed in
-and in the project, as fixed requests: a continuation of a line from the
-hub's model and settings, or a text to score. One ask at a time each; a
-newer one replaces it. The text is the project's, already on the hub.
-Without these, each person can still point Settings at a model on their own
-machine.
+another attention-only base model, e.g. `Qwen/Qwen3-8B-Base` for a GPU with
+24 GB (the engine reuses its cache across edits, so it refuses models with
+linear or sliding attention: Qwen3.5, Gemma 4). Ghost text comes from an
+Ollama on the host, which must listen beyond `127.0.0.1` with the firewall
+keeping it off the network (NixOS: `services.ollama.host = "0.0.0.0"`,
+`loadModels = [ "qwen2.5-coder:1.5b" ]`). Members reach both only through
+the hub, signed in and in the project, as fixed requests: a continuation of
+a line from the hub's model and settings, or a text to score. One ask at a
+time each; a newer one replaces it. The text is the project's, already on
+the hub. Without these, each person can still point Settings at a model on
+their own machine.
 
 **Surprise overlay** (Settings): the text highlighted three ways; one click
 on the bar's readout moves to the next. *Surprise*: each word tinted by how
 unexpected it was to a language model, warm for more. *Flatness*: by how
 unsure the model was just before it, blue for more: a flat guess means many
 words could have come next, so a surprising word there says less about the
-writing. *AI-likeness*: each sentence tinted by how AI-like it reads
-(Fast-DetectGPT's criterion: teal reads human, violet AI). In the first two,
-each sentence is underlined on the same scale. Hover a word for what its
-numbers mean: its chance, its rank among the model's guesses, how many
+writing. *AI-likeness*: each sentence tinted violet by how rare MELD's
+reading of it is among human sentences (from 1 in 10 to 1 in 1,000), and the
+bar gives MELD's verdict on the whole file: typical, unusual, or flagged (at
+most 1% of human documents score as high); it needs 100 words. In the first
+two, each sentence is underlined on the same scale. Hover a word for what
+its numbers mean: its chance, its rank among the model's guesses, how many
 equally likely words its flatness amounts to. The model is the hub's
 (above), or a Perplexiscope engine on your own machine (`just` in its folder
 serves one at `http://localhost:8000`). Typst files are scored as the prose
 they typeset, wherever it is written: headings, list items, `[content]`
 passed to functions, and strings that read as prose (a `title: "..."`);
 code, paths, math, citations and markup are left out. The word count counts
-the same prose. The AI reading is a z-score until the engine is calibrated
-(`just calib` there), then a percentage; it is evidence, not a verdict:
-short, edited or translated text, and non-native writers, fool such
-detectors.
+the same prose. MELD's authors measure it catching 99.7% of plain AI text
+from current chat models at 1% false positives, where likelihood detectors
+(Fast-DetectGPT, Binoculars) catch 17% or less; but text edited by a person,
+written to imitate an author, or short slips past it more, and non-native
+writers are flagged more often. A flag is evidence to discuss, never a
+verdict.
 
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.

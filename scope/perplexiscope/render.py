@@ -1,9 +1,10 @@
 """Static overlays: word surprise as a tint, sentence surprise as an underline,
-or AI-likeness per sentence. HTML, terminal, or JSON for perplexiscope.typ."""
+or how AI-like each sentence reads. HTML, terminal, or JSON for perplexiscope.typ."""
+import math
 from html import escape
 
 RAMP = (242, 193, 78), (233, 128, 58), (194, 45, 86)
-HUMAN, MACHINE = (42, 157, 143), (123, 79, 214)
+MACHINE = 123, 79, 214
 UL, BG = "\x1b[4m\x1b[58:2::{}:{}:{}m", "\x1b[30;48;2;{};{};{}m"
 
 
@@ -15,21 +16,24 @@ def ink(bits, cap=16):  # (rgb, alpha) as in the app: expected stays unmarked
     return c, .72 * t ** 1.6 * (t >= .12)
 
 
-def lean(z):  # (rgb, alpha): teal reads human, violet reads AI
-    t = 2 * z["p"] - 1 if "p" in z else max(-1., min(z["z"] / 4, 1.))
-    return MACHINE if t > 0 else HUMAN, .55 * abs(t) ** 1.3 * (abs(t) >= .1)
+def rare(tail):  # 0 at 1 in 10 human texts scoring this high, 1 at 1 in 1,000
+    return max(0., min(1., math.log10(.1 / tail) / 2))
 
 
-def doc(text, h):  # sentences of [space before, word, bits]; joins back to text
+def lean(z):  # (rgb, alpha): violet as the score grows rare among human writing
+    return MACHINE, .6 * rare(z["ai"]["tail"]) if z.get("ai") else 0
+
+
+def doc(text, h, ai=None):  # sentences of [space before, word, bits]; joins back to text
     W, at, k, out = h["words"], 0, 0, []
-    for z in h["sents"]:
+    for i, z in enumerate(h["sents"]):
         ws = []
         for w in W[k:k + z["w"]]:
             ws.append([text[at:w["s"]], text[w["s"]:w["e"]], w["bits"]])
             at = w["e"]
         k += z["w"]
-        out.append(dict(z, words=ws))
-    return dict(sents=out, tail=text[at:], ai=h["ai"], ppl=h["ppl"])
+        out.append(dict(z, words=ws, ai=ai and ai["sents"][i]))
+    return dict(sents=out, tail=text[at:], ppl=h["ppl"], ai=ai and {k: v for k, v in ai.items() if k != "sents"})
 
 
 def css(c, a):
@@ -37,9 +41,8 @@ def css(c, a):
 
 
 def tip(z):
-    m = z["bits"] / z["n"]
-    ai = f"AI {z['p']:.0%}" if "p" in z else f"AI-likeness z {z['z']:+.1f}"
-    return f"perplexity {2 ** m:.1f}, {ai}"
+    m, a = z["bits"] / z["n"], z.get("ai")
+    return f"perplexity {2 ** m:.1f}" + (f", {a['tail']:.2%} of human sentences score this AI-like" if a else "")
 
 
 def html(d, by="bits", cap=16):  # [jelinek1977perplexity; bao2024fastdetectgpt]

@@ -1065,18 +1065,27 @@ p.post('/ghost', async (req, res) => {
   } catch (e) { res.status(e.name === 'AbortError' ? 409 : 502).json({ error: e.name === 'AbortError' ? 'replaced by a newer ask' : `the hub's model is not answering (${e.cause?.code || e.message})` }) }
   finally { done() }
 })
+// the words' scores; with ?ai, the detector's reading of the same text (slower,
+// so asked once the words show), or ai: null where the engine runs none
+const pick = (j, ks) => Object.fromEntries(ks.map(k => [k, j[k]]))
 p.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
   if (!SCOPE) return res.status(404).json({ error: 'this hub serves no surprise engine (TYDIG_PERPLEXISCOPE)' })
   if (typeof req.body !== 'string') return res.status(400).json({ error: 'the text to score, as text/plain' })
-  const [signal, done] = ask(req, 'surprise'), ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws')
+  const ai = 'ai' in req.query, [signal, done] = ask(req, 'surprise'), ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws')
   try {
-    const h = await new Promise((ok, no) => {
+    res.json(await new Promise((ok, no) => {
       signal.onabort = () => no(Object.assign(new Error('replaced by a newer ask'), { status: 409 }))
-      setTimeout(() => no(new Error('no answer in 60 s')), 60_000).unref()
+      setTimeout(() => no(new Error(`no answer in ${ai ? 180 : 60} s`)), (ai ? 180 : 60) * 1000).unref()
+      let detector
       ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 })))
-      ws.on('message', m => { const j = JSON.parse(m); if (j.type === 'heat') ok(j) }).on('error', no)
-    })
-    const { words, sents, ai, ppl, bpt, ntok } = h; res.json({ words, sents, ai, ppl, bpt, ntok })
+      ws.on('message', m => { const j = JSON.parse(m)
+        if (j.type === 'hello') detector = j.detector
+        else if (j.type === 'error') no(Object.assign(new Error(j.message), { status: 422 }))
+        else if (j.type === 'heat' && !ai) ok(pick(j, ['words', 'sents', 'ppl', 'bpt', 'ntok']))
+        else if (j.type === 'heat' && (!detector || !j.sents.length)) ok({ ai: null })
+        else if (j.type === 'ai') ok({ ai: j.sents ? pick(j, ['score', 'tail', 'words', 'calibrated', 'family', 'task', 'sents']) : null })
+      }).on('error', no)
+    }))
   } catch (e) { res.status(e.status || 502).json({ error: e.status ? e.message : `the hub's surprise engine is not answering (${e.code || e.message})` }) }
   finally { ws.terminate(); done() }
 })
