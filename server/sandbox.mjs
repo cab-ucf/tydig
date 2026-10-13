@@ -24,7 +24,8 @@ const PIN = 'test "$(stat -c %d:%i /work)" = "$0" || { echo project moved >&2; e
 const args = (proj, secs, i, cmd) => {
   const dir = path.join(DATA, proj), s = lstatSync(dir)
   if (!s.isDirectory()) throw new Error('not a project')
-  return ['run', '--rm', ...(i ? ['-i'] : []), ...NET, `--timeout=${secs}`,
+  // no log: output streams back here, and conmon opening one is a way to fail
+  return ['run', '--rm', ...(i ? ['-i'] : []), ...NET, `--timeout=${secs}`, '--log-driver=none',
     '--userns=keep-id:uid=1000,gid=1000', '--memory=2g', '--pids-limit=512', '--cpus=2',
     '--cap-drop=ALL', '--security-opt=no-new-privileges', '--security-opt=label=level:s0',
     '--read-only', '--tmpfs=/tmp:rw,size=512m', '--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
@@ -65,7 +66,11 @@ const serve = sock => {
     const out = { stdout: '', stderr: '' }
     p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
     p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
-    p.on('close', code => sock.end(JSON.stringify({ code, ...out }) + '\n'))
+    p.on('close', code => {
+      // podman --remote says only that conmon failed; the service's log says why
+      if (/conmon failed/.test(out.stderr)) out.stderr += '\n(why: `just podman-log` on the hub)\n'
+      sock.end(JSON.stringify({ code, ...out }) + '\n')
+    })
   })
 }
 

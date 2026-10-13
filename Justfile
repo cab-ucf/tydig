@@ -183,6 +183,7 @@ help:
     @echo
     @echo "  just                everything: build images, start server, print URL"
     @echo "  just logs           follow the server log"
+    @echo "  just podman-log     why a build container would not start"
     @echo "  just down           stop it"
     @echo "  just restart        restart after changing .env or code"
     @echo "  just shell          shell inside the running server"
@@ -240,6 +241,12 @@ restart: down up
 
 logs:
     {{as}} podman compose logs -f app
+
+# tydig's podman service and conmon, lately: why a container would not start.
+podman-log:
+    #!/usr/bin/env bash
+    if [ -d /run/systemd/system ]; then sudo journalctl _UID=$(id -u {{TYDIG_USER}}) -n 80 --no-pager
+    else echo "no journal here: restart the service with logs (it runs by hand): {{as}} podman --log-level=info system service --time=0"; fi
 
 # The link collaborators open in any browser (also in Settings > Share).
 link:
