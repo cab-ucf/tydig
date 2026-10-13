@@ -239,10 +239,13 @@ numbers mean: its chance, its rank among the model's guesses, how many
 equally likely words its flatness amounts to. The model is the hub's
 (above), or a Perplexiscope engine on your own machine (`just` in its folder
 serves one at `http://localhost:8000`). Typst files are scored as the prose
-they typeset: code, math, citations and markup are left out. The AI reading
-is a z-score until the engine is calibrated (`just calib` there), then a
-percentage; it is evidence, not a verdict: short, edited or translated text,
-and non-native writers, fool such detectors.
+they typeset, wherever it is written: headings, list items, `[content]`
+passed to functions, and strings that read as prose (a `title: "..."`);
+code, paths, math, citations and markup are left out. The word count counts
+the same prose. The AI reading is a z-score until the engine is calibrated
+(`just calib` there), then a percentage; it is evidence, not a verdict:
+short, edited or translated text, and non-native writers, fool such
+detectors.
 
 **Ghost suggestions** (Settings): a model on your own machine, through
 [Ollama](https://ollama.com), suggests how the line goes on; Tab takes it.

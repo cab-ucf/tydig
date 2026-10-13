@@ -108,6 +108,8 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
   /* which file to compile: above the preview (main.js moves it there) */
   #zoomctl #main-label { display: block !important; font-size: 0; margin-right: 4px; }
   #zoomctl #main-sel { max-width: 15rem; height: 100%; }
+  #mtabs #bar-build { display: block !important; text-transform: capitalize; }
+  #mtabs #wordcount { display: block !important; font-size: .65rem; }
   .menu > button { padding: .45rem .5rem; }
   .dropdown { max-width: calc(100vw - 1rem); }
   #status { flex: none; width: .65rem; height: .65rem; padding: 0; font-size: 0; background: currentColor; }

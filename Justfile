@@ -279,6 +279,7 @@ test:
     npm install >/dev/null
     npm run build >/dev/null
     repo=$PWD
+    node server/prosetest.mjs
     for suite in test authtest offlinetest provtest singleporttest signuptest agenttest templatetest egresstest importtest assisttest; do
         # each suite in a scratch dir of its own: never the real data/
         t=$(mktemp -d); cd "$t"

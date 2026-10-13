@@ -205,6 +205,10 @@ check('the Preview tab picks which file to compile, and still fits', await page.
   const sel = document.getElementById('main-sel'), r = sel.getBoundingClientRect()
   return r.width > 40 && r.right <= 390 && [...sel.options].some(o => o.value === 'summary.typ') && document.documentElement.scrollWidth <= 390 }))
 check('the other tabs leave it out', (await shows('edit')) && await page.evaluate(() => !document.getElementById('main-sel').getBoundingClientRect().width))
+check('the word count sits under the Edit tab, and build in the tab bar opens the Build panel', await page.evaluate(() =>
+  /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
+  (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
+   await page.evaluate(() => document.body.dataset.m === 'side' && document.getElementById('side-title').textContent === 'build')))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)

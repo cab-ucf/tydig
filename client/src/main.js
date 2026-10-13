@@ -20,7 +20,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
 import { renderCite } from './cite.js'
-import { surprise, aiText, MODES } from './surprise.js'
+import { surprise, aiText, MODES, prose } from './surprise.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
 
@@ -404,8 +404,8 @@ async function openFile(p) {
 }
 
 function updateWordCount() {
-  const src = currentPath?.endsWith('.typ') ? view?.state.doc.toString() : null
-  $('wordcount').textContent = src ? `${(src.match(/[\p{L}\p{N}']+/gu) || []).length} words` : ''
+  const src = currentPath?.endsWith('.typ') ? view?.state.doc.toString() : null // the prose, not the markup
+  $('wordcount').textContent = src ? `${(prose(src).text.match(/[\p{L}\p{N}']+/gu) || []).length} words` : ''
 }
 
 // Files outside the CRDT open here too: build output as read-only text, an
@@ -1160,10 +1160,12 @@ if (/iP(hone|ad|od)/.test(navigator.userAgent)) document.querySelector('meta[nam
 // Phones, narrow or on their side (short, touch), show one pane at a time,
 // picked in the bottom tab bar (#mtabs); a turned phone gets a wide preview.
 const phoneQ = matchMedia('(max-width: 800px), (max-height: 500px) and (pointer: coarse)'), phone = () => phoneQ.matches
-// which file to compile: a phone's bar has no room, so above its preview
-const mainHome = [$('main-label').parentNode, $('main-label').nextSibling]
-const placeMain = () => phone() ? $('zoomctl').prepend($('main-label')) : mainHome[0].insertBefore($('main-label'), mainHome[1])
-phoneQ.addEventListener('change', placeMain); placeMain()
+// a phone's bar has no room for these: which file to compile goes above the
+// preview, the word count under the Edit tab, build into the tab bar
+const moves = [['main-label', 'zoomctl', 'prepend'], ['wordcount', 'mt-edit', 'append'], ['bar-build', 'mtabs', 'append']]
+  .map(([id, to, how]) => [$(id), $(id).parentNode, $(id).nextSibling, $(to), how])
+const place = () => moves.forEach(([el, home, next, to, how]) => phone() ? to[how](el) : home.insertBefore(el, next))
+phoneQ.addEventListener('change', place); place()
 function applyLayout() {
   document.body.dataset.m = settings.m
   document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.m === settings.m))
@@ -1563,7 +1565,7 @@ $('tgl-tree').onclick = () => actions['toggle-tree']()
 $('tgl-side').onclick = () => actions['toggle-side']()
 $('tgl-theme').onclick = () => actions.theme()
 $('mtabs').onclick = e => {
-  const m = e.target.dataset?.m
+  const m = e.target.closest('[data-m]')?.dataset.m
   if (!m) return
   if (m === 'side') return openSidebar(sidebarMode || 'chat')
   settings.m = m; applyLayout(); if (m === 'preview') scheduleCompile()

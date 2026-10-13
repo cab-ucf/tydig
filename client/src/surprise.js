@@ -9,32 +9,62 @@ import { StateField, StateEffect } from '@codemirror/state'
 import { EditorView, Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
 
 // prose: the text a .typ file reads as, and for each of its characters the
-// source position it stands for. Code (a # line, until its brackets close),
-// comments, headings, math, references, labels and markup characters are
-// left out; the [content] inside code stays.
+// source position it stands for. Typst's two modes, scanned: markup is text
+// (headings and list items too) less its markup characters, math, raw text,
+// comments, labels and references; code (after a #, to the end of its
+// expression or statement) gives only its [content] blocks, and its strings
+// that read as prose ("Thermal relaxation of water", "Approach", never
+// "fig.png"); an #if's branches are kept apart.
+const SKIP = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|(`{3,})[\s\S]*?\1|`[^`]*`|\$(\\.|[^$\\])*\$|<[\w:.-]+>|@[\w:.-]*\w/y
+const KEYWORD = /(let|set|show|import|include|if|for|while|context|return)\b/y
+const STRING = /"(\\.|[^"\\])*"?/y, PARA = /\n[ \t]*\n/y, LINE = /[ \t]*(=+[ \t]+|[-+/][ \t]+|\d+\.[ \t]+)?/y
+const FONT = /\b(font|family)\s*:\s*\(?\s*("[^"]*"\s*,\s*)*$/ // a font's name is not prose
 export function prose(src, typst = true) {
   if (!typst) return { text: src, at: [...src].map((_, i) => i) }
-  let text = '', at = [], open = 0
-  const put = (c, i) => { text += c; at.push(i) }
-  const depth = l => l.replace(/"(\\.|[^"])*"|\/\/.*/g, '').split('').reduce((d, c) => d + ('({'.includes(c)) - (')}'.includes(c)), 0)
-  for (let i = 0; i <= src.length;) {
-    const end = src.indexOf('\n', i) < 0 ? src.length : src.indexOf('\n', i), line = src.slice(i, end)
-    if (open > 0 || /^\s*(#|\/\/|=)/.test(line)) {
-      open = Math.max(0, open + depth(line))
-      if (text && !text.endsWith('\n')) put('\n', i) // a break, so no sentence runs across it
-    } else {
-      for (let j = i + (/^\s*([-+]|\d+\.)?\s*/.exec(line)[0].length); j < end;) {
-        // inline code up to the [content] it chooses (#if c [a] else [b]: a, b), raw text, math, references
-        const skip = /^(\/\/.*|\/\*[\s\S]*?\*\/|`[^`]*`|\$[^$]*\$|@[\w:.-]*\w|#(let|set|show|import|include)\b.*|#(if|for|while)\b[^\[\n]*|\]\s*else\b(\s+if\b[^\[\n]*)?|#[\w.]+(\([^()]*(\([^()]*\)[^()]*)*\))?|<[\w:.-]+>|\\)/.exec(src.slice(j, end))
-        if (skip) { if (text && !/\s$/.test(text)) put(' ', j); j += skip[0].length; continue } // no two words glued over it
-        if (!/[*_`\[\]]/.test(src[j])) put(src[j], j)
-        j++
-      }
-      put(line.trim() ? ' ' : '\n', end) // a wrapped line joins its paragraph; a blank one ends it
-    }
-    i = end + 1
+  const out = [], at = []
+  let i = 0
+  const put = (c, j) => { out.push(c); at.push(j) }
+  const stick = re => (re.lastIndex = i, re.exec(src)?.[0])
+  // a space or a break between two runs of text (a break ends any sentence)
+  const sep = (c, j) => { const l = out.at(-1); if (!l || l === '\n') return; if (l !== ' ') put(c, j); else if (c === '\n') out[out.length - 1] = c }
+  const string = () => {
+    const s = stick(STRING), from = i; i += s.length
+    if (!/\p{L}{2,}\s+\p{L}|^"\p{Lu}\p{Ll}+"$/u.test(s) || FONT.test(src.slice(Math.max(0, from - 200), from))) return
+    sep('\n', from)
+    for (let j = from + 1; j < from + s.length - 1; j++) src[j] === '\\' ? put('nt'.includes(src[++j]) ? ' ' : src[j], j) : put(src[j], j)
+    sep('\n', i)
   }
-  return { text, at }
+  const code = () => { // just after a #: one expression, or a statement to its line's end
+    const stmt = !!stick(KEYWORD)
+    for (let depth = 0; i < src.length;) {
+      const c = src[i], skip = stick(SKIP)
+      if (skip) { i += skip.length; continue }
+      if (c === '"') { string(); continue }
+      if (c === '[') { if (stmt) sep('\n', i); i++; markup(true); if (!depth && !stmt && src[i] !== '[') return; continue }
+      if ('({'.includes(c)) { depth++; i++; continue }
+      if (')}'.includes(c)) { if (!depth) return; i++; if (!--depth && !stmt && !/[.(\[]/.test(src[i])) return; continue }
+      if (!depth && (c === '\n' || c === ';' || !stmt && !/[\w.-]/.test(c) || !stmt && c === '.' && !/\w/.test(src[i + 1]))) return
+      i++
+    }
+  }
+  const markup = block => { // to the ] that closes a [content] block, or the end
+    let sol = true, heading = false
+    while (i < src.length) {
+      const c = src[i]
+      if (sol) { const m = stick(LINE); i += m.length; heading = m.includes('='); sol = false; continue }
+      if (block && c === ']') { i++; return }
+      if (c === '\n') { sep(heading || stick(PARA) ? '\n' : ' ', i); i++; sol = true; continue }
+      const skip = '/`$<@'.includes(c) && !(c === '/' && src[i - 1] === ':') && stick(SKIP) // (https:// is a link)
+      if (skip) { sep(' ', i); i += skip.length; continue }
+      if (c === '#') { const n = out.length; i++; code(); if (out.length === n) sep(' ', i); continue }
+      if (c === '\\') { /\s/.test(src[i + 1] ?? ' ') ? sep(' ', i) : put(src[i + 1], i + 1); i += 2; continue }
+      if (' \t~'.includes(c)) sep(' ', i)
+      else if (!'*_[]'.includes(c)) put(c, i)
+      i++
+    }
+  }
+  markup(false)
+  return { text: out.join(''), at }
 }
 
 // what the text can be highlighted by: [name, what it shows]
