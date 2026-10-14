@@ -1,6 +1,4 @@
-// The public internet only: a name resolves to addresses that are not this
-// machine's own network (loopback, private, CGNAT, link-local and cloud
-// metadata, ULA, or v4 hidden in v6). Throws otherwise.
+// A host's addresses, if all are on the public internet; else throws.
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 

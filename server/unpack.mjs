@@ -1,7 +1,6 @@
-// A .tar.gz, .tar or .zip, read in memory: never extracted to disk, so a
-// path out of the project, a symlink or a device file cannot land anywhere.
-// Regular files only; a folder everything sits in (corona-r21/) is dropped;
-// .git and OS litter are skipped. max bounds the unpacked size (zip bombs).
+// A .tar(.gz) or .zip read in memory, never extracted: regular files only,
+// no .git or OS litter, a folder holding everything dropped; max bounds
+// the unpacked size.
 import zlib from 'node:zlib'
 
 const files = (buf, max) => buf[0] === 0x50 && buf[1] === 0x4b ? zip(buf, max) : tar(buf[0] === 0x1f && buf[1] === 0x8b

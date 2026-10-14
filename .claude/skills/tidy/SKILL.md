@@ -9,8 +9,7 @@ description: Tidy a Typst project (grant, paper, report) into tydig's layout so
 
 # Tidy a project for tydig
 
-A tydig project is a stack of template layers (`server/templates/`, see
-README > Templates) plus the writing. Tidy means: one layout, the
+A tydig project is a stack of template layers (`templates/`) plus the writing. Tidy means: one layout, the
 template's; the writing moved into it; nothing else.
 
 1. **Audit.** `.claude/skills/tidy/audit.sh PROJECT TEMPLATE [BRAND]`

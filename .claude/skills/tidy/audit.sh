@@ -1,7 +1,7 @@
 #!/bin/sh
 # audit.sh PROJECT TEMPLATE [BRAND]: each file against tydig's template stack
 set -e
-T=$(cd "$(dirname "$0")/../../../server/templates" && pwd)
+T=$(cd "$(dirname "$0")/../../../templates" && pwd)
 p=$1 t=$2 L=
 case $t in nih*|nsf*) L=grant ;; esac
 for l in $(ls "$T"); do case $t in "$l" | "$l"-*) L="$L $l" ;; esac; done

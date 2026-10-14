@@ -1,7 +1,6 @@
 node_modules/
 dist/
-client/dist/
 /data/
-server/data/
 .env
 .uitest/
+.claude/worktrees/

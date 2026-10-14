@@ -1,7 +1,5 @@
-// The build network's only way out: an HTTPS proxy (CONNECT to port 443) to
-// the public internet. Builds can fetch packages and data; they cannot reach
-// the host, the LAN, the campus network or the cloud's metadata service.
-// The address checked is the address dialled, so DNS cannot be rebound.
+// The build network's only way out: CONNECT to port 443 on public
+// addresses. The address checked is the one dialled (no DNS rebinding).
 import http from 'node:http'
 import net from 'node:net'
 import { publicOnly } from './public.mjs'

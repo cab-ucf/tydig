@@ -1,20 +1,11 @@
 import { defineConfig } from 'vite'
 import wasm from 'vite-plugin-wasm'
 
-// Dev proxy makes everything same-origin (so the session cookie is sent on
-// all requests, including websockets). In production, put one reverse proxy
-// in front of the static client, :3000 (REST+auth+LSP), and :1234 (sync).
+// the hub serves this in development (TYDIG_DEV=1); base './' lets the same
+// build run from a hub and from the static site
 export default defineConfig({
   plugins: [wasm()],
-  server: {
-    proxy: {
-      '/api': 'http://localhost:3000',
-      '/lsp': { target: 'ws://localhost:3000', ws: true },
-      '/sync': { target: 'ws://localhost:1234', ws: true, rewrite: p => p.replace(/^\/sync/, '') },
-    },
-  },
-  // the hub's look: brands/<TYDIG_BRAND>/brand.css, after style.css
   resolve: { alias: { '@brand': `${import.meta.dirname}/brands/${process.env.TYDIG_BRAND || 'tydig'}` } },
-  base: './', // the same build is served by a hub and from the static site's app/
+  base: './',
   build: { target: 'esnext' },
 })

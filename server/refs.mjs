@@ -1,7 +1,6 @@
-// Papers and references, for the Cite panel (client/src/cite.js) and for agent
-// members (agent-mcp.mjs) alike: search three indexes, cite by the
-// registrar's own record, and check that each reference is real and cited
-// as it was published. No DOM, so it runs in a browser and in Node.
+// Papers: search PubMed, Crossref (and OpenAlex with OPENALEX_API_KEY), cite
+// by the registrar's record, check each reference against it. Shared by the
+// Cite panel (client) and agents; no DOM.
 const env = globalThis.process?.env || {}
 const CR = env.TYDIG_CROSSREF || 'https://api.crossref.org/works', PM = env.TYDIG_PUBMED || 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
 const OA = env.TYDIG_OPENALEX || 'https://api.openalex.org/works'

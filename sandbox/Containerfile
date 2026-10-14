@@ -1,51 +1,25 @@
-# Build sandbox for tydig recipes: one container per build, then gone.
-# Builds have network by default (packages, datasets); TYDIG_BUILD_NET=0 cuts it.
-#   podman build -t tydig-build -f sandbox/Containerfile .   (from the repo root)
-# Add julia, R, LaTeX, etc. here as your justfiles need them.
+# The build sandbox: one container per build (server/sandbox.mjs).
+# Add what your projects' Makefiles need (R, julia, LaTeX).
 FROM docker.io/library/python:3.12-slim
-
-# pooch: pinned-hash data fetching, used by the project template's data recipe.
 RUN pip install --no-cache-dir numpy pandas matplotlib seaborn pooch openpyxl pypdf ruamel.yaml
-
-ARG TYPST_VERSION=0.15.1
-ARG JUST_VERSION=1.46.0
-ARG TINYMIST_VERSION=0.15.8
-ARG PANDOC_VERSION=3.8.2
-# make drives the project build graph; tinymist serves the editor's LSP;
-# pandoc writes Word (tydig-docx). typst, just, tinymist and pandoc come as
-# static binaries for whatever arch this is built on (x86_64 or aarch64);
-# curl and xz-utils are only needed to fetch them, so they are dropped afterwards.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends make xz-utils curl \
- && a=$(uname -m) \
- && curl -fsSL https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-$a-unknown-linux-musl.tar.xz \
+ARG TYPST=0.15.1 JUST=1.46.0 TINYMIST=0.15.8 PANDOC=3.8.2
+RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils curl \
+ && a=$(uname -m) && gh=https://github.com \
+ && curl -fsSL $gh/typst/typst/releases/download/v$TYPST/typst-$a-unknown-linux-musl.tar.xz \
     | tar -xJ -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
- && curl -fsSL https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-$a-unknown-linux-musl.tar.gz \
+ && curl -fsSL $gh/casey/just/releases/download/$JUST/just-$JUST-$a-unknown-linux-musl.tar.gz \
     | tar -xz -C /usr/local/bin just \
- && curl -fsSL https://github.com/Myriad-Dreamin/tinymist/releases/download/v${TINYMIST_VERSION}/tinymist-$a-unknown-linux-musl.tar.gz \
+ && curl -fsSL $gh/Myriad-Dreamin/tinymist/releases/download/v$TINYMIST/tinymist-$a-unknown-linux-musl.tar.gz \
     | tar -xz -C /usr/local/bin --strip-components=1 tinymist-$a-unknown-linux-musl/tinymist \
- && curl -fsSL https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-linux-$(dpkg --print-architecture).tar.gz \
-    | tar -xz -C /usr/local/bin --strip-components=2 pandoc-${PANDOC_VERSION}/bin/pandoc \
- && apt-get purge -y xz-utils curl && apt-get autoremove -y \
- && rm -rf /var/lib/apt/lists/* \
- && typst --version && just --version && tinymist --version && pandoc --version | head -1 && make --version | head -1
-
-# Typst @preview packages download on first use; the runtime has no network by
-# default, so warm the cache at image build. Add the packages your documents
-# import. Readable by the non-root user set below.
+ && curl -fsSL $gh/jgm/pandoc/releases/download/$PANDOC/pandoc-$PANDOC-linux-$(dpkg --print-architecture).tar.gz \
+    | tar -xz -C /usr/local/bin --strip-components=2 pandoc-$PANDOC/bin/pandoc \
+ && apt-get purge -y xz-utils curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+# warm the packages documents import: builds may have no network
 ENV TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages
-RUN mkdir -p /opt/typst-packages \
- && printf '#import "@preview/cetz:0.4.2"\n#import "@preview/tablex:0.0.9"\n' > /tmp/warm.typ \
- && typst compile /tmp/warm.typ /tmp/warm.pdf || true \
- && rm -f /tmp/warm.* \
- && chmod -R a+rX /opt/typst-packages
-
-# non-root inside the sandbox; rootless podman maps this to your user anyway
-# The preview's fonts (fonts/ at the repo root): built PDFs set type exactly
-# like the preview, and Inter, Libertinus Sans etc. work in both.
+RUN printf '#import "@preview/cetz:0.4.2"\n#import "@preview/tablex:0.0.9"\n' > /tmp/w.typ \
+ && (typst compile /tmp/w.typ /tmp/w.pdf || true) && rm -f /tmp/w.* && chmod -R a+rX /opt/typst-packages
+# the preview's fonts, so PDFs set type alike; Word export (tydig-docx)
 COPY fonts/ /usr/local/share/fonts/tydig/
-# Word with live EndNote citations: tydig-docx FILE.typ (File > Export Word)
 COPY sandbox/tydig-docx sandbox/docx.typ sandbox/endnote.lua /usr/local/share/tydig-docx/
 RUN ln -s /usr/local/share/tydig-docx/tydig-docx /usr/local/bin/tydig-docx
-
 USER 1000:1000

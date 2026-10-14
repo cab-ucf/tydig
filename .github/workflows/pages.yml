@@ -1,12 +1,8 @@
-# The static site: the editor, which opens a hub's link (<site>/#<id>; see
-# server/link.mjs) or, with none, this site's own hub; app/ for older links;
-# the landing page at about/. Settings > Pages > Source: GitHub Actions.
-# Settings > Variables: TYDIG_HUB, the hub's id (`just link`, after the #);
-# TYDIG_BRAND, its look (a folder in client/brands/).
+# The static site: the editor (opens <site>/#<hub id>, else TYDIG_HUB),
+# app/ for older links, the landing page at about/.
+# Variables: TYDIG_HUB (`just` prints it after the #), TYDIG_BRAND.
 name: pages
-on:
-  push: { branches: [main] }
-  workflow_dispatch:
+on: { push: { branches: [main] }, workflow_dispatch: }
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:

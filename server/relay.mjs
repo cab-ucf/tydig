@@ -1,8 +1,5 @@
-// A link's seed names its hub's key, as irp derives it; the hub (link.mjs)
-// and the page (client/src/link.js) both import this. The relay is n0's
-// US-East one (use1-1) unless the link names another (#<seed>;r=<region or
-// URL>, from TYDIG_LINK_RELAY): networks that block other countries still
-// reach it, where a relay picked by hash or distance could be Singapore.
+// Link ids and relays, shared by the hub (link.mjs) and the page (link.js).
+// n0's US-East relay unless the link names another (#<id>;r=<region|URL>).
 import { blake3 } from '@noble/hashes/blake3.js'
 
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567'
