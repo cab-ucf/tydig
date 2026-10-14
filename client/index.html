@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <!-- The static site sends no CSP header (a hub does): no inline script, no
-       javascript: URLs in the preview, on either. -->
+  <!-- for the static site, which sends no CSP header (a hub does) -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'" />
   <title>tydig</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/src/style.css" />
   <link rel="stylesheet" href="@brand/brand.css" />
 </head>
@@ -63,7 +63,6 @@
         <button data-act="lsp" data-check="lsp">LSP (tinymist)</button>
         <hr/>
         <button data-act="share">Share project...</button>
-        <button data-act="federation">Federate with another hub...</button>
         <button data-act="gitremote">Git remote (durable copy)...</button>
         <hr/>
         <button data-act="template">Project template...</button>
@@ -80,28 +79,28 @@
     <span id="peers" title="connected collaborators"></span>
     <span class="spacer"></span>
     <label id="main-label">compile <select id="main-sel"></select></label>
-    <button id="bar-comment" title="Comment on selection (Ctrl-Alt-M)">comment</button>
-    <button id="bar-cite" title="Find papers for the selection; check references (Ctrl-Alt-C)">cite</button>
-    <button id="bar-build" title="Build panel (Alt-B)">build</button>
-    <button id="bar-check" title="What the application needs, and what is here" hidden>checklist</button>
+    <button id="bar-comment" data-act="comment" title="Comment on selection (Ctrl-Alt-M)">comment</button>
+    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references (Ctrl-Alt-C)">cite</button>
+    <button id="bar-build" data-act="build" title="Build panel (Alt-B)">build</button>
+    <button id="bar-check" data-act="checklist" title="What the application needs, and what is here" hidden>checklist</button>
     <span id="wordcount" title="words in current file"></span>
-    <button id="scope" class="tgl" hidden></button>
-    <button id="tgl-tree" class="tgl" title="Toggle sidebar (Alt-1)">&#9707;</button>
-    <button id="tgl-side" class="tgl" title="Toggle panel (Alt-2)">&#9706;</button>
-    <button id="tgl-theme" class="tgl" title="Theme: dark, cyberpunk, light (Alt-D)">&#9680;</button>
+    <button id="scope" class="tgl" data-act="scope-next" hidden></button>
+    <button id="tgl-tree" class="tgl" data-act="toggle-tree" title="Toggle sidebar (Alt-1)">&#9707;</button>
+    <button id="tgl-side" class="tgl" data-act="toggle-side" title="Toggle panel (Alt-2)">&#9706;</button>
+    <button id="tgl-theme" class="tgl" data-act="theme" title="Theme: dark, cyberpunk, light (Alt-D)">&#9680;</button>
     <span id="status" data-state="connecting">connecting</span>
   </header>
   <main id="layout">
     <nav id="tree-pane">
       <div class="sect">
         <div class="sect-head" data-sect="projectsOpen"><span class="tw">&#9662;</span> projects
-          <button id="proj-new-btn" title="New project">+</button></div>
+          <button id="proj-new-btn" data-act="projects" title="New project">+</button></div>
         <div class="sect-body" id="projects-list"></div>
       </div>
       <div class="sect grow">
         <div class="sect-head" data-sect="filesOpen"><span class="tw">&#9662;</span> files
-          <span><button id="new-file" title="New file (use / for directories)">+file</button>
-          <button id="upload" title="Upload binary (image, data)">up</button></span></div>
+          <span><button id="new-file" data-act="new-file" title="New file (use / for directories)">+file</button>
+          <button id="upload" data-act="upload" title="Upload binary (image, data)">up</button></span></div>
         <div class="sect-body" id="tree"></div>
       </div>
       <input id="upload-input" type="file" hidden multiple />
@@ -109,7 +108,9 @@
     <section id="editor"></section>
     <div id="split" title="drag to resize; double-click to even out"></div>
     <section id="preview">
-      <div id="zoomctl"><button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button></div>
+      <div id="zoomctl">
+        <button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button>
+      </div>
       <div id="page"></div><pre id="diag" hidden></pre>
       <button id="pv-comment" hidden title="Comment on the selected text (Ctrl-Alt-M)">comment</button>
     </section>
@@ -118,16 +119,27 @@
       <div id="side-body"></div>
     </aside>
   </main>
-  <nav id="mtabs"><button data-m="files">Files</button><button data-m="edit" id="mt-edit">Edit</button><button data-m="preview">Preview</button><button data-m="side">Panel</button></nav>
-  <button id="focus-exit" title="exit focus mode (Alt-0)">⤢ exit focus</button>
+  <nav id="mtabs">
+    <button data-m="files">Files</button><button data-m="edit" id="mt-edit">Edit</button>
+    <button data-m="preview">Preview</button><button data-m="side">Panel</button>
+  </nav>
+  <button id="focus-exit" data-act="focus" title="exit focus mode (Alt-0)">⤢ exit focus</button>
   <dialog id="qo"><input id="qo-input" placeholder="open file..." /><div id="qo-list"></div></dialog>
   <dialog id="picker">
     <h3>Projects</h3>
     <div id="proj-list"></div>
-    <form method="dialog" id="proj-new"><input id="proj-name" placeholder="new-project-name" pattern="[\w\-]{1,64}" required /><select id="proj-tpl" title="template"></select><select id="proj-brand" title="branding"></select><button>create</button>
-      <button type="button" id="proj-zip" title="a new project from a .zip or .tar.gz (the name above, or the archive's)">from archive</button><input type="file" id="proj-zip-input" accept=".zip,.tgz,.tar.gz,.tar" hidden /></form>
-    <form method="dialog" id="proj-join"><input id="proj-invite" placeholder="or paste a federation invite from another hub" /><button>join</button></form>
-    <form method="dialog" id="proj-git"><input id="proj-git-url" placeholder="or a git URL to open a project stored on GitHub / GitLab / Codeberg" /><button>open</button></form>
+    <form method="dialog" id="proj-new" class="row">
+      <input id="proj-name" placeholder="new-project-name" pattern="[\w\-]{1,64}" required />
+      <select id="proj-tpl" title="template"></select><select id="proj-brand" title="branding"></select>
+      <button class="go">create</button>
+      <button type="button" class="go" id="proj-zip"
+        title="a new project from a .zip or .tar.gz (the name above, or the archive's)">from archive</button>
+      <input type="file" id="proj-zip-input" accept=".zip,.tgz,.tar.gz,.tar" hidden />
+    </form>
+    <form method="dialog" id="proj-git" class="row">
+      <input id="proj-git-url" placeholder="or a git URL to open a project stored on GitHub / GitLab / Codeberg" />
+      <button class="go">open</button>
+    </form>
     <form method="dialog" class="dlg-close"><button>close</button></form>
   </dialog>
   <dialog id="share">
@@ -138,11 +150,6 @@
   <dialog id="git">
     <h3>Git remote</h3>
     <div id="git-body"></div>
-    <form method="dialog" class="dlg-close"><button>close</button></form>
-  </dialog>
-  <dialog id="fed">
-    <h3>Federate this project</h3>
-    <div id="fed-body"></div>
     <form method="dialog" class="dlg-close"><button>close</button></form>
   </dialog>
   <script type="module" src="/src/main.js"></script>

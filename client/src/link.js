@@ -8,11 +8,13 @@
 import { RELAY, relayUrl } from '../../server/relay.mjs'
 const HUB = import.meta.env.VITE_HUB
 const m = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/.exec(location.hash || HUB && '#' + HUB)
-export const link = m && { code: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
+export const link = m &&
+  { code: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {
-  const el = document.getElementById('link-status') ?? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'link-status' }))
+  const el = document.getElementById('link-status') ??
+    document.body.appendChild(Object.assign(document.createElement('div'), { id: 'link-status' }))
   el.className = fail ? 'fail' : ''; el.innerHTML = html
   el.querySelector('button')?.addEventListener('click', () => location.reload())
 }
@@ -83,14 +85,18 @@ class HubSocket extends EventTarget {
   #sent = Promise.resolve(); #reader = null
   constructor(url) { super(); this.url = String(url); this.#run(new URL(url)) }
   #emit(type, init) {
-    const e = type === 'message' ? new MessageEvent(type, init) : type === 'close' ? new CloseEvent(type, init) : new Event(type)
+    const e = type === 'message' ? new MessageEvent(type, init)
+      : type === 'close' ? new CloseEvent(type, init) : new Event(type)
     this['on' + type]?.(e); this.dispatchEvent(e)
   }
   async #run(u) {
     try {
       const r = await fetch(`/api/bridge?id=${this.#id}&path=${encodeURIComponent(u.pathname + u.search)}`)
       if (!r.ok) throw new Error(r.status)
-      if (this.readyState) { r.body?.cancel(); this.readyState = 3; return this.#emit('close', { code: 1000 }) } // closed while connecting
+      if (this.readyState) { // closed while connecting
+        r.body?.cancel(); this.readyState = 3
+        return this.#emit('close', { code: 1000 })
+      }
       this.#reader = r.body.getReader(); this.readyState = 1; this.#emit('open')
       for (let buf = new Uint8Array(0); ;) {
         const { value, done } = await this.#reader.read()
@@ -99,7 +105,8 @@ class HubSocket extends EventTarget {
         for (let n; buf.length >= 5 && buf.length >= 5 + (n = new DataView(buf.buffer).getUint32(1));) {
           const d = buf.slice(5, 5 + n), text = buf[0] === 1
           buf = buf.slice(5 + n)
-          this.#emit('message', { data: text ? new TextDecoder().decode(d) : this.binaryType === 'arraybuffer' ? d.buffer : new Blob([d]) })
+          this.#emit('message', { data: text ? new TextDecoder().decode(d)
+            : this.binaryType === 'arraybuffer' ? d.buffer : new Blob([d]) })
         }
       }
     } catch { if (this.readyState === 0) this.#emit('error') }
@@ -107,7 +114,8 @@ class HubSocket extends EventTarget {
   }
   send(d) {
     const binary = typeof d === 'string' ? '0' : '1'
-    this.#sent = this.#sent.then(() => fetch(`/api/bridge/${this.#id}`, { method: 'POST', headers: { 'x-binary': binary }, body: d })).catch(() => {})
+    this.#sent = this.#sent.then(() => fetch(`/api/bridge/${this.#id}`,
+      { method: 'POST', headers: { 'x-binary': binary }, body: d })).catch(() => {})
   }
   close() { if (this.readyState < 2) { this.readyState = 2; this.#reader?.cancel() } }
 }

@@ -9,9 +9,15 @@ import { Decoration, EditorView, ViewPlugin, showTooltip } from '@codemirror/vie
 import { StateField, StateEffect } from '@codemirror/state'
 
 export const DICT = '.harper-dictionary.txt'
+const el = (tag, props = {}, ...kids) => {
+  const e = Object.assign(document.createElement(tag), props)
+  e.append(...kids)
+  return e
+}
 let harper, words
 // sound English (or a house style), or prose cut around code, that these misread
-const OFF = { DisjointPrefixes: false, ExpandMinimum: false, OxfordComma: false, SentenceCapitalization: false, Spaces: false }
+const OFF = { DisjointPrefixes: false, ExpandMinimum: false, OxfordComma: false,
+  SentenceCapitalization: false, Spaces: false }
 // as word processors do: no spelling for ACRONYMS, NSF's or sha256
 const CODE = /\d|^[^\p{Ll}]+(['’]s)?$/u
 const load = () => harper ??= Promise.all([import('harper.js'), import('harper.js/binary')])
@@ -31,15 +37,18 @@ const units = text => {
 // [{ from, to, word, message, spelling, fixes: [{ from, to, insert }] }]
 export async function check(src, files) {
   const h = await load(), dict = files.get(DICT)?.toString() ?? ''
-  if (dict !== words) { words = dict; await h.clearWords(); await h.importWords(dict.split(/\s+/).filter(Boolean)) }
+  if (dict !== words) {
+    words = dict
+    await h.clearWords(); await h.importWords(dict.split(/\s+/).filter(Boolean))
+  }
   const { text, at } = prose(src), u = units(text)
   return (await h.lint(text, { language: 'plaintext' })).flatMap(l => {
     const a = u(l.span().start), b = u(l.span().end)
     const from = at[a], to = at[b - 1] + 1, word = text.slice(a, b), spelling = l.lint_kind() === 'Spelling'
     // not what was written (it spans code that was cut out), or an acronym
     if (b <= a || src.slice(from, to) !== word || spelling && CODE.test(word)) return []
-    return { from, to, word, message: l.message(), spelling,
-      fixes: l.suggestions().map(s => ({ from: s.kind() === 2 ? to : from, to, insert: s.get_replacement_text() })) }
+    return { from, to, word, message: l.message(), spelling, fixes: l.suggestions()
+      .map(s => ({ from: s.kind() === 2 ? to : from, to, insert: s.get_replacement_text() })) }
   })
 }
 
@@ -61,9 +70,8 @@ const tip = files => showTooltip.compute(['selection', marks], state => {
   const at = state.selection.main.head
   let hit; state.field(marks).between(at, at, (from, to, d) => { hit = { ...d.spec.lint, from, to } })
   return hit && { pos: hit.from, end: hit.to, above: true, create: view => {
-    const dom = document.createElement('div'), b = (text, run) =>
-      dom.appendChild(Object.assign(document.createElement('button'), { textContent: text, onmousedown: e => { e.preventDefault(); run() } }))
-    dom.className = 'cm-spell-tip'; dom.append(Object.assign(document.createElement('p'), { textContent: hit.message }))
+    const dom = el('div', { className: 'cm-spell-tip' }, el('p', { textContent: hit.message }))
+    const b = (text, run) => dom.append(el('button', { textContent: text, onmousedown: e => { e.preventDefault(); run() } }))
     const shift = hit.from - hit.found // the text may have moved since it was checked
     for (const f of hit.fixes.slice(0, 5))
       b(f.insert || '(remove)', () => view.dispatch({ changes: { from: f.from + shift, to: f.to + shift, insert: f.insert } }))
@@ -92,7 +100,6 @@ const run = files => ViewPlugin.fromClass(class {
 export const spellcheck = files => [marks, tip(files), run(files)]
 
 // ---- the whole project, in the side panel ----
-const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
 export async function renderSpelling(body, { files, open }) {
   body.replaceChildren(el('p', { className: 'empty', textContent: 'checking every .typ file…' }))
   const out = []
@@ -102,5 +109,6 @@ export async function renderSpelling(body, { files, open }) {
       el('b', { textContent: f.word }), ` ${f.fixes[0]?.insert ? '→ ' + f.fixes[0].insert : ''}`,
       el('small', { textContent: `${p}:${text.slice(0, f.from).split('\n').length} · ${f.message}` })))
   }
-  body.replaceChildren(el('p', { className: 'hint', textContent: out.length ? `${out.length} to look at; click one to go there.` : 'Nothing to fix.' }), ...out)
+  body.replaceChildren(el('p', { className: 'hint',
+    textContent: out.length ? `${out.length} to look at; click one to go there.` : 'Nothing to fix.' }), ...out)
 }
