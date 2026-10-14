@@ -16,5 +16,5 @@ export function migrate(DATA, HUB) {
   for (const [f, n] of ls(a)) if (n.endsWith('.json')) move(f, n.slice(0, -5), 'agents.json')
   if (existsSync(path.join(g, 'known_hosts')))
     renameSync(path.join(g, 'known_hosts'), path.join(HUB, 'known_hosts'))
-  for (const d of [g, a, path.join(DATA, 'federation')]) rmSync(d, { recursive: true, force: true })
+  for (const d of [g, a, 'federation', 'iroh.secret', 'iroh.json']) rmSync(path.resolve(DATA, d), { recursive: true, force: true })
 }
