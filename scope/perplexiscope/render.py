@@ -1,5 +1,7 @@
 """Static overlays: word surprise as a tint, sentence surprise as an underline,
-or how AI-like each sentence reads. HTML, terminal, or JSON for perplexiscope.typ."""
+or how AI-like each sentence reads; as HTML, for a terminal, or as JSON (doc).
+
+    h = Engine(name).heat(text); print(ansi(doc(text, h, Detector()(text, spans))))"""
 import math
 from html import escape
 
@@ -33,7 +35,8 @@ def doc(text, h, ai=None):  # sentences of [space before, word, bits]; joins bac
             at = w["e"]
         k += z["w"]
         out.append(dict(z, words=ws, ai=ai and ai["sents"][i]))
-    return dict(sents=out, tail=text[at:], ppl=h["ppl"], ai=ai and {k: v for k, v in ai.items() if k != "sents"})
+    return dict(sents=out, tail=text[at:], ppl=h["ppl"],
+                ai=ai and {k: v for k, v in ai.items() if k != "sents"})
 
 
 def css(c, a):
@@ -42,7 +45,8 @@ def css(c, a):
 
 def tip(z):
     m, a = z["bits"] / z["n"], z.get("ai")
-    return f"perplexity {2 ** m:.1f}" + (f", {a['tail']:.2%} of human sentences score this AI-like" if a else "")
+    return f"perplexity {2 ** m:.1f}" + (
+        f", {a['tail']:.2%} of human sentences score this AI-like" if a else "")
 
 
 def html(d, by="bits", cap=16):  # [jelinek1977perplexity; bao2024fastdetectgpt]

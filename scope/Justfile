@@ -1,0 +1,17 @@
+model := env_var_or_default("MODEL", "Qwen/Qwen3-0.6B-Base")
+detector := env_var_or_default("DETECTOR", "meld")
+torch := env_var_or_default("TORCH", "cpu")
+run := "uv run --no-project --with-requirements requirements.txt python -m perplexiscope."
+
+# serve it at http://localhost:8000 (more: just serve --help)
+serve *args:
+    {{run}}serve --model '{{model}}' --detector '{{detector}}' {{args}}
+
+# the container image, its models baked in
+image tag="perplexiscope":
+    podman build -t {{tag}} --build-arg MODEL={{model}} --build-arg TORCH={{torch}} \
+        --build-arg DETECTOR={{detector}} .
+
+# MELD's thresholds for sentences, from human writing: just calib human/*.txt
+calib +files:
+    {{run}}calib {{files}}

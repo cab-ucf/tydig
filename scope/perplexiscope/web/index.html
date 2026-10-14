@@ -131,9 +131,9 @@ function connect(){
     else if(m.type=="doc"){S.doctext=m.text;if(S.src=="watch"){setText(m.text);send(0,!!S.tree)}}
     else if(m.seq!==S.seq)return;
     else if(m.type=="heat"){S.words=m.words;S.sents=m.sents;S.ai=null;S.wtext=S.sent;render();$("ppl").textContent=m.ppl.toFixed(1);$("bpt").textContent=m.bpt.toFixed(2)}
-    else if(m.type=="ai"){m.sents.forEach((a,i)=>S.sents[i]&&(S.sents[i].ai=a));S.ai=m;if(S.mode=="ai")render();
+    else if(m.type=="ai"&&m.sents){m.sents.forEach((a,i)=>S.sents[i]&&(S.sents[i].ai=a));S.ai=m;if(S.mode=="ai")render();
       $("aiv").textContent=m.words<100?"too short":m.tail<=.01?"flagged":m.tail<.1?"unusual":"typical";
-      $("aiv").parentElement.title=`MELD: ${m.words<100?"needs 100+ words to judge; ":""}${tailtxt(m.tail,"documents")}. Closest family ${m.family}, task ${m.task}.${m.calibrated?"":" Sentence shading uses document thresholds until 'just calib' runs."}`}
+      $("aiv").parentElement.title=`MELD: ${m.words<100?"needs 100+ words to judge; ":""}${tailtxt(m.tail,"documents")}. Closest family ${m.family}, task ${m.task}.${m.calibrated?"":" Sentence shading uses document thresholds until 'just calib' runs on human writing."}`}
     else if(m.type=="tree"){S.tree=m;S.sample=null;drawTree()}
     else if(m.type=="sample"){S.sample=m.tokens;drawTree()}};
 }
