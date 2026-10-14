@@ -164,15 +164,15 @@ check('focus hides the preview and every bar, centres the text, reads in Atkinso
 
 // spelling: a misspelt word is marked and fixed from the mark; code is not
 await page.focus('.cm-content'); await page.keyboard.down('Control'); await page.keyboard.press('End'); await page.keyboard.up('Control')
-await page.keyboard.type('\n\nThe water was recieved. #let foo_bar = 1\n')
+await page.keyboard.type('\n\nThe water was recieved by the transcriptome. #let foo_bar = 1\n')
 const marked = () => page.evaluate(() => [...document.querySelectorAll('.cm-spell')].map(e => e.textContent))
 await page.waitForFunction(() => [...document.querySelectorAll('.cm-spell')].some(e => e.textContent === 'recieved'), { timeout: 60000 }).catch(() => {})
-check('spelling marks a misspelt word, not code', (await marked()).includes('recieved') && !(await marked()).some(m => /foo|let/.test(m)))
+check('spelling marks a misspelt word, not code or a term of the field', (await marked()).includes('recieved') && !(await marked()).some(m => /foo|let|transcriptome/.test(m)))
 await page.evaluate(() => { const e = [...document.querySelectorAll('.cm-spell')].find(e => e.textContent === 'recieved')
   getSelection().collapse(e.firstChild, 2) }); await sleep(300)
 await page.evaluate(() => [...document.querySelectorAll('.cm-spell-tip button')].find(b => b.textContent === 'received')
   ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
-check('a fix from the mark corrects the text', await page.evaluate(() => document.querySelector('.cm-content').innerText.includes('was received.')))
+check('a fix from the mark corrects the text', await page.evaluate(() => document.querySelector('.cm-content').innerText.includes('was received by')))
 await page.focus('.cm-content'); await page.keyboard.down('Control'); await page.keyboard.press('Home'); await page.keyboard.up('Control'); await sleep(3000)
 
 // the surprise overlay, from a stand-in for a Perplexiscope engine: it scores

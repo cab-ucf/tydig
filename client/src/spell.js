@@ -4,18 +4,22 @@
 // nowhere. Words the project accepts live in .harper-dictionary.txt, as
 // harper-ls keeps them.
 import * as Y from 'yjs'
+import MEDICAL from './dict/medical.txt?url'
 import { prose } from './surprise.js'
 import { Decoration, EditorView, ViewPlugin, showTooltip } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 
 export const DICT = '.harper-dictionary.txt'
-let harper, words
-// sound English (or a house style), or prose cut around code, that these misread
-const OFF = { DisjointPrefixes: false, ExpandMinimum: false, OxfordComma: false, SentenceCapitalization: false, Spaces: false }
-// as word processors do: no spelling for ACRONYMS, NSF's or sha256
-const CODE = /\d|^[^\p{Ll}]+(['’]s)?$/u
-const load = () => harper ??= Promise.all([import('harper.js'), import('harper.js/binary')])
-  .then(async ([{ WorkerLinter }, { binary }]) => {
+let harper, words, terms
+// sound English (or a house style), prose cut around code, or what Typst
+// typesets itself (-- is an en dash) or means (..spread), that these misread
+const OFF = { Dashes: false, DisjointPrefixes: false, EllipsisLength: false, ExpandMinimum: false,
+  OxfordComma: false, SentenceCapitalization: false, Spaces: false, SplitWords: false, UnclosedQuotes: false }
+// as word processors do: no spelling for ACRONYMS, NSF's, sha256, scRNA or (f)
+const CODE = /\d|^[^\p{Ll}]+(['’]s)?$|.\p{Lu}|^\p{L}\.?$/u
+const load = () => harper ??= Promise.all([import('harper.js'), import('harper.js/binary'), fetch(MEDICAL).then(r => r.text())])
+  .then(async ([{ WorkerLinter }, { binary }, med]) => {
+    terms = new Set(med.toLowerCase().split('\n'))
     const h = new WorkerLinter({ binary })
     await h.setLintConfig({ ...await h.getLintConfig(), ...OFF })
     return h
@@ -28,6 +32,26 @@ const units = text => {
   return i => at[i]
 }
 
+// edits apart, a transposition one (Damerau)
+const dist = (a, b) => {
+  const d = [...Array(a.length + 1)].map((_, i) => [...Array(b.length + 1)].map((_, j) => i && j ? 0 : i + j))
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] !== b[j - 1]),
+      a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1] ? d[i - 2][j - 2] + 1 : Infinity)
+  return d[a.length][b.length]
+}
+// A slip is an edit (two, in a long word) from a word it might have meant, as
+// most typing slips are; a term Harper does not know (phosphoproteomics) is
+// not, nor one the medical list has, nor a plural of a known word (loadings),
+// nor a closed compound (cleanroom). Doubled letters count for nothing (tommorow).
+const once = t => t.replace(/(.)\1+/g, '$1')
+const slip = (word, fixes) => {
+  const w = word.toLowerCase(), f = fixes.map(x => x.toLowerCase()).filter(x => x.replace(/[ -]/g, '') !== w)
+  const stems = [w.replace(/['’]s$/, ''), w.replace(/s$/, ''), w.replace(/es$/, ''), w.replace(/ies$/, 'y')]
+  if (stems.some(s => terms.has(s)) || w.length > 4 && f.some(x => stems.includes(x))) return false
+  return f.some(x => Math.min(dist(w, x), dist(once(w), once(x))) <= (w.length > 8 ? 2 : 1))
+}
+
 // [{ from, to, word, message, spelling, fixes: [{ from, to, insert }] }]
 export async function check(src, files) {
   const h = await load(), dict = files.get(DICT)?.toString() ?? ''
@@ -36,10 +60,13 @@ export async function check(src, files) {
   return (await h.lint(text, { language: 'plaintext' })).flatMap(l => {
     const a = u(l.span().start), b = u(l.span().end)
     const from = at[a], to = at[b - 1] + 1, word = text.slice(a, b), spelling = l.lint_kind() === 'Spelling'
-    // not what was written (it spans code that was cut out), or an acronym
-    if (b <= a || src.slice(from, to) !== word || spelling && CODE.test(word)) return []
-    return { from, to, word, message: l.message(), spelling,
-      fixes: l.suggestions().map(s => ({ from: s.kind() === 2 ? to : from, to, insert: s.get_replacement_text() })) }
+    const fixes = l.suggestions().map(s => ({ from: s.kind() === 2 ? to : from, to, insert: s.get_replacement_text() }))
+    // not what was written (it spans code that was cut out), only space, a
+    // symbol or a name's part (PIs, dmsp.typ, #c.name, F&A), or no slip
+    const token = /^\p{L}[^\s]*$/u.test(word) && (CODE.test(word) || /[#./_@&]/.test(src[from - 1]))
+    if (b <= a || src.slice(from, to) !== word || !word.trim() || token ||
+      spelling && !slip(word, fixes.map(x => x.insert))) return []
+    return { from, to, word, message: l.message(), spelling, fixes }
   })
 }
 

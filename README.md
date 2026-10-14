@@ -163,7 +163,11 @@ and pandoc.
 
 **Spelling and grammar** are checked as you type, on the prose alone (never
 code, math or markup), by [Harper](https://writewithharper.com), which runs in
-the browser: the text goes nowhere. Put the cursor on a mark for its fixes, or
+the browser: the text goes nowhere. It marks a word only when it is an edit
+or two from one you might have meant, as typing slips are, so the terms of
+your field are left be; ~98,000 medical terms
+([wordlist-medicalterms-en](https://github.com/glutanimate/wordlist-medicalterms-en),
+GPL-3.0) and their plurals are known besides. Put the cursor on a mark for its fixes, or
 to add the word to the project's `.harper-dictionary.txt` (shared with
 everyone on it, and read by `harper-ls` too). **Alt-S** checks every file at
 once and lists what it finds; Settings turns it off.
