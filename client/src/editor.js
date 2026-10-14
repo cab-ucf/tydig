@@ -3,7 +3,7 @@
 // is not shared text opens read-only, as an image, or is downloaded.
 import { basicSetup } from 'codemirror'
 import { EditorView, keymap } from '@codemirror/view'
-import { EditorState, Compartment, Prec } from '@codemirror/state'
+import { EditorState, EditorSelection, Compartment, Prec } from '@codemirror/state'
 import { HighlightStyle, syntaxHighlighting, LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { indentWithTab } from '@codemirror/commands'
@@ -19,7 +19,7 @@ import { spellcheck } from './spell.js'
 import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asText } from './util.js'
 import { files, provider, token, ws, isImg, okPath, GEN } from './doc.js'
 import { ghost } from './ghost.js'
-import { commentExt, addComment } from './comments.js'
+import { commentExt } from './comments.js'
 import { scheduleCompile } from './preview.js'
 import { renderTree } from './tree.js'
 import { applyLayout } from './menu.js'
@@ -101,6 +101,11 @@ const show = (state, ...dom) => {
   countWords(); renderTree()
 }
 
+// Mod-B, Mod-I: *bold*, _italic_ around the selection (or at the cursor)
+const wrap = m => v => (v.dispatch(v.state.changeByRange(r => ({ range: EditorSelection.range(r.from + 1, r.to + 1),
+  changes: [{ from: r.from, insert: m }, { from: r.to, insert: m }] }))), true)
+const emphasis = Prec.high(keymap.of([{ key: 'Mod-b', run: wrap('*') }, { key: 'Mod-i', run: wrap('_') }]))
+
 let opening = 0
 export async function openFile(p) {
   const yt = files.get(p)
@@ -111,7 +116,7 @@ export async function openFile(p) {
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
     vimC.of(settings.vim ? vim() : []), basicSetup, themeC.of(themeExt()), lang, lsp, spellC.of(spellExt(p)),
-    keymap.of([indentWithTab, ...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
+    keymap.of([indentWithTab, ...yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
     yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,
     EditorView.updateListener.of(u => u.docChanged && (scheduleCompile(), countWords())),

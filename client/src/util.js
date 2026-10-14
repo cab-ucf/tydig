@@ -47,11 +47,35 @@ export const projName = (new URLSearchParams(location.search).get('proj') || '')
 export const P = p => `/p/${projName}${p}`
 export const rawUrl = p => `/api${P('/raw/' + p)}`
 
-// ms 0: stays until the next toast replaces it
-export const toast = (html, ok = true, ms = ok ? 2500 : 8000) => {
+// ms 0: stays until the next toast replaces it; click: what a click on it does
+export const toast = (html, ok = true, ms = ok ? 2500 : 8000, click) => {
   const t = $('toast') ?? document.body.appendChild(el('div', { id: 'toast' }))
-  t.innerHTML = html; t.className = ok ? '' : 'bad'; clearTimeout(t.timer)
+  t.innerHTML = html; t.className = (ok ? '' : 'bad') + (click ? ' click' : ''); clearTimeout(t.timer)
+  t.onclick = click && (() => { t.remove(); click() })
   if (ms) t.timer = setTimeout(() => t.remove(), ms)
+}
+// the key every shortcut is held with: Ctrl, or ⌘ on a Mac
+export const MOD = /Mac|iP(hone|ad|od)/.test(navigator.platform) ? '⌘' : 'Ctrl'
+// pick from a list, filtered as typed: [{ label, hint, run }]
+export function choose(items, placeholder) {
+  const dlg = $('qo'), input = $('qo-input'), list = $('qo-list')
+  const fits = (q, s) => { let i = 0; for (const c of s.toLowerCase()) if (c === q[i]) i++; return i === q.length }
+  let sel = 0, hits = []
+  const render = () => {
+    hits = items.filter(x => fits(input.value.toLowerCase(), x.label)).slice(0, 14)
+    sel = Math.min(sel, Math.max(0, hits.length - 1))
+    list.replaceChildren(...hits.map((x, i) => el('div', { className: i === sel ? 'sel' : '',
+      onclick: () => { dlg.close(); x.run() } }, x.label, x.hint ? el('kbd', { textContent: x.hint }) : '')))
+  }
+  input.placeholder = placeholder; input.value = ''; sel = 0; render()
+  input.oninput = () => { sel = 0; render() }
+  input.onkeydown = e => {
+    const k = { ArrowDown: 1, ArrowUp: -1 }[e.key]
+    if (k) { sel = Math.max(0, sel + k); render() } else if (e.key === 'Enter') list.children[sel]?.click()
+    else return
+    e.preventDefault()
+  }
+  dlg.showModal(); input.focus()
 }
 // A link visitor's tab cannot load the hub's URLs itself: fetch, then show.
 // Only a PDF is shown: from a blob: URL anything else would run in this

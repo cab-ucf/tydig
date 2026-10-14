@@ -1,12 +1,13 @@
 // What every button and shortcut does (any element with data-act names an
 // action here), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
-import { $, settings, saveSettings, theme, system, phone, phoneQ, projName, P, download } from './util.js'
+import { $, settings, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
+  from './util.js'
 import { MODES } from './surprise.js'
 import { signOut, changePassword, deleteAccount } from './auth.js'
 import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleScope, scopeBy } from './editor.js'
 import { toggleGhost } from './ghost.js'
-import { addComment } from './comments.js'
+import { addComment, discuss } from './comments.js'
 import { exportPdf, exportDocx, fitText, zoom, scheduleCompile } from './preview.js'
 import { newFile, uploadTo, quickOpen } from './tree.js'
 import { mode, openSidebar, toggleSide, checkpoint, cite } from './panels.js'
@@ -28,32 +29,26 @@ const actions = {
     : document.documentElement.requestFullscreen(),
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
-  comments: pane('comments'), chat: pane('chat'), checklist: pane('checklist'), template: pane('template'),
+  discuss, comments: pane('comments'), chat: pane('chat'), checklist: pane('checklist'), template: pane('template'),
   history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'),
   ghost: toggleGhost, scope: toggleScope, 'scope-next': () => scopeBy(),
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,
   signout: signOut, password: changePassword, 'delete-account': deleteAccount,
-  shortcuts: () => alert(`Ctrl-P    open file (fuzzy)
-Ctrl-S    save: commit, and push to the git remote
-Alt-N     new file
-Alt-E     export preview PDF
-Ctrl-Alt-M  comment on selection
-Ctrl-Alt-C  cite: find papers for the selection, check references
-Alt-S     spelling and grammar, every file; the cursor on a mark offers fixes
-Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
-
-Alt-1     file tree
-Alt-2     side panel
-Alt-0     focus: the text alone, centred, no preview
-Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
-Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
-drag the bar between editor and preview; double-click it to even out
-Alt-C     comments   Alt-M  discussion   Alt-H  history   Alt-B  build
-Alt-D     theme: dark, cyberpunk, light
-
-Vim mode: Settings > Vim (then vim keys apply inside the editor)`),
+  palette: () => choose([...document.querySelectorAll('#menubar [data-act]')].map(b => ({
+    label: b.firstChild.textContent.trim(), hint: b.querySelector('kbd')?.textContent,
+    run: () => actions[b.dataset.act]() })), 'find a command...'),
+  shortcuts: () => alert(Object.entries(HELP).map(([k, v]) => `${k.replaceAll('Mod', MOD).padEnd(14)}${v}`).join('\n')),
 }
+// Few keys, each what other editors use, none an Alt-letter (browser menus,
+// a Mac's Option characters, AltGr layouts). Everything else: Mod-K.
+const KEYS = { 'mod+k': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save', 'mod+alt+m': 'comment' }
+const HELP = { 'Mod-K': 'find any command', 'Mod-P': 'open a file', 'Mod-S': 'save: commit, sign, push',
+  'Mod-Alt-M': 'comment on the selection', 'Mod-B Mod-I': 'bold, italic', 'Mod-Z Mod-Shift-Z': 'undo, redo',
+  'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus' }
+for (const k of document.querySelectorAll('kbd')) k.textContent = k.textContent.replaceAll('Mod', MOD)
+for (const k of document.querySelectorAll('[title*="Mod-"]')) k.title = k.title.replaceAll('Mod', MOD)
+$('bar-cmd').textContent = `${MOD}-K`
 // a click on a menu opens it; anything else closes them
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act], .menu > button')
@@ -63,20 +58,15 @@ document.addEventListener('click', e => {
 })
 // buttons that act on the selection must not take it away
 for (const id of ['pv-comment', 'bar-comment', 'bar-cite']) $(id).onmousedown = e => e.preventDefault()
-// capture: before CodeMirror sees the key, so they work while typing
-const KEYS = {
-  'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus', 'A-Digit3': 'max-editor',
-  'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
-  'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
-  'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
-  'A-KeyN': 'new-file', 'A-KeyS': 'spelling', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
-  'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment', 'C-A-KeyC': 'cite',
-}
+// capture: before CodeMirror sees the key; never AltGr (a character there)
 document.addEventListener('keydown', e => {
-  const mods = (e.ctrlKey || e.metaKey ? 'C-' : '') + (e.altKey ? 'A-' : '') + (e.shiftKey ? 'S-' : '')
-  const act = KEYS[mods + e.code]
+  if (e.getModifierState('AltGraph') || !(e.ctrlKey || e.metaKey)) return
+  const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : e.code.replace(/^Key/, '').toLowerCase()
+  const act = KEYS[`mod+${e.altKey ? 'alt+' : ''}${e.shiftKey ? 'shift+' : ''}${k}`]
   if (act) { e.preventDefault(); e.stopPropagation(); actions[act]() }
 }, true)
+// Esc leaves focus, unless the editor wanted it (a suggestion, vim)
+document.addEventListener('keydown', e => e.key === 'Escape' && !e.defaultPrevented && settings.focus && actions.focus())
 
 export function applyLayout() {
   const b = document.body, on = (c, x) => b.classList.toggle(c, !!x), t = theme()
@@ -129,7 +119,7 @@ phoneQ.addEventListener('change', place); place()
 phoneQ.addEventListener('change', applyLayout)
 $('mtabs').onclick = e => {
   const m = e.target.closest('[data-m]')?.dataset.m
-  if (m === 'side') return openSidebar(mode || 'chat')
+  if (m === 'side') return mode ? openSidebar(mode) : discuss()
   if (!m) return
   settings.m = m; applyLayout()
   if (m === 'preview') scheduleCompile()

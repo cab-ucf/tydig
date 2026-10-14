@@ -2,12 +2,12 @@
 // the editor or the preview; highlighted, shown on hover, numbered in their
 // pane and pinned in the preview. And the Discussion: the project's chat.
 import * as Y from 'yjs'
-import { Annotation } from '@codemirror/state'
-import { Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
-import { $, el, dot, uid } from './util.js'
+import { Annotation, StateField } from '@codemirror/state'
+import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
+import { $, el, esc, dot, uid, toast, settings, projName } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
-import { openSidebar, redraw } from './panels.js'
+import { openSidebar, redraw, mode, tabs } from './panels.js'
 import { pinSafe } from './preview.js'
 
 // an anchor's start sticks to the text after it, its end to the text before:
@@ -49,9 +49,55 @@ const hover = hoverTooltip((v, pos) => {
   return cs.length && { pos: cs[0].from, end: cs[0].to, above: true, create: () => ({ dom: el('div',
     { className: 'cm-comment-tip' }, ...cs.map(c => el('p', { textContent: `${c.author}: ${c.text}` }))) }) }
 })
-export const commentExt = [marks, hover]
-comments.observe(() => { view?.dispatch({ annotations: changed.of(true) }); redraw('comments') })
-chat.observe(() => { redraw('chat'); redraw('comments') })
+// a button on any selection: comment on it
+const ask = StateField.define({
+  create: () => null,
+  update: (t, tr) => tr.docChanged || tr.selection ? at(tr.state.selection.main) : t,
+  provide: f => showTooltip.from(f),
+})
+const at = r => r.empty ? null : { pos: r.to, arrow: false, create: () => ({ dom: el('button', {
+  className: 'cm-ask', textContent: '💬 comment', onmousedown: e => e.preventDefault(), onclick: () => addComment(null) }) }) }
+export const commentExt = [marks, hover, ask]
+
+// ---- what is new: counted on the bar, said as it arrives ----
+// comments and their replies count under Comments; other messages under Discussion
+const SEEN = 'seen:' + projName, seen = JSON.parse(localStorage[SEEN] || '{}'), since = Date.now()
+const others = x => x.author !== user.name
+const reply = m => m.re ? 'comments' : 'chat'
+export function unseen() {
+  const n = { comments: 0, chat: 0 }
+  for (const c of comments.values()) if (others(c) && c.ts > (seen.comments || 0)) n.comments++
+  for (const m of chat.toArray()) if (others(m) && m.ts > (seen[reply(m)] || 0)) n[reply(m)]++
+  return n
+}
+export function count() {
+  const n = unseen(), all = n.comments + n.chat
+  for (const b of document.querySelectorAll('.badge')) { b.hidden = !all; b.textContent = all }
+  document.title = (all ? `(${all}) ` : '') + document.title.replace(/^\(\d+\) /, '')
+  tabs()
+}
+function read(which) {
+  if (!settings.sideOpen || mode !== which) return
+  seen[which] = Date.now(); localStorage[SEEN] = JSON.stringify(seen); count()
+}
+// the pane with something new in it
+export function discuss() { openSidebar(unseen().comments ? 'comments' : 'chat') }
+const me = new RegExp(`@${user.name.split(/[\s@]/)[0].replace(/\W/g, '')}\\b`, 'i')
+const say = (x, where, pane) => {
+  if (!others(x) || x.ts < since || (settings.sideOpen && mode === pane)) return
+  const to = me.test(x.text)
+  toast(`<b>${esc(x.author)}</b> ${to ? 'mentioned you' : ''} ${where}: ${esc(x.text.slice(0, 120))}`,
+    true, to ? 0 : 6000, () => openSidebar(pane))
+}
+comments.observe(e => {
+  view?.dispatch({ annotations: changed.of(true) }); redraw('comments'); count()
+  for (const [k, c] of e.changes.keys) if (c.action === 'add') say(comments.get(k), `commented on ${comments.get(k).file}`, 'comments')
+})
+chat.observe(e => {
+  redraw('chat'); redraw('comments'); count()
+  for (const m of e.changes.added) for (const x of m.content.getContent())
+    say(x, x.re ? 'replied to a comment' : 'in the Discussion', reply(x))
+})
 
 export function addComment(ctx = previewContext()) {
   const sel = view?.state.selection.main
@@ -169,14 +215,16 @@ export function renderComments(body) {
       el('p', {}, ...mentions(c.text)), el('div', { className: 'replies' }, ...replies, composer(c.id, 'reply')),
       el('button', { textContent: 'resolve', onclick: () => comments.delete(c.id) }))
   }))
-  if (!cs.length) body.innerHTML = '<p class="empty">No comments. Select text, then Edit > Comment. ' +
-    'Pins appear in the preview.</p>'
+  if (!cs.length) body.innerHTML = '<p class="empty">No comments yet. Select text in the editor or the ' +
+    'preview and press <b>💬 comment</b>; it is pinned in the preview for everyone.</p>'
+  read('comments')
 }
 
 export function renderChat(body) {
   const list = chat.toArray()
-  body.replaceChildren(...list.length ? [] : [el('p', { className: 'empty',
-    textContent: 'The project\'s discussion: for everyone working on it, and agents (@name).' })],
+  body.replaceChildren(...list.length ? [] : [el('p', { className: 'empty', textContent: 'Talk with everyone ' +
+    'on this project. @name tells a person, or asks an agent member to do something.' })],
   ...list.map(message), composer(null, 'Message everyone'))
   body.scrollTop = body.scrollHeight
+  read('chat')
 }

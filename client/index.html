@@ -15,79 +15,80 @@
     <span id="brand"></span>
     <nav id="menubar">
       <div class="menu"><button>File</button><div class="dropdown">
-        <button data-act="new-file">New file<kbd>Alt-N</kbd></button>
-        <button data-act="upload">Upload binary</button>
-        <button data-act="projects">Projects...</button>
-        <button data-act="quick-open">Open file...<kbd>Ctrl-P</kbd></button>
+        <button data-act="quick-open">Open file<kbd>Mod-P</kbd></button>
+        <button data-act="new-file">New file</button>
+        <button data-act="upload">Upload files or an archive</button>
+        <button data-act="projects">Projects</button>
         <hr/>
-        <button data-act="save">Save (commit, push)<kbd>Ctrl-S</kbd></button>
-        <button data-act="checkpoint">Named checkpoint...</button>
-        <button data-act="export-pdf">Export preview PDF<kbd>Alt-E</kbd></button>
-        <button data-act="export-docx">Export Word (.docx), citations for EndNote</button>
+        <button data-act="save">Save: commit, sign, push<kbd>Mod-S</kbd></button>
+        <button data-act="checkpoint">Save with a name</button>
+        <button data-act="export-pdf">Export PDF</button>
+        <button data-act="export-docx">Export Word, citations for EndNote</button>
         <button data-act="download-src">Download sources (.tar.gz)</button>
-        <button data-act="download-all">Download everything, PDFs too (.tar.gz)</button>
+        <button data-act="download-all">Download everything (.tar.gz)</button>
       </div></div>
       <div class="menu"><button>Edit</button><div class="dropdown">
-        <button data-act="undo">Undo<kbd>Ctrl-Z</kbd></button>
-        <button data-act="redo">Redo<kbd>Ctrl-Shift-Z</kbd></button>
+        <button data-act="undo">Undo<kbd>Mod-Z</kbd></button>
+        <button data-act="redo">Redo<kbd>Mod-Shift-Z</kbd></button>
         <hr/>
-        <button data-act="comment">Comment on selection<kbd>Ctrl-Alt-M</kbd></button>
-        <button data-act="cite">Cite selection / check references<kbd>Ctrl-Alt-C</kbd></button>
-        <button data-act="spelling">Check spelling, every file<kbd>Alt-S</kbd></button>
+        <button data-act="comment">Comment on the selection<kbd>Mod-Alt-M</kbd></button>
+        <button data-act="cite">Cite: find papers, check references</button>
+        <button data-act="spelling">Check spelling, every file</button>
       </div></div>
       <div class="menu"><button>View</button><div class="dropdown">
-        <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Alt-1</kbd></button>
-        <button data-act="toggle-side" data-check="sideOpen">Panel<kbd>Alt-2</kbd></button>
-        <button data-act="focus" data-check="focus">Focus mode<kbd>Alt-0</kbd></button>
-        <button data-act="max-editor">Editor only<kbd>Alt-3</kbd></button>
-        <button data-act="max-preview">Preview only<kbd>Alt-4</kbd></button>
-        <button data-act="fullscreen">Full screen<kbd>Alt-F</kbd></button>
-        <hr/>
-        <button data-act="theme">Theme: dark, cyberpunk, light<kbd>Alt-D</kbd></button>
-        <hr/>
-        <button data-act="comments">Comments<kbd>Alt-C</kbd></button>
-        <button data-act="chat">Discussion<kbd>Alt-M</kbd></button>
+        <button data-act="comments">Comments</button>
+        <button data-act="chat">Discussion</button>
+        <button data-act="history">History</button>
+        <button data-act="build">Build</button>
         <button data-act="checklist">Grant checklist</button>
-        <button data-act="history">History<kbd>Alt-H</kbd></button>
-        <button data-act="build">Build panel<kbd>Alt-B</kbd></button>
-        <button data-act="review">Review changes</button>
+        <button data-act="review">Changes made while away</button>
+        <hr/>
+        <button data-act="toggle-tree" data-check="treeOpen">File tree</button>
+        <button data-act="toggle-side" data-check="sideOpen">Side panel</button>
+        <button data-act="max-editor">Editor only</button>
+        <button data-act="max-preview">Preview only</button>
+        <button data-act="focus" data-check="focus">Focus: the text alone<kbd>Esc leaves</kbd></button>
+        <button data-act="fullscreen">Full screen</button>
+        <button data-act="theme">Theme: dark, cyberpunk, light</button>
       </div></div>
       <div class="menu"><button>Settings</button><div class="dropdown">
-        <button data-act="vim" data-check="vim">Vim mode</button>
+        <button data-act="share">Share project</button>
+        <button data-act="gitremote">Git remote (durable copy)</button>
+        <button data-act="template">Project template</button>
+        <hr/>
+        <button data-act="spell" data-check="spell">Spelling and grammar</button>
         <button data-act="ghost" data-check="ghost">Ghost suggestions</button>
         <button data-act="scope" data-check="scope">Surprise overlay</button>
-        <button data-act="scope-bits" data-check="scope-bits">&emsp;Highlight surprise</button>
-        <button data-act="scope-ent" data-check="scope-ent">&emsp;Highlight flatness</button>
-        <button data-act="scope-ai" data-check="scope-ai">&emsp;Highlight AI-likeness</button>
-        <button data-act="spell" data-check="spell">Spelling and grammar</button>
-        <button data-act="lsp" data-check="lsp">LSP (tinymist)</button>
+        <button data-act="scope-bits" data-check="scope-bits">&emsp;by surprise</button>
+        <button data-act="scope-ent" data-check="scope-ent">&emsp;by flatness</button>
+        <button data-act="scope-ai" data-check="scope-ai">&emsp;by AI-likeness</button>
+        <button data-act="lsp" data-check="lsp">Completions (tinymist)</button>
+        <button data-act="vim" data-check="vim">Vim keys</button>
         <hr/>
-        <button data-act="share">Share project...</button>
-        <button data-act="gitremote">Git remote (durable copy)...</button>
-        <hr/>
-        <button data-act="template">Project template...</button>
-        <button data-act="password">Change password...</button>
-        <button data-act="delete-account">Delete my account...</button>
+        <button data-act="password">Change password</button>
+        <button data-act="delete-account">Delete my account</button>
         <button data-act="signout">Sign out</button>
       </div></div>
       <div class="menu"><button>Help</button><div class="dropdown">
+        <button data-act="palette">Find a command<kbd>Mod-K</kbd></button>
         <button data-act="shortcuts">Shortcuts</button>
+        <a href="https://cab-ucf.github.io/tydig/" target="_blank" rel="noopener">tydig docs</a>
         <a href="https://typst.app/docs/" target="_blank" rel="noopener">Typst docs</a>
       </div></div>
     </nav>
     <span id="projname"></span>
-    <span id="peers" title="connected collaborators"></span>
+    <span id="peers" title="who is here"></span>
     <span class="spacer"></span>
     <label id="main-label">compile <select id="main-sel"></select></label>
-    <button id="bar-comment" data-act="comment" title="Comment on selection (Ctrl-Alt-M)">comment</button>
-    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references (Ctrl-Alt-C)">cite</button>
-    <button id="bar-build" data-act="build" title="Build panel (Alt-B)">build</button>
+    <button id="bar-comment" data-act="comment" title="Comment on the selected text (Mod-Alt-M)">comment</button>
+    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references">cite</button>
+    <button id="bar-build" data-act="build" title="Run the project's build (make)">build</button>
     <button id="bar-check" data-act="checklist" title="What the application needs, and what is here" hidden>checklist</button>
-    <span id="wordcount" title="words in current file"></span>
+    <button id="bar-chat" data-act="discuss" title="Comments and the Discussion">discuss<b class="badge" hidden></b></button>
+    <button id="bar-share" data-act="share" class="go" title="Invite people; the link they open">share</button>
+    <span id="wordcount" title="words in this file"></span>
     <button id="scope" class="tgl" data-act="scope-next" hidden></button>
-    <button id="tgl-tree" class="tgl" data-act="toggle-tree" title="Toggle sidebar (Alt-1)">&#9707;</button>
-    <button id="tgl-side" class="tgl" data-act="toggle-side" title="Toggle panel (Alt-2)">&#9706;</button>
-    <button id="tgl-theme" class="tgl" data-act="theme" title="Theme: dark, cyberpunk, light (Alt-D)">&#9680;</button>
+    <button id="bar-cmd" class="tgl" data-act="palette" title="Find any command">Mod-K</button>
     <span id="status" data-state="connecting">connecting</span>
   </header>
   <main id="layout">
@@ -112,19 +113,20 @@
         <button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button>
       </div>
       <div id="page"></div><pre id="diag" hidden></pre>
-      <button id="pv-comment" hidden title="Comment on the selected text (Ctrl-Alt-M)">comment</button>
+      <button id="pv-comment" hidden title="Comment on the selected text (Mod-Alt-M)">comment</button>
     </section>
     <aside id="side" hidden>
-      <div id="side-head"><span id="side-title"></span><button id="side-close">close</button></div>
+      <div id="side-head"><nav id="side-tabs"></nav><span id="side-title"></span>
+        <button id="side-close" title="close the panel">&times;</button></div>
       <div id="side-body"></div>
     </aside>
   </main>
   <nav id="mtabs">
     <button data-m="files">Files</button><button data-m="edit" id="mt-edit">Edit</button>
-    <button data-m="preview">Preview</button><button data-m="side">Panel</button>
+    <button data-m="preview">Preview</button><button data-m="side">Discuss<b class="badge" hidden></b></button>
   </nav>
-  <button id="focus-exit" data-act="focus" title="exit focus mode (Alt-0)">⤢ exit focus</button>
-  <dialog id="qo"><input id="qo-input" placeholder="open file..." /><div id="qo-list"></div></dialog>
+  <button id="focus-exit" data-act="focus" title="leave focus (Esc)">⤢ leave focus</button>
+  <dialog id="qo"><input id="qo-input" /><div id="qo-list"></div></dialog>
   <dialog id="picker">
     <h3>Projects</h3>
     <div id="proj-list"></div>

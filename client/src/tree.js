@@ -1,7 +1,8 @@
 // The file tree: shared text and files on disk, who has which open; upload,
 // archive import, new file, rename, delete; and quick open (Ctrl-P).
 import * as Y from 'yjs'
-import { $, el, dot, esc, api, del, settings, phone, download, asText, projName, P, rawUrl } from './util.js'
+import { $, el, dot, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose }
+  from './util.js'
 import { ydoc, files, comments, meta, provider, okPath, GEN, setText } from './doc.js'
 import { path, open, openFile } from './editor.js'
 import { fileComments, rel } from './comments.js'
@@ -157,27 +158,5 @@ function rename(p) {
 }
 
 // Ctrl-P: any file, by letters of its path in order
-export function quickOpen() {
-  const dlg = $('qo'), input = $('qo-input'), list = $('qo-list'), all = paths().sort()
-  let sel = 0
-  const fuzzy = (q, s) => {
-    let i = 0
-    for (const c of s.toLowerCase()) if (c === q[i]) i++
-    return i === q.length
-  }
-  const render = () => {
-    const q = input.value.toLowerCase(), hits = all.filter(p => fuzzy(q, p)).slice(0, 12)
-    sel = Math.min(sel, Math.max(0, hits.length - 1))
-    list.replaceChildren(...hits.map((p, i) => el('div', { textContent: p, className: i === sel ? 'sel' : '',
-      onclick: () => { dlg.close(); open(p) } })))
-  }
-  input.value = ''; render()
-  input.oninput = () => { sel = 0; render() }
-  input.onkeydown = e => {
-    const k = { ArrowDown: 1, ArrowUp: -1 }[e.key]
-    if (k) { sel = Math.max(0, sel + k); render() } else if (e.key === 'Enter') list.children[sel]?.click()
-    else return
-    e.preventDefault()
-  }
-  dlg.showModal(); input.focus()
-}
+export const quickOpen = () => choose(paths().sort().map(p => ({ label: p, run: () => open(p) })),
+  'open a file...')

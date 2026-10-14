@@ -8,6 +8,7 @@ const puppeteer = (await import(createRequire(new URL('../.uitest/package.json',
   .resolve('puppeteer'))).default
 let pass = true
 const check = (name, cond) => { console.log(cond ? 'PASS' : 'FAIL', name); pass &&= cond }
+const { person } = await import('./lib.mjs')
 const B = process.env.HUB || 'http://localhost:3000'
 const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] })
 const page = await browser.newPage()
@@ -26,7 +27,8 @@ let answer = null
 page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(answer ?? (d.defaultValue() || 'first signed checkpoint')); else if (d.type() === 'confirm' && yes) await d.accept(); else await d.dismiss() })
 let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
-const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden, title: document.getElementById('side-title').textContent, body: document.getElementById('side-body').innerText.slice(0, 300) }))
+const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden,
+  title: (document.querySelector('#side-tabs .on')?.firstChild.textContent || document.getElementById('side-title').textContent).toLowerCase(), body: document.getElementById('side-body').innerText.slice(0, 300) }))
 
 await page.goto(B, { waitUntil: 'networkidle2', timeout: 60000 })
 await page.waitForSelector('#auth-form'); await page.click('.auth-tabs button[data-tab="up"]')
@@ -89,8 +91,21 @@ yes = false
 
 // 1. Comments pane via the View menu action
 await page.evaluate(() => document.querySelector('[data-action="comments"], button[data-act="comments"]')?.click())
-let s = await side(); if (s.hidden) { await page.keyboard.down('Alt'); await page.keyboard.press('c'); await page.keyboard.up('Alt'); await sleep(500); s = await side() }
+await sleep(500); const s = await side()
 check('comments pane opens', !s.hidden && s.title === 'comments')
+check('the panel has tabs for comments, the Discussion, history and build', await page.evaluate(() =>
+  [...document.querySelectorAll('#side-tabs button')].map(b => b.firstChild.textContent).join() === 'Comments,Discussion,History,Build'))
+// Ctrl-K finds any command by name
+await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await sleep(300)
+await page.keyboard.type('discussion'); await page.keyboard.press('Enter'); await sleep(500)
+check('Ctrl-K finds a command and runs it', (await side()).title === 'discussion')
+// a selection in the editor offers to comment on it; Ctrl-B makes it bold
+await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.down('Shift'); await page.keyboard.press('Home'); await page.keyboard.up('Shift'); await sleep(300)
+check('selected text offers a comment button', await page.evaluate(() => !!document.querySelector('.cm-ask')))
+await page.keyboard.press('ArrowRight'); await page.keyboard.type(' boldme'); for (let i = 0; i < 6; i++) await page.keyboard.down('Shift'), await page.keyboard.press('ArrowLeft'), await page.keyboard.up('Shift')
+await page.keyboard.down('Control'); await page.keyboard.press('b'); await page.keyboard.up('Control'); await sleep(200)
+check('Ctrl-B wraps the selection in Typst bold', await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('*boldme*')))
+await page.keyboard.press('End'); for (let i = 0; i < 9; i++) await page.keyboard.press('Backspace')
 
 
 // 3. Build: run "all" from the build pane, wait, see the preview keep working
@@ -110,7 +125,7 @@ await page.keyboard.down('Control'); await page.keyboard.press('s'); await page.
 await page.waitForFunction(() => /saved/.test(document.getElementById('toast')?.textContent || ''), { timeout: 8000 }).catch(() => {})
 check('Ctrl-S saves and says so', /saved/.test(await page.evaluate(() => document.getElementById('toast')?.textContent || '')))
 await page.evaluate(() => document.querySelector('[data-act="checkpoint"]').click()); await sleep(4000)
-await page.keyboard.down('Alt'); await page.keyboard.press('h'); await page.keyboard.up('Alt'); await sleep(1500)
+await page.evaluate(() => document.querySelector('[data-act="history"]').click()); await sleep(1500)
 const hist = await side(); check('history pane opens', !hist.hidden && hist.title === 'history')
 const signed = await page.evaluate(() => [...document.querySelectorAll('.commit')].map(c => c.innerText.replace(/\s+/g, ' ')).slice(0, 3))
 check('checkpoint shows signed badge', signed.some(c => /first signed checkpoint.*signed/.test(c)))
@@ -150,13 +165,13 @@ check('Ollama refusing the page says how to let it in', await page.evaluate(() =
 ollama.close()
 
 // focus: the text alone, centred, in a readable face; Alt-0 again, and all is back
-await page.keyboard.down('Alt'); await page.keyboard.press('Digit0'); await page.keyboard.up('Alt'); await sleep(500)
+await page.evaluate(() => document.querySelector('#menubar [data-act="focus"]').click()); await page.focus('.cm-content'); await sleep(500)
 const w = await page.evaluate(() => { const c = document.querySelector('.cm-content').getBoundingClientRect(), e = document.getElementById('editor').getBoundingClientRect()
   return { preview: getComputedStyle(document.getElementById('preview')).display, bar: getComputedStyle(document.getElementById('bar')).display,
     left: c.left - e.left, right: e.right - c.right, width: c.width, full: e.width,
     font: getComputedStyle(document.querySelector('.cm-scroller')).fontFamily } })
 await page.screenshot({ path: `${tmp}/ui-focus.png` })
-await page.keyboard.down('Alt'); await page.keyboard.press('Digit0'); await page.keyboard.up('Alt'); await sleep(500)
+await page.keyboard.press('Escape'); await sleep(500)
 check('focus hides the preview and every bar, centres the text, reads in Atkinson', w.preview === 'none' && w.bar === 'none' &&
   w.font.includes('Atkinson') &&
   w.full > w.width + 100 && Math.abs(w.left - w.right) < 30 && await page.evaluate(() => getComputedStyle(document.getElementById('preview')).display !== 'none'))
@@ -209,6 +224,19 @@ answer = ''; await page.evaluate(() => document.querySelector('[data-act="scope"
 check('and it turns off', await page.evaluate(() => !document.querySelector('.scope-ai') && document.getElementById('scope').hidden))
 engine.close()
 
+// someone else writes: the bar counts it, a note says it, a click shows it
+await page.evaluate(() => document.getElementById('side-close').click())
+await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST', headers: { 'content-type': 'application/json' },
+  body: '{"email":"bea@example.com"}' }))
+const bea = await person('Bea', { hub: B, email: 'bea@example.com' }), beaDoc = bea.doc('demo'); await sleep(2000)
+beaDoc.getArray('chat').push([{ id: 'b1', author: 'Bea', text: '@Ada look at the intro', ts: Date.now() }]); await sleep(1500)
+check('a message from someone else is counted on the bar and said in a note', await page.evaluate(() =>
+  document.querySelector('#bar-chat .badge').textContent === '1' && /Bea.*mentioned you.*look at the intro/.test(document.getElementById('toast')?.textContent)))
+await page.click('#toast'); await sleep(600)
+check('a click on the note opens the Discussion, and the count clears', (await side()).title === 'discussion' &&
+  await page.evaluate(() => document.querySelector('#bar-chat .badge').hidden && !/^\(/.test(document.title)))
+beaDoc.provider.destroy()
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
@@ -224,7 +252,7 @@ check('the other tabs leave it out', (await shows('edit')) && await page.evaluat
 check('the word count sits under the Edit tab, and build in the tab bar opens the Build panel', await page.evaluate(() =>
   /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
   (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
-   await page.evaluate(() => document.body.dataset.m === 'side' && document.getElementById('side-title').textContent === 'build')))
+   await page.evaluate(() => document.body.dataset.m === 'side') && (await side()).title === 'build'))
 // Word: the citations are EndNote's fields, the bibliography its list
 const word = await page.evaluate(async () => {
   const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then(r => r.json())

@@ -10,7 +10,7 @@ import { registerDeviceKey, signCheckpoint } from './prov.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl } from './util.js'
 import { files, provider, local, okPath, GEN, setText } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
-import { renderComments, renderChat } from './comments.js'
+import { renderComments, renderChat, unseen } from './comments.js'
 import { disk, refreshDisk } from './tree.js'
 import { applyLayout } from './menu.js'
 
@@ -22,9 +22,17 @@ const panes = () => ({ comments: renderComments, chat: renderChat, cite: b => re
 export function openSidebar(m) {
   mode = m; settings.sideOpen = true
   if (phone()) settings.m = 'side'
-  applyLayout()
-  $('side-title').textContent = m
+  applyLayout(); tabs()
   redraw(m)
+}
+// the panes always at hand, each with what is new in it; any other is named
+const TABS = { comments: 'Comments', chat: 'Discussion', history: 'History', build: 'Build' }
+export function tabs() {
+  const n = unseen()
+  $('side-tabs').replaceChildren(...Object.entries(TABS).map(([m, t]) => el('button',
+    { className: m === mode ? 'on' : '', onclick: () => openSidebar(m) }, t,
+    n[m] ? el('b', { className: 'badge', textContent: n[m] }) : '')))
+  $('side-title').textContent = TABS[mode] ? '' : mode
 }
 // the pane again, if it is the one open
 export function redraw(m) { if (mode === m) panes()[m]($('side-body')) }

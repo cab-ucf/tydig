@@ -57,6 +57,19 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   font: .75rem var(--mono); padding: .2rem; max-width: 11rem;
 }
 #wordcount { font: .72rem var(--mono); color: var(--fg-dim); }
+.badge {
+  margin-left: .35rem; padding: 0 .38rem; border-radius: 999px; font: 700 .68rem/1.35 var(--sans);
+  background: var(--teal); color: var(--on-teal);
+}
+#bar #bar-share { background: var(--teal); color: var(--on-teal); border-color: var(--teal); }
+#bar #bar-cmd { font: .7rem var(--mono) !important; color: var(--fg-dim); }
+.cm-tooltip.cm-tooltip-below:has(.cm-ask), .cm-tooltip:has(> .cm-ask) { background: none; border: 0; }
+.cm-ask {
+  font: .75rem var(--sans); padding: .2rem .55rem; margin-top: .3rem; cursor: pointer; border-radius: 999px;
+  background: var(--teal); color: var(--on-teal); border: 0; box-shadow: 0 2px 8px #0005;
+}
+#toast.click { cursor: pointer; }
+#toast.click:hover { outline: 1px solid var(--teal); }
 #status { font-size: .75rem; padding: .15rem .5rem; border-radius: 999px; background: var(--ink-2); color: var(--fg-dim); }
 #status[data-state="connected"] { color: var(--teal); }
 #status[data-state="disconnected"] { color: var(--red); }
@@ -166,6 +179,10 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
   padding: .6rem .8rem; border-bottom: 1px solid var(--ink-3);
 }
 #side-title { font-variant: small-caps; letter-spacing: .08em; color: var(--fg-dim); }
+#side-tabs { display: flex; gap: .15rem; flex: 1; min-width: 0; overflow-x: auto; }
+#side-tabs button { padding: .25rem .5rem; border-radius: 4px; }
+#side-tabs button.on { color: var(--hi); background: var(--ink-3); }
+#side-head #side-close { font-size: 1.1rem; }
 #side-head button { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: .8rem; }
 #side-body { overflow: auto; padding: .6rem; display: flex; flex-direction: column; gap: .5rem; }
 #side-body > .go { align-self: flex-start; }
@@ -429,7 +446,7 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
 #mtabs { display: none; }
 @media (max-width: 800px), (max-height: 500px) and (pointer: coarse) {
   #brand, #peers, #main-label, #bar-comment, #bar-cite, #bar-build, #bar-check, #wordcount,
-  #tgl-tree, #tgl-side, #split, .spacer { display: none !important; }
+  #bar-chat, #bar-cmd, #split, .spacer { display: none !important; }
   #bar { gap: .25rem; padding: 0 .35rem; padding-top: env(safe-area-inset-top); }
   #projname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* moved by menu.js: which file to compile above the preview, the count and build to the tabs */
