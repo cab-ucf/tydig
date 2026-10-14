@@ -1,6 +1,8 @@
-# The static site: the landing page, and the editor at app/ that collaborators
-# open with a hub's link (<site>/app/#<seed>; see server/link.mjs).
-# Settings > Pages > Source: GitHub Actions.
+# The static site: the editor, which opens a hub's link (<site>/#<id>; see
+# server/link.mjs) or, with none, this site's own hub; app/ for older links;
+# the landing page at about/. Settings > Pages > Source: GitHub Actions.
+# Settings > Variables: TYDIG_HUB, the hub's id (`just link`, after the #);
+# TYDIG_BRAND, its look (a folder in client/brands/).
 name: pages
 on:
   push: { branches: [main] }
@@ -10,13 +12,14 @@ concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env: { VITE_HUB: '${{ vars.TYDIG_HUB }}', TYDIG_BRAND: '${{ vars.TYDIG_BRAND }}' }
     environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}' }
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci -w client && npm run build
-      - run: mkdir _site && cp index.html .nojekyll _site/ && cp -r client/dist _site/app
+      - run: cp -r client/dist _site && cp -r client/dist _site/app && cp .nojekyll _site && mkdir _site/about && cp index.html _site/about
       - uses: actions/upload-pages-artifact@v4
         with: { path: _site }
       - id: deploy

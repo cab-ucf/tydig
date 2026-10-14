@@ -6,6 +6,8 @@ import { link } from './link.js'
 import { createAuthClient } from 'better-auth/client'
 import { organizationClient, genericOAuthClient } from 'better-auth/client/plugins'
 
+document.title = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().slice(1, -1)
+
 export const authClient = createAuthClient({
   baseURL: location.origin,
   plugins: [organizationClient(), genericOAuthClient()],
@@ -47,9 +49,10 @@ async function loginScreen() {
   // tydig's static site with no hub code in the address: nothing to sign in to
   if (!cfg) { // in link mode, link.js already says why the hub is unreachable
     if (!link) document.body.insertAdjacentHTML('beforeend', `<div id="auth-gate"><div class="auth-card">
-      <div class="auth-brand">tydig</div><p>This page needs a hub's link: the full address
+      <div class="auth-brand"></div><p>This page needs a hub's link: the full address
       ending in <code>#</code> and a code, which the hub prints (<code>just link</code>) and
-      shows under Settings &gt; Share. Ask whoever runs the hub for it.</p></div></div>`)
+      shows under Settings &gt; Share. Ask whoever runs the hub for it.
+      <a href="about/">What is this?</a></p></div></div>`)
     return new Promise(() => {})
   }
   // SSO returns to the hub's own address, which a link visitor cannot hold a session for
@@ -69,7 +72,7 @@ async function loginScreen() {
         <b>${location.origin}</b> and restart (<code>just serve</code>).</p>` : ''
     root.innerHTML = `
       <div class="auth-card">
-        <div class="auth-brand">tydig</div>${originWarning}${sso}
+        <div class="auth-brand"></div>${originWarning}${sso}
         <div class="auth-tabs"><button data-tab="in" class="on">Sign in</button><button data-tab="up">Create account</button></div>
         <form id="auth-form">
           <label class="up-only" hidden>Name (shown on your comments)<input name="name" autocomplete="name" /></label>

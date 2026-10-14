@@ -1,0 +1,6 @@
+/* A hub's look: TYDIG_BRAND=<folder> builds with brands/<folder>/brand.css.
+   Copy this folder, then set any of these (themes: dark, cyber, light):
+     --brand        the name, in the bar, on the sign-in and as the title
+     --logo         url(logo.svg), a file beside this one; --logo-w its width
+     --teal         the accent; --on-teal, text on it */
+:root { --brand: 'tydig'; }

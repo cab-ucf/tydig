@@ -230,7 +230,8 @@ scope:
 
 # The app server image (client build + Node runtime).
 image:
-    {{as}} podman build --format docker -t tydig -f Containerfile.server .
+    {{as}} podman build --format docker -t tydig -f Containerfile.server . \
+      --build-arg TYDIG_BRAND={{env_var_or_default("TYDIG_BRAND", "tydig")}}
 
 # Start the hub, its sandbox service and the build network's egress.
 # --force-recreate matters: with the same image tag, compose will happily

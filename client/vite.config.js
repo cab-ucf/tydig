@@ -13,6 +13,8 @@ export default defineConfig({
       '/sync': { target: 'ws://localhost:1234', ws: true, rewrite: p => p.replace(/^\/sync/, '') },
     },
   },
+  // the hub's look: brands/<TYDIG_BRAND>/brand.css, after style.css
+  resolve: { alias: { '@brand': `${import.meta.dirname}/brands/${process.env.TYDIG_BRAND || 'tydig'}` } },
   base: './', // the same build is served by a hub and from the static site's app/
   build: { target: 'esnext' },
 })

@@ -45,10 +45,10 @@ services:
       TYDIG_GHOST_MODEL: "${TYDIG_GHOST_MODEL:-}"
       TYDIG_PERPLEXISCOPE: "${TYDIG_PERPLEXISCOPE:-}"
       TYDIG_SANDBOX: sandbox:7000
-      # The link collaborators open (`just link`): tydig's static site plus a
-      # seed this hub keeps in data/. Reached over iroh, so no domain or open
+      # The link collaborators open (`just link`): tydig's static site plus the
+      # public id of a key this hub keeps in data/. Reached over iroh, so no domain or open
       # port is needed. TYDIG_LINK=0 turns it off.
-      TYDIG_PAGE: "${TYDIG_PAGE:-https://cxn.pub/app/}"
+      TYDIG_PAGE: "${TYDIG_PAGE:-https://cxn.pub/}"
       TYDIG_LINK: "${TYDIG_LINK:-1}"
       # Same absolute path inside and outside the container (see above).
       TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"

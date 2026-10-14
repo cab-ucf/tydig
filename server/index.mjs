@@ -470,7 +470,7 @@ const HTTPS = /^https:/.test(process.env.TYDIG_URL || '')
 // localhost: a model on the person's own machine (ghost suggestions, Ollama);
 // Crossref and PubMed: finding papers and checking references (cite.js)
 const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace(/^http/, 'ws')).join(' ')} http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://api.crossref.org https://eutils.ncbi.nlm.nih.gov; ` +
-  "script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+  "script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
   "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 app.use((req, res, next) => (res.set({
   'Content-Security-Policy': CSP,
@@ -846,6 +846,20 @@ p.post('/build/:recipe', async (req, res) => {
   } finally { building.delete(req.params.proj) }
 })
 
+// Word, its citations live EndNote fields (sandbox/tydig-docx): out/<file>.docx
+const DOCX = new URL('../sandbox/tydig-docx', import.meta.url).pathname
+p.post('/docx', async (req, res) => {
+  const name = req.params.proj, f = req.body?.file
+  if (!okPath(f) || !f.endsWith('.typ') || GENERATED.test(f) || !existsSync(inProj(name, f)))
+    return res.status(400).json({ ok: false, output: 'not a .typ file of this project' })
+  if (building.has(name)) return res.status(409).json({ ok: false, output: 'a build is already running for this project' })
+  building.add(name)
+  try {
+    const r = await (UNSAFE ? run(DOCX, [f], { cwd: proj(name), timeout: 180_000 }) : inSandbox(name, ['tydig-docx', f], 180))
+    res.json({ ok: true, path: r.stdout.trim().split('\n').pop() })
+  } catch (e) { res.json({ ok: false, output: sandboxHint(e) }) } finally { building.delete(name); scrub(name) }
+})
+
 // The canonical file state a checkpoint signs: every CRDT-managed text file
 // (generated dirs excluded), path -> sha256 of content. Computed from the
 // live document when open, from disk otherwise. The client computes the same
@@ -1179,16 +1193,16 @@ app.use((e, req, res, next) => {
 })
 
 const PORT = Number(process.env.PORT || 3000)
-// The hub's link: tydig's static page plus a seed only this hub holds (link.mjs).
-import { startLink, newSeed } from './link.mjs'
+// The hub's link: tydig's static page plus the public id of a key only this hub holds (link.mjs).
+import { startLink, newSeed, hubId } from './link.mjs'
 import { RELAY as DEFAULT_RELAY, relayUrl } from './relay.mjs'
-const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/app/'
+const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/'
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
 let linkOnline = false
 const RELAY = process.env.TYDIG_LINK_RELAY || DEFAULT_RELAY // see relay.mjs
-const LINK = PAGE && `${PAGE}#${LINK_SEED}${RELAY !== DEFAULT_RELAY ? `;r=${RELAY}` : ''}`
+const LINK = PAGE && `${PAGE}#${await hubId(LINK_SEED)}${RELAY !== DEFAULT_RELAY ? `;r=${RELAY}` : ''}`
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 const httpServer = app.listen(PORT, e => {
   if (e) throw e

@@ -20,6 +20,7 @@ import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { parse as parseYaml } from 'yaml'
 import { renderCite } from './cite.js'
+import { spellcheck, renderSpelling } from './spell.js'
 import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { authClient, requireUser } from './auth.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
@@ -28,7 +29,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true, sideOpen: false, focus: false, write: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, spell: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -266,7 +267,8 @@ const themeComp = new Compartment(), themeExt = () => PALETTES[theme()] ? [PALET
 const commentsChanged = Annotation.define()
 let view = null, currentPath = null
 const undoManagers = new Map()
-const vimComp = new Compartment(), langComp = new Compartment(), lspComp = new Compartment()
+const vimComp = new Compartment(), langComp = new Compartment(), lspComp = new Compartment(), spellComp = new Compartment()
+const spellExt = p => settings.spell && p?.endsWith('.typ') ? spellcheck(filesMap) : []
 
 // Ghost suggestions: a model on this person's own machine (Ollama) proposes
 // how the line goes on, in grey after the cursor; Tab takes it, typing or
@@ -387,7 +389,7 @@ async function openFile(p) {
         themeComp.of(themeExt()),
         keymap.of([indentWithTab]),
         langComp.of(lang),
-        lspComp.of(lsp),
+        lspComp.of(lsp), spellComp.of(spellExt(p)),
         keymap.of([...yUndoManagerKeymap, { key: 'Ctrl-Alt-m', run: () => (addComment(), true) }]),
         yCollab(yt, provider.awareness, { undoManager: undoManagers.get(p) }),
         commentHighlights, commentHover, ghostField, ghostPlugin, ghostKeys, scope.extension,
@@ -869,7 +871,12 @@ function openSidebar(mode) {
   settings.sideOpen = true; if (phone()) settings.m = 'side'
   applyLayout()
   $('side-title').textContent = mode
-  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, template: renderTemplate, cite: () => renderCite(sideBody, citeCtx), history: renderHistory, build: renderBuild, review: renderReview })[mode]()
+  ;({ comments: renderComments, chat: renderChat, checklist: renderChecklist, template: renderTemplate, cite: () => renderCite(sideBody, citeCtx), history: renderHistory, build: renderBuild, review: renderReview,
+    spelling: () => renderSpelling(sideBody, { files: filesMap, open: goTo }) })[mode]()
+}
+async function goTo(p, from, to) {
+  if (currentPath !== p) await openFile(p)
+  view?.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); view?.focus()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; sidebarMode = null; applyLayout() }
 
@@ -1176,7 +1183,6 @@ function applyLayout() {
   // has to be released here or no pane can ever appear.
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
-  document.body.classList.toggle('write', settings.write)
   $('scope').hidden = !settings.scope
   document.documentElement.dataset.theme = theme()
   document.body.classList.toggle('dark-preview', theme() !== 'light')
@@ -1432,13 +1438,21 @@ const actions = {
     if (sidebarMode === 'history') renderHistory()
   },
   'export-pdf': exportPdf,
+  'export-docx': async () => {
+    const file = $('main-sel').value
+    if (!file) return
+    toast(`making ${esc(file.replace(/typ$/, 'docx'))}&hellip;`, true, 0)
+    const r = await api(P('/docx'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file }) })
+    if (!r.ok) return toast(esc(r.output), false)
+    toast('In Word, EndNote &gt; Update Citations and Bibliography makes them live', true, 8000)
+    download(rawUrl(r.path), r.path)
+  },
   undo: () => undoManagers.get(currentPath)?.undo(),
   redo: () => undoManagers.get(currentPath)?.redo(),
   comment: addComment,
   'toggle-tree': () => { settings.treeOpen = !settings.treeOpen; applyLayout() },
   'toggle-side': () => { settings.sideOpen = !settings.sideOpen; if (settings.sideOpen && !sidebarMode) sidebarMode = 'comments', renderComments(); applyLayout() },
-  focus: () => { settings.write ? settings.write = false : settings.focus = !settings.focus; applyLayout() },
-  write: () => { settings.write = !settings.write; applyLayout(); view?.focus() },
+  focus: () => { settings.focus = !settings.focus; applyLayout(); view?.focus() },
   'max-editor': () => { settings.max = settings.max === 'editor' ? null : 'editor'; applyLayout() },
   'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
@@ -1480,6 +1494,8 @@ const actions = {
     if (settings.scope) { settings.scope.by = by; applyLayout(); scope.refresh() }
   }])),
   vim: () => { settings.vim = !settings.vim; applyLayout(); view?.dispatch({ effects: vimComp.reconfigure(settings.vim ? vim() : []) }) },
+  spell: () => { settings.spell = !settings.spell; applyLayout(); view?.dispatch({ effects: spellComp.reconfigure(spellExt(currentPath)) }) },
+  spelling: () => openSidebar('spelling'),
   lsp: () => { settings.lsp = !settings.lsp; lspDead = false; lspClient = null; applyLayout(); if (currentPath) openFile(currentPath) },
   share: showShare,
   federation: showFederation,
@@ -1509,12 +1525,12 @@ Alt-N     new file
 Alt-E     export preview PDF
 Ctrl-Alt-M  comment on selection
 Ctrl-Alt-C  cite: find papers for the selection, check references
+Alt-S     spelling and grammar, every file; the cursor on a mark offers fixes
 Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
 
 Alt-1     file tree
 Alt-2     side panel
-Alt-0     focus mode (toggle works while typing)
-Alt-W     writing mode: the text alone, centred, no preview
+Alt-0     focus: the text alone, centred, no preview
 Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
@@ -1541,10 +1557,10 @@ document.addEventListener('click', () => document.querySelectorAll('#menubar .dr
 // while typing in the editor (essential for exiting focus mode).
 const KEYMAP = {
   'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus',
-  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen', 'A-KeyW': 'write',
+  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
-  'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
+  'A-KeyN': 'new-file', 'A-KeyS': 'spelling', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',
   'C-KeyP': 'quick-open', 'C-KeyS': 'save', 'C-A-KeyM': 'comment', 'C-A-KeyC': 'cite',
 }
 document.addEventListener('keydown', e => {

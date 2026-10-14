@@ -150,15 +150,30 @@ check('Ollama refusing the page says how to let it in', await page.evaluate(() =
   document.getElementById('toast')?.textContent.includes(`OLLAMA_ORIGINS=${location.origin}`)))
 ollama.close()
 
-// writing mode: the text alone, centred; Alt-W again, and all is back
-await page.keyboard.down('Alt'); await page.keyboard.press('KeyW'); await page.keyboard.up('Alt'); await sleep(500)
+// focus: the text alone, centred, in a readable face; Alt-0 again, and all is back
+await page.keyboard.down('Alt'); await page.keyboard.press('Digit0'); await page.keyboard.up('Alt'); await sleep(500)
 const w = await page.evaluate(() => { const c = document.querySelector('.cm-content').getBoundingClientRect(), e = document.getElementById('editor').getBoundingClientRect()
   return { preview: getComputedStyle(document.getElementById('preview')).display, bar: getComputedStyle(document.getElementById('bar')).display,
-    left: c.left - e.left, right: e.right - c.right, width: c.width, full: e.width } })
-await page.screenshot({ path: `${tmp}/ui-write.png` })
-await page.keyboard.down('Alt'); await page.keyboard.press('KeyW'); await page.keyboard.up('Alt'); await sleep(500)
-check('writing mode hides the preview and every bar, and centres the text', w.preview === 'none' && w.bar === 'none' &&
+    left: c.left - e.left, right: e.right - c.right, width: c.width, full: e.width,
+    font: getComputedStyle(document.querySelector('.cm-scroller')).fontFamily } })
+await page.screenshot({ path: `${tmp}/ui-focus.png` })
+await page.keyboard.down('Alt'); await page.keyboard.press('Digit0'); await page.keyboard.up('Alt'); await sleep(500)
+check('focus hides the preview and every bar, centres the text, reads in Atkinson', w.preview === 'none' && w.bar === 'none' &&
+  w.font.includes('Atkinson') &&
   w.full > w.width + 100 && Math.abs(w.left - w.right) < 30 && await page.evaluate(() => getComputedStyle(document.getElementById('preview')).display !== 'none'))
+
+// spelling: a misspelt word is marked and fixed from the mark; code is not
+await page.focus('.cm-content'); await page.keyboard.down('Control'); await page.keyboard.press('End'); await page.keyboard.up('Control')
+await page.keyboard.type('\n\nThe water was recieved. #let foo_bar = 1\n')
+const marked = () => page.evaluate(() => [...document.querySelectorAll('.cm-spell')].map(e => e.textContent))
+await page.waitForFunction(() => [...document.querySelectorAll('.cm-spell')].some(e => e.textContent === 'recieved'), { timeout: 60000 }).catch(() => {})
+check('spelling marks a misspelt word, not code', (await marked()).includes('recieved') && !(await marked()).some(m => /foo|let/.test(m)))
+await page.evaluate(() => { const e = [...document.querySelectorAll('.cm-spell')].find(e => e.textContent === 'recieved')
+  getSelection().collapse(e.firstChild, 2) }); await sleep(300)
+await page.evaluate(() => [...document.querySelectorAll('.cm-spell-tip button')].find(b => b.textContent === 'received')
+  ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+check('a fix from the mark corrects the text', await page.evaluate(() => document.querySelector('.cm-content').innerText.includes('was received.')))
+await page.focus('.cm-content'); await page.keyboard.down('Control'); await page.keyboard.press('Home'); await page.keyboard.up('Control'); await sleep(3000)
 
 // the surprise overlay, from a stand-in for a Perplexiscope engine: it scores
 // the prose (never the markup), and each word lands on its own source text
@@ -211,6 +226,15 @@ check('the word count sits under the Edit tab, and build in the tab bar opens th
   /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
   (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
    await page.evaluate(() => document.body.dataset.m === 'side' && document.getElementById('side-title').textContent === 'build')))
+// Word: the citations are EndNote's fields, the bibliography its list
+const word = await page.evaluate(async () => {
+  const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then(r => r.json())
+  const r = (await post('/api/projects/wordy', '{"template":"nih-r21"}')).ok && await post('/api/p/wordy/docx', '{"file":"main.typ"}')
+  return r.ok && [...new Uint8Array(await (await fetch('/api/p/wordy/raw/' + r.path)).arrayBuffer())]
+})
+if (word) writeFileSync(`${tmp}/w.docx`, Buffer.from(word))
+const xml = word ? (await import('node:child_process')).execSync(`unzip -p ${tmp}/w.docx word/document.xml`).toString() : ''
+check('Word export makes the citations EndNote fields, the bibliography its list', /ADDIN EN\.CITE &lt;EndNote&gt;[\s\S]*ADDIN EN\.REFLIST/.test(xml))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)

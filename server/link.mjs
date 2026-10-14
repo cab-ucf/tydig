@@ -1,20 +1,24 @@
-// Browser links: <TYDIG_PAGE>#<seed>. The page is the tydig client on a static
-// host plus irp's wasm iroh client (github.com/cab-ucf/irp). It derives this
-// hub's key and home relay from the seed, as irp does, and sends one HTTP/1.0
+// Browser links: <TYDIG_PAGE>#<id>. The page is the tydig client on a static
+// host plus irp's wasm iroh client (github.com/cab-ucf/irp). The id is the
+// public half of the key this hub derives from its seed, as irp does: it can be
+// published (a site's default hub), for it cannot pose as the hub. One HTTP/1.0
 // exchange per stream. Each stream is handed to the hub's own HTTP server as a
 // connection, so nothing behind it knows the difference. No domain, no TLS
 // certificate, no open port: the hub can sit behind NAT on a laptop.
 import { Duplex } from 'node:stream'
-import { derive } from './relay.mjs'
-export { newSeed } from './relay.mjs'
+import { derive, newSeed } from './relay.mjs'
+export { newSeed }
 
-const ALPN = [...Buffer.from('irweb/http/1')]
+const ALPN = [...Buffer.from('irweb/http/1')], KEY = 'irweb v1 endpoint identity'
+const secret = seed => [...derive(seed, KEY)]
+export const hubId = async seed =>
+  newSeed((await import('@number0/iroh')).SecretKey.fromBytes(secret(seed)).public().toBytes())
 
 export async function startLink({ server, seed, relay }) {
   const iroh = await import('@number0/iroh')
   const b = iroh.Endpoint.builder()
   b.applyMinimal()
-  b.secretKey([...derive(seed, 'irweb v1 endpoint identity')])
+  b.secretKey(secret(seed))
   b.relayMode(iroh.RelayMode.customFromUrls([relay]))
   b.alpns([ALPN])
   const ep = await b.bind()
