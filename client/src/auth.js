@@ -56,14 +56,32 @@ function explain(error, email) {
 // An invite link (?invite=<id>) opens on Create account and carries its key.
 const invite = new URLSearchParams(location.search).get('invite')
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
+const DOCS = 'https://cab-ucf.github.io/tydig/'
+// the static site: open any hub by its link or code
+const hubBox = `<form class="auth-hub"><input name="hub" required
+  placeholder="a hub's link or code"><button class="go">open</button></form>`
+const foot = `<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">What is tydig?</a></p>`
+const wire = root => {
+  const f = root.querySelector('.auth-hub')
+  if (f) f.onsubmit = e => {
+    e.preventDefault()
+    const v = f.hub.value.trim()
+    location.hash = v.includes('#') ? v.slice(v.indexOf('#')) : '#' + v
+    location.reload()
+  }
+}
 
 async function loginScreen() {
   const cfg = await fetch('/api/auth-config').then(r => r.json()).catch(() => null)
-  if (!cfg) { // the static site with no hub in its address (in link mode, link.js says why)
-    if (!link) document.body.insertAdjacentHTML('beforeend', `<div id="auth-gate"><div class="auth-card">
-      <div class="auth-brand"></div><p>This page needs a hub's link: the full address ending in
-      <code>#</code> and a code, which the hub prints (<code>just link</code>) and shows under Settings &gt;
-      Share. Ask whoever runs the hub for it. <a href="about/">What is this?</a></p></div></div>`)
+  if (!cfg) { // the static site with no hub, or one that did not answer (link.js says why)
+    const root = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'auth-gate' }))
+    root.innerHTML = `<div class="auth-card"><div class="auth-brand"></div>
+      <p><b>Ty</b>pst, <b>d</b>ecentralized collaboration with <b>i</b>roh, saved in <b>g</b>it:
+      papers written together in the browser, computed by a hub you run.</p>
+      <p>${link ? 'That hub did not answer. Another one:' : "Open a hub with the link its owner sent you:"}</p>
+      ${hubBox}<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">Docs</a> ·
+      <a href="https://github.com/cab-ucf/tydig" target="_blank" rel="noopener">run your own hub</a></p></div>`
+    wire(root)
     return new Promise(() => {})
   }
   // SSO returns to the hub's own address, which a link visitor cannot hold a session for
@@ -87,7 +105,8 @@ async function loginScreen() {
         minlength="8"></label>
       <p class="auth-err" hidden></p>
       <button type="submit" class="go auth-submit">Sign in</button>
-    </form></div>`
+    </form>${link ? `<div class="auth-or">or another hub</div>${hubBox}` : ''}${foot}</div>`
+  wire(root)
   const form = root.querySelector('#auth-form'), err = root.querySelector('.auth-err')
   const submit = root.querySelector('.auth-submit'), tabs = root.querySelectorAll('.auth-tabs button')
   if (cfg.sso) {

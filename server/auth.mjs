@@ -69,7 +69,8 @@ const gate = createAuthMiddleware(async ctx => {
   const invite = ctx.headers?.get?.('x-tydig-invite')
   if (!OPEN && db.prepare('SELECT 1 FROM user').get() && !invitesFor(ctx.body?.email).some(i => i.id === invite))
     no('FORBIDDEN', invite ? 'This invite link is for another address, or has expired.'
-      : 'This hub is invite-only: ask a project owner for an invite link.')
+      : 'This hub is invite-only: ask a project owner for an invite link. Run this hub? ' +
+        'Put TYDIG_SIGNUP=open in its .env and run `just`, or reset a password: `just passwd EMAIL`.')
 })
 
 // a deleted account's projects pass to an admin, else the oldest member;

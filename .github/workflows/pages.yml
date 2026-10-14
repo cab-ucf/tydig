@@ -1,5 +1,5 @@
 # The static site: the editor (opens <site>/#<hub id>, else TYDIG_HUB),
-# app/ for older links, the landing page at about/.
+# app/ for older links; with no hub it opens on a landing page.
 # Variables: TYDIG_HUB (`just` prints it after the #), TYDIG_BRAND.
 name: pages
 on: { push: { branches: [main] }, workflow_dispatch: }
@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci -w client && npm run build
-      - run: cp -r client/dist _site && cp -r client/dist _site/app && cp .nojekyll _site && mkdir _site/about && cp index.html _site/about
+      - run: cp -r client/dist _site && cp -r client/dist _site/app && cp .nojekyll _site
       - uses: actions/upload-pages-artifact@v4
         with: { path: _site }
       - id: deploy

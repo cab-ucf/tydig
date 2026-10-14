@@ -356,7 +356,7 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
 }
 #toast.bad { background: var(--bad-bg); color: var(--bad-fg); }
 #link-status {
-  position: fixed; left: 50%; top: 40%; transform: translateX(-50%); z-index: 100; max-width: 28rem;
+  position: fixed; left: 50%; top: 1.5rem; transform: translateX(-50%); z-index: 300; max-width: 28rem;
   padding: 1rem 1.2rem; border-radius: 8px; background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3);
   font: .9rem/1.5 var(--sans); box-shadow: 0 6px 30px #0006;
 }
@@ -375,11 +375,16 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
 .auth-tabs button.on { border-color: var(--teal); color: var(--hi); }
 #auth-form { display: flex; flex-direction: column; gap: .6rem; }
 #auth-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .72rem; color: var(--fg-dim); }
-#auth-form input {
+#auth-form input, .auth-hub input {
   background: var(--ink); border: 1px solid var(--ink-3); border-radius: 5px; color: var(--fg);
   font: .85rem var(--sans); padding: .45rem .55rem;
 }
-#auth-form input:focus { border-color: var(--teal); outline: none; }
+#auth-form input:focus, .auth-hub input:focus { border-color: var(--teal); outline: none; }
+.auth-hub { display: flex; gap: .4rem; }
+.auth-hub input { flex: 1; min-width: 0; }
+.auth-card p { font-size: .8rem; line-height: 1.45; }
+.auth-foot { text-align: center; color: var(--fg-dim); margin: 1rem 0 0; }
+.auth-foot a { color: var(--teal); }
 .auth-err { color: var(--bad-fg); font-size: .75rem; margin: 0; }
 .auth-submit { padding: .5rem; font-size: .85rem; margin-top: .3rem; }
 .auth-sso { width: 100%; padding: 9px; margin: 10px 0 2px; font-weight: 600; }
