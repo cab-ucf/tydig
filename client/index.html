@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <!-- The static site sends no CSP header (a hub does): no inline script, no
        javascript: URLs in the preview, on either. -->
-  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'" />
   <title>tydig</title>
   <link rel="stylesheet" href="/src/style.css" />
   <link rel="stylesheet" href="@brand/brand.css" />
@@ -32,6 +32,7 @@
         <hr/>
         <button data-act="comment">Comment on selection<kbd>Ctrl-Alt-M</kbd></button>
         <button data-act="cite">Cite selection / check references<kbd>Ctrl-Alt-C</kbd></button>
+        <button data-act="spelling">Check spelling, every file<kbd>Alt-S</kbd></button>
       </div></div>
       <div class="menu"><button>View</button><div class="dropdown">
         <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Alt-1</kbd></button>
@@ -57,6 +58,7 @@
         <button data-act="scope-bits" data-check="scope-bits">&emsp;Highlight surprise</button>
         <button data-act="scope-ent" data-check="scope-ent">&emsp;Highlight flatness</button>
         <button data-act="scope-ai" data-check="scope-ai">&emsp;Highlight AI-likeness</button>
+        <button data-act="spell" data-check="spell">Spelling and grammar</button>
         <button data-act="lsp" data-check="lsp">LSP (tinymist)</button>
         <hr/>
         <button data-act="share">Share project...</button>

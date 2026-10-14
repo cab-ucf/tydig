@@ -415,3 +415,11 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
 .cm-scope-tip dd { margin: 0; }
 .cm-scope-tip .on { font-weight: 600; opacity: 1; }
 #scope { font-size: 11px; width: auto; padding: 0 6px; }
+
+/* spelling and grammar (spell.js): red for spelling, the accent for the rest */
+.cm-spell { text-decoration: underline wavy #e06c5b 1px; text-underline-offset: 3px; text-decoration-skip-ink: none; }
+.cm-spell.gram { text-decoration-color: var(--teal); }
+.cm-spell-tip { padding: .35rem .5rem; max-width: 26rem; font: .8rem var(--sans); }
+.cm-spell-tip p { margin: 0 0 .3rem; }
+.cm-spell-tip button { margin: 0 .3rem .2rem 0; font: .78rem var(--sans); background: var(--ink-2); color: var(--fg);
+  border: 1px solid var(--ink-3); border-radius: 3px; padding: .1rem .45rem; cursor: pointer; }

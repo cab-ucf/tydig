@@ -25,6 +25,7 @@
     "codemirror": "^6.0.1",
     "codemirror-lang-typst": "^0.4.0",
     "codemirror-languageserver": "^1.22.0",
+    "harper.js": "^2.10.0",
     "y-codemirror.next": "^0.3.5",
     "y-indexeddb": "^9.0.12",
     "yaml": "^2.9.1",

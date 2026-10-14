@@ -151,6 +151,13 @@ holds every entry in the `.bib` to its published record: a DOI that does not
 exist, a title nothing matches (a made-up reference), wrong authors, year or
 journal are each named, with the published record one click away.
 
+**Spelling and grammar** are checked as you type, on the prose alone (never
+code, math or markup), by [Harper](https://writewithharper.com), which runs in
+the browser: the text goes nowhere. Put the cursor on a mark for its fixes, or
+to add the word to the project's `.harper-dictionary.txt` (shared with
+everyone on it, and read by `harper-ls` too). **Alt-S** checks every file at
+once and lists what it finds; Settings turns it off.
+
 File > Download gives the sources as a `.tar.gz` (enough to rebuild), or
 everything with the PDFs; any file downloads from its row in the tree.
 

@@ -470,7 +470,7 @@ const HTTPS = /^https:/.test(process.env.TYDIG_URL || '')
 // localhost: a model on the person's own machine (ghost suggestions, Ollama);
 // Crossref and PubMed: finding papers and checking references (cite.js)
 const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace(/^http/, 'ws')).join(' ')} http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https://api.crossref.org https://eutils.ncbi.nlm.nih.gov; ` +
-  "script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+  "script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
   "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 app.use((req, res, next) => (res.set({
   'Content-Security-Policy': CSP,
