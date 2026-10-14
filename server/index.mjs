@@ -137,7 +137,7 @@ if (dev) app.use(dev.middlewares)
 else if (existsSync(`${client}dist/index.html`)) {
   app.use('/assets', express.static(`${client}dist/assets`, { immutable: true, maxAge: '1y' }))
   app.use(express.static(`${client}dist`))
-  app.get(/^\/(?!api\/)/, (req, res) => res.sendFile(`${client}dist/index.html`))
+  app.get(/^\/(?!api\/)/, (req, res) => res.sendFile('index.html', { root: `${client}dist` }))
 }
 
 app.use((e, req, res, next) => {

@@ -4,7 +4,7 @@
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-const puppeteer = (await import(createRequire(path.resolve('.uitest/package.json')).resolve('puppeteer'))).default
+const puppeteer = (await import(createRequire(new URL('../.uitest/package.json', import.meta.url)).resolve('puppeteer'))).default
 import { check, done, sleep } from './lib.mjs'
 const LINK = readFileSync(process.env.LINKFILE, 'utf8').trim()
 const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] })

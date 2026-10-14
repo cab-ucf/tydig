@@ -1,15 +1,14 @@
 // Browser-level test: drives the built client in headless Chrome. This is the
 // suite that catches what the API suites cannot -- panes that render into a
 // hidden element, preview compiles that fail on missing files, UI labels.
-// Run via `just test-ui`, which installs puppeteer (and its Chrome) on demand
-// into .uitest/ so the app's own dependency tree stays lean.
+// `just test ui` installs puppeteer into .uitest/, apart from the app's own.
 import { createRequire } from 'node:module'
 import path from 'node:path'
-const puppeteer = (await import(createRequire(path.resolve('.uitest/package.json'))
+const puppeteer = (await import(createRequire(new URL('../.uitest/package.json', import.meta.url))
   .resolve('puppeteer'))).default
 let pass = true
 const check = (name, cond) => { console.log(cond ? 'PASS' : 'FAIL', name); pass &&= cond }
-const B = process.env.B || 'http://localhost:3000'
+const B = process.env.HUB || 'http://localhost:3000'
 const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] })
 const page = await browser.newPage()
 await page.setViewport({ width: 1400, height: 900 })
