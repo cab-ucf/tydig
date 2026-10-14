@@ -329,5 +329,6 @@ the Ollama already running as a service.
 - **Accounts.** Settings > Delete my account: each project it owns passes to
   an admin, else to the longest-standing member; one nobody else is in is
   deleted with it. Comments keep the name they were written under.
-- **Updates.** `git pull && just serve`.
+- **Updates.** `git pull && just serve`; on NixOS, `nixos.nix` does it
+  hourly.
 
