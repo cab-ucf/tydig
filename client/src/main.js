@@ -28,7 +28,7 @@ const $ = id => document.getElementById(id)
 
 // ---------- settings (persisted) ----------
 const settings = Object.assign(
-  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true, sideOpen: false, focus: false, write: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
+  { vim: false, lsp: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true, sideOpen: false, focus: false, projectsOpen: true, filesOpen: true, zoom: null, split: 0.5, max: null },
   JSON.parse(localStorage.settings || '{}'))
 const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // theme: dark (black), cyber (pink/purple) or light; the system's until Alt-D cycles it
@@ -1176,7 +1176,6 @@ function applyLayout() {
   // has to be released here or no pane can ever appear.
   $('side').hidden = !settings.sideOpen
   document.body.classList.toggle('focus', settings.focus)
-  document.body.classList.toggle('write', settings.write)
   $('scope').hidden = !settings.scope
   document.documentElement.dataset.theme = theme()
   document.body.classList.toggle('dark-preview', theme() !== 'light')
@@ -1437,8 +1436,7 @@ const actions = {
   comment: addComment,
   'toggle-tree': () => { settings.treeOpen = !settings.treeOpen; applyLayout() },
   'toggle-side': () => { settings.sideOpen = !settings.sideOpen; if (settings.sideOpen && !sidebarMode) sidebarMode = 'comments', renderComments(); applyLayout() },
-  focus: () => { settings.write ? settings.write = false : settings.focus = !settings.focus; applyLayout() },
-  write: () => { settings.write = !settings.write; applyLayout(); view?.focus() },
+  focus: () => { settings.focus = !settings.focus; applyLayout(); view?.focus() },
   'max-editor': () => { settings.max = settings.max === 'editor' ? null : 'editor'; applyLayout() },
   'max-preview': () => { settings.max = settings.max === 'preview' ? null : 'preview'; applyLayout() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(),
@@ -1513,8 +1511,7 @@ Ctrl-Z / Ctrl-Shift-Z  undo / redo (own edits only)
 
 Alt-1     file tree
 Alt-2     side panel
-Alt-0     focus mode (toggle works while typing)
-Alt-W     writing mode: the text alone, centred, no preview
+Alt-0     focus: the text alone, centred, no preview
 Alt-3     editor only     Alt-4  preview only     Alt-F  full screen
 Alt-=  Alt--  Alt-9   zoom preview in / out / fit (or Ctrl-wheel)
 drag the bar between editor and preview; double-click it to even out
@@ -1541,7 +1538,7 @@ document.addEventListener('click', () => document.querySelectorAll('#menubar .dr
 // while typing in the editor (essential for exiting focus mode).
 const KEYMAP = {
   'A-Digit1': 'toggle-tree', 'A-Digit2': 'toggle-side', 'A-Digit0': 'focus',
-  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen', 'A-KeyW': 'write',
+  'A-Digit3': 'max-editor', 'A-Digit4': 'max-preview', 'A-KeyF': 'fullscreen',
   'A-Equal': 'zoom-in', 'A-Minus': 'zoom-out', 'A-Digit9': 'zoom-fit',
   'A-KeyB': 'build', 'A-KeyH': 'history', 'A-KeyC': 'comments', 'A-KeyM': 'chat',
   'A-KeyN': 'new-file', 'A-KeyE': 'export-pdf', 'A-KeyD': 'theme',

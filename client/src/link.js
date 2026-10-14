@@ -1,11 +1,14 @@
-// Link mode: this page came from tydig's static site as <page>#<seed>, not from
-// a hub. What the app sends to /api, and the websockets it opens to /sync and
-// /lsp, go to the hub over iroh instead, through irp's wasm client
-// (public/irweb, from github.com/cab-ucf/irp); server/link.mjs is the far end.
+// Link mode: this page came from tydig's static site as <page>#<hub id>, not
+// from a hub; with no #, the site's own hub (VITE_HUB, set where it is built).
+// A 26-character code is an old link's seed. What the app sends to /api, and
+// the websockets it opens to /sync and /lsp, go to the hub over iroh instead,
+// through irp's wasm client (public/irweb, from github.com/cab-ucf/irp);
+// server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
 import { RELAY, relayUrl } from '../../server/relay.mjs'
-const m = /^#([a-z2-7]{26})(?:;r=(\S+))?$/.exec(location.hash)
-export const link = m && { seed: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
+const HUB = import.meta.env.VITE_HUB
+const m = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/.exec(location.hash || HUB && '#' + HUB)
+export const link = m && { code: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {
@@ -40,7 +43,7 @@ const connect = () => client ??= new Promise((ok, no) => {
   const at = f => new URL('irweb/' + f, document.baseURI).href
   const s = Object.assign(document.createElement('script'), { src: at('irweb_web.js'), onerror: no })
   s.onload = () => wasm_bindgen({ module_or_path: at('irweb_web_bg.wasm') })
-    .then(() => wasm_bindgen.Client.connect(link.seed, link.relay)).then(ok, no)
+    .then(() => wasm_bindgen.Client.connect(link.code, link.relay)).then(ok, no)
   setTimeout(() => no(new Error('no answer in 30 s')), 30_000)
   document.head.append(s)
 }).then(c => { document.getElementById('link-status')?.remove(); return c }, e => {

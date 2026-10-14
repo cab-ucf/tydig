@@ -38,15 +38,16 @@ of yours is in reach of it: not your files, not your SSH keys.
 ## Share it: a link, nothing to install
 
 `just` prints a link (and **Settings > Share** shows it):
-`https://cxn.pub/app/#<code>`. Share a project with someone's address
+`https://cxn.pub/#<code>`. Share a project with someone's address
 (Settings > Share) and send them the invite link that appears under it: they
 open it in any browser, create their account, and are editing. The address
 alone cannot sign up, so nobody can claim an invitation by guessing it. The page is the editor itself, served statically; it reaches your hub
 over [iroh](https://iroh.computer) through irp's wasm client, end-to-end
 encrypted, through NAT, so the hub can be a laptop with no open port, domain or
-certificate. The code is the hub's address and is unguessable; sign-in and
-invitations still decide who gets in. A new code: delete `link-seed` in the data folder and
-restart. Links go through n0's US-East relay (`use1-1`), which networks that
+certificate. The code is the hub's public id: it reaches the hub and nothing
+more, since only the hub holds the key behind it (`link-seed` in the data
+folder; delete it and restart for a new one). Sign-in and invitations decide
+who gets in. Links go through n0's US-East relay (`use1-1`), which networks that
 block other countries still reach; `TYDIG_LINK_RELAY` picks another region or
 your own relay, and the link then names it (`;r=...`). Firefox
 is refused by n0's relays (its ECH GREASE): use another browser, or set
@@ -56,7 +57,15 @@ The static site deploys from this repo (`.github/workflows/pages.yml`; Settings
 > Pages > Source: GitHub Actions). Give it a custom domain of its own: the
 editor keeps sign-ins and offline drafts in the browser, so it must not share
 an origin with sites run by others (irp's pages at `cab-ucf.github.io`).
-This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own. Whoever controls
+This repo's is `cxn.pub`; a fork sets `TYDIG_PAGE` to its own.
+
+**A site's own hub** opens at its bare address, so `cxn.pub` is a sign-in
+anyone can type. Set the repo's variable (Settings > Variables > Actions)
+`TYDIG_HUB` to the hub's code (`just link`, after the `#`); other hubs' links
+still work there. Its look is `TYDIG_BRAND`, a folder in `client/brands/`: the
+name, a logo and the accent, in one CSS file (`brands/tydig/brand.css` says
+how). `cxn.pub` is UCF's (`TYDIG_BRAND=ucf`); a hub sets the same in `.env`
+for the editor it serves itself. tydig's own page is at `about/`. Whoever controls
 that site (its GitHub repo, its DNS) serves the page every link visitor
 runs, so it can read what they type and their sign-ins: the same trust you
 give any web app's host. A hub that should not rely on it sets `TYDIG_PAGE`

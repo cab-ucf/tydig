@@ -1,12 +1,16 @@
+@import '@fontsource-variable/atkinson-hyperlegible-next';
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css';
 /* Identity: ink (editor, dark) writes onto paper (preview, a lit page).
    Accent: typst teal. One signature, everything else quiet. */
 :root {
   /* dark is black: the editor, panels and page on #000, high-contrast text */
   --ink: #000; --ink-2: #111; --ink-3: #333; --editor: #000;
   --paper-bg: #c9ccd1; --paper: #ffffff;
-  --teal: #2fc1d3; --fg: #f2f2f2; --fg-dim: #a6a6a6;
+  --teal: #2fc1d3; --on-teal: #fff; --fg: #f2f2f2; --fg-dim: #a6a6a6;
+  --brand: 'tydig'; --logo: none; --logo-w: 0px;
   --mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
   --sans: system-ui, 'Inter', sans-serif;
+  --read: 'Atkinson Hyperlegible Next Variable', var(--sans);
   --hi: #fff; --line: #ffffff14; --bad-bg: #3b1f1f; --bad-fg: #f0b9af; --good-bg: #1d3326; --good-fg: #a5d6a7;
   color-scheme: dark;
 }
@@ -32,6 +36,9 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   background: var(--ink); color: var(--fg); border-bottom: 1px solid var(--ink-3);
 }
 #brand { font-family: var(--mono); color: var(--teal); font-weight: 700; letter-spacing: .04em; }
+#brand::after, .auth-brand::after { content: var(--brand); }
+#brand::before, .auth-brand::before { content: ''; display: inline-block; vertical-align: middle;
+  width: var(--logo-w); height: 1.4em; margin-right: calc(var(--logo-w) / 5); background: var(--logo) left / contain no-repeat; }
 #docname { font-family: var(--mono); color: var(--fg-dim); }
 #docname::before { content: '/'; margin-right: .15rem; color: var(--ink-3); }
 #peers { font-size: .78rem; color: var(--fg-dim); }
@@ -124,8 +131,6 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
     padding-bottom: env(safe-area-inset-bottom); background: var(--ink); border-top: 1px solid var(--ink-3); }
   #mtabs button { flex: 1; background: none; border: 0; color: var(--fg-dim); font: .85rem var(--sans); }
   #mtabs button.on { color: var(--teal); box-shadow: inset 0 2px var(--teal); }
-  body.focus #mtabs { display: none; }
-  body.focus #layout { height: 100dvh; }
   .tnode { padding-top: .4rem; padding-bottom: .4rem; }
   .tnode .ops { visibility: visible; }
   .tnode .ops button { padding: .15rem .45rem; font-size: .8rem; }
@@ -155,7 +160,7 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
 .tnode:hover .del { visibility: visible; }
 #main-label { font-size: .75rem; color: var(--fg-dim); }
 #main-sel { background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 4px; font: .75rem var(--mono); padding: .2rem; max-width: 11rem; }
-.pin-n { background: var(--teal); color: #fff; border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: .65rem; flex: none; }
+.pin-n { background: var(--teal); color: var(--on-teal); border-radius: 50%; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: .65rem; flex: none; }
 .cfile { font: .68rem var(--mono); color: var(--fg-dim); margin-top: .2rem; }
 .recipe { display: flex; justify-content: space-between; align-items: center; background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 6px; padding: .45rem .6rem; }
 .recipe code { font-family: var(--mono); font-size: .8rem; color: var(--teal); }
@@ -169,7 +174,7 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
 #proj-new, #proj-join, #proj-git { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
 #proj-new input, #proj-new select, #proj-join input, #proj-git input { flex: 1; min-width: 0; background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 4px; color: var(--fg); font-family: var(--mono); padding: .35rem .5rem; }
 #proj-new select { flex: 0; }
-#proj-new button, #proj-join button, #proj-git button { background: var(--teal); border: none; border-radius: 4px; color: #fff; cursor: pointer; padding: .35rem .8rem; }
+#proj-new button, #proj-join button, #proj-git button { background: var(--teal); border: none; border-radius: 4px; color: var(--on-teal); cursor: pointer; padding: .35rem .8rem; }
 
 /* invite */
 #invite { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 8px; padding: 1.2rem 1.5rem; text-align: center; }
@@ -205,12 +210,6 @@ textarea.say { width: 100%; margin-top: .4rem; resize: vertical; background: var
 
 /* collapsible layout */
 body.no-tree #tree-pane { display: none; }
-/* focus: nothing but the text and the page; Alt-0 (or the corner) leaves */
-body.focus #bar, body.focus #tree-pane, body.focus #side, body.focus #zoomctl, body.focus .cm-gutters { display: none; }
-body.focus #layout { height: 100%; }
-body.focus #split { width: 2px; }
-body.focus #preview { padding: 0; }
-body.focus #page { box-shadow: none; min-height: 100%; }
 
 /* dark theme: dim the rendered page too (inverted, hues kept), not just the chrome */
 body.dark-preview #preview { background: var(--ink); }
@@ -285,7 +284,7 @@ body.sect-files-closed #tree { display: none; }
 #zoomctl button { background: var(--ink); color: var(--fg-dim); border: 1px solid var(--ink-3); border-radius: 4px;
   font: .75rem var(--mono); padding: .15rem .5rem; cursor: pointer; opacity: .65; }
 #zoomctl button:hover { opacity: 1; color: var(--hi); border-color: var(--teal); }
-#pv-comment { position: absolute; z-index: 6; transform: translateX(-100%); background: var(--teal); color: #fff; border: none;
+#pv-comment { position: absolute; z-index: 6; transform: translateX(-100%); background: var(--teal); color: var(--on-teal); border: none;
   border-radius: 4px; font: .75rem var(--mono); padding: .25rem .6rem; cursor: pointer; box-shadow: 0 2px 8px #0004; }
 
 /* v5: change review + share */
@@ -302,7 +301,7 @@ body.sect-files-closed #tree { display: none; }
 .dl.del { background: var(--bad-bg); color: var(--bad-fg); }
 .dl.same { color: var(--fg-dim); }
 .review-foot { margin-top: .4rem; }
-.review-foot button { background: var(--teal); border: none; border-radius: 4px; color: #fff; cursor: pointer; padding: .35rem .8rem; font-size: .78rem; }
+.review-foot button { background: var(--teal); border: none; border-radius: 4px; color: var(--on-teal); cursor: pointer; padding: .35rem .8rem; font-size: .78rem; }
 #status[data-review="1"]::after { content: ' • review'; color: var(--teal); }
 
 #share { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 8px; padding: 1.1rem 1.3rem; min-width: 340px; }
@@ -315,7 +314,7 @@ body.sect-files-closed #tree { display: none; }
 .share-row.pending { opacity: .65; }
 #share-add, #agent-add { display: flex; gap: .4rem; }
 #share-add input, #agent-add input { flex: 1; min-width: 0; background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 4px; color: var(--fg); font: .8rem var(--sans); padding: .35rem .5rem; }
-#share-add button, #agent-add button { background: var(--teal); border: none; border-radius: 4px; color: #fff; cursor: pointer; padding: .35rem .8rem; }
+#share-add button, #agent-add button { background: var(--teal); border: none; border-radius: 4px; color: var(--on-teal); cursor: pointer; padding: .35rem .8rem; }
 
 /* auth gate */
 #auth-gate { position: fixed; inset: 0; z-index: 200; background: var(--ink); display: flex; align-items: center; justify-content: center; }
@@ -329,7 +328,7 @@ body.sect-files-closed #tree { display: none; }
 #auth-form input { background: var(--ink); border: 1px solid var(--ink-3); border-radius: 5px; color: var(--fg); font: .85rem var(--sans); padding: .45rem .55rem; }
 #auth-form input:focus { border-color: var(--teal); outline: none; }
 .auth-err { color: var(--bad-fg); font-size: .75rem; margin: 0; }
-.auth-submit { background: var(--teal); border: none; border-radius: 5px; color: #fff; cursor: pointer; padding: .5rem; font-size: .85rem; margin-top: .3rem; }
+.auth-submit { background: var(--teal); border: none; border-radius: 5px; color: var(--on-teal); cursor: pointer; padding: .5rem; font-size: .85rem; margin-top: .3rem; }
 
 /* SSO + provenance additions */
 .auth-sso { width: 100%; padding: 9px; margin: 10px 0 2px; font-weight: 600;
@@ -399,14 +398,13 @@ body.max-editor #preview, body.max-editor #split, body.max-preview #editor, body
 .ref p { margin: .15rem 0; font-size: .75rem; }
 .ref.ok b { color: var(--teal); } .ref.web b { color: var(--fg-dim); } .ref.differs b { color: #d9a441; } .ref.missing b, .ref.error b { color: #e06c5b; }
 
-/* writing: the text alone, in a column a line can be read across; Alt-W (or the corner) leaves */
-body.write #bar, body.write #tree-pane, body.write #side, body.write #zoomctl, body.write .cm-gutters,
-body.write #preview, body.write #split, body.write #mtabs { display: none !important; }
-body.write #layout { height: 100dvh; }
-body.write #editor { display: block !important; flex: 1 1 auto !important; }
-body.write .cm-content { max-width: 70ch; margin: 0 auto; padding: 10vh 1.5rem 40vh; }
-body.write #focus-exit { display: block; opacity: 0; }
-body.write #focus-exit:hover, body.write #focus-exit:focus-visible { opacity: 1; }
+/* focus: the text alone, centred, in a face made to be read; Alt-0 (or the corner) leaves */
+body.focus #bar, body.focus #tree-pane, body.focus #side, body.focus .cm-gutters,
+body.focus #preview, body.focus #split, body.focus #mtabs { display: none !important; }
+body.focus #layout { height: 100dvh; }
+body.focus #editor { display: block !important; flex: 1 1 auto !important; }
+body.focus .cm-scroller { font: 19px/1.7 var(--read); }
+body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 40vh; }
 
 /* the surprise overlay: words tinted by surprise or flatness, sentences underlined on the same scale, or tinted by AI-likeness */
 .scope-sent { text-decoration: underline 2px; text-underline-offset: 3px; }

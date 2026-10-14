@@ -18,6 +18,8 @@ RUN npm ci -w client
 COPY client/ client/
 COPY fonts/ fonts/
 COPY server/relay.mjs server/refs.mjs server/
+# the hub's look: a folder in client/brands/
+ARG TYDIG_BRAND=tydig
 RUN npm run build
 
 # ---------- stage 2: runtime ----------

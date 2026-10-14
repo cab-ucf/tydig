@@ -8,10 +8,11 @@
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval'; object-src 'none'; base-uri 'none'" />
   <title>tydig</title>
   <link rel="stylesheet" href="/src/style.css" />
+  <link rel="stylesheet" href="@brand/brand.css" />
 </head>
 <body>
   <header id="bar">
-    <span id="brand">tydig</span>
+    <span id="brand"></span>
     <nav id="menubar">
       <div class="menu"><button>File</button><div class="dropdown">
         <button data-act="new-file">New file<kbd>Alt-N</kbd></button>
@@ -36,7 +37,6 @@
         <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Alt-1</kbd></button>
         <button data-act="toggle-side" data-check="sideOpen">Panel<kbd>Alt-2</kbd></button>
         <button data-act="focus" data-check="focus">Focus mode<kbd>Alt-0</kbd></button>
-        <button data-act="write" data-check="write">Writing mode<kbd>Alt-W</kbd></button>
         <button data-act="max-editor">Editor only<kbd>Alt-3</kbd></button>
         <button data-act="max-preview">Preview only<kbd>Alt-4</kbd></button>
         <button data-act="fullscreen">Full screen<kbd>Alt-F</kbd></button>
