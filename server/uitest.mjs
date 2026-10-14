@@ -226,6 +226,15 @@ check('the word count sits under the Edit tab, and build in the tab bar opens th
   /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
   (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
    await page.evaluate(() => document.body.dataset.m === 'side' && document.getElementById('side-title').textContent === 'build')))
+// Word: the citations are EndNote's fields, the bibliography its list
+const word = await page.evaluate(async () => {
+  const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then(r => r.json())
+  const r = (await post('/api/projects/wordy', '{"template":"nih-r21"}')).ok && await post('/api/p/wordy/docx', '{"file":"main.typ"}')
+  return r.ok && [...new Uint8Array(await (await fetch('/api/p/wordy/raw/' + r.path)).arrayBuffer())]
+})
+if (word) writeFileSync(`${tmp}/w.docx`, Buffer.from(word))
+const xml = word ? (await import('node:child_process')).execSync(`unzip -p ${tmp}/w.docx word/document.xml`).toString() : ''
+check('Word export makes the citations EndNote fields, the bibliography its list', /ADDIN EN\.CITE &lt;EndNote&gt;[\s\S]*ADDIN EN\.REFLIST/.test(xml))
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)

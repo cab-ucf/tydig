@@ -1438,6 +1438,15 @@ const actions = {
     if (sidebarMode === 'history') renderHistory()
   },
   'export-pdf': exportPdf,
+  'export-docx': async () => {
+    const file = $('main-sel').value
+    if (!file) return
+    toast(`making ${esc(file.replace(/typ$/, 'docx'))}&hellip;`, true, 0)
+    const r = await api(P('/docx'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file }) })
+    if (!r.ok) return toast(esc(r.output), false)
+    toast('In Word, EndNote &gt; Update Citations and Bibliography makes them live', true, 8000)
+    download(rawUrl(r.path), r.path)
+  },
   undo: () => undoManagers.get(currentPath)?.undo(),
   redo: () => undoManagers.get(currentPath)?.redo(),
   comment: addComment,

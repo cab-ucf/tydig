@@ -1,0 +1,19 @@
+#!/bin/sh
+# tydig-docx FILE.typ [OUT.docx]: FILE as Word (out/FILE.docx), from a
+# project's root. Typst evaluates it as for the PDF (results, #if, math as
+# MathML); pandoc writes the Word; endnote.lua makes each citation a live
+# EndNote field carrying its reference: in Word, EndNote > Update Citations
+# and Bibliography formats them in any style.
+set -eu
+f=${1:?usage: tydig-docx FILE.typ [OUT.docx]}
+o=${2:-out/$(basename "${f%.typ}").docx}
+h=$(mktemp); trap 'rm -f "$h"' EXIT
+mkdir -p "$(dirname "$o")"
+here=$(dirname "$(readlink -f "$0")")
+{ cat "$here/docx.typ"; echo "#include \"$f\""; } |
+  typst compile --root . --features html --format html - "$h" 2>&1 | grep -A4 '^error' >&2 || true
+test -s "$h"
+bibs=$(find . -name '*.bib' ! -path './out/*' ! -path './build/*' | sed 's/^/-M bib=/')
+pandoc -f html "$h" -o "$o" --quiet --shift-heading-level-by=-1 $bibs \
+  --lua-filter "$here/endnote.lua"
+echo "$o"

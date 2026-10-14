@@ -151,6 +151,16 @@ holds every entry in the `.bib` to its published record: a DOI that does not
 exist, a title nothing matches (a made-up reference), wrong authors, year or
 journal are each named, with the published record one click away.
 
+**Word** (File > Export Word): the file being compiled as `out/<name>.docx`,
+for co-authors, offices and journals that work in Word. Typst sets it as for
+the PDF (computed numbers, equations as Word's own, figures); every citation
+is a live [EndNote](https://endnote.com) field carrying its whole reference,
+and the bibliography is EndNote's. In Word, EndNote > Update Citations and
+Bibliography makes them EndNote's, in any of its styles, and Export Traveling
+Library adds the references to an EndNote library. Until then each shows
+what Typst set. Outside the app: `sandbox/tydig-docx main.typ`, with typst
+and pandoc.
+
 **Spelling and grammar** are checked as you type, on the prose alone (never
 code, math or markup), by [Harper](https://writewithharper.com), which runs in
 the browser: the text goes nowhere. Put the cursor on a mark for its fixes, or

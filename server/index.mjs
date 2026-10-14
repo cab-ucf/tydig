@@ -846,6 +846,20 @@ p.post('/build/:recipe', async (req, res) => {
   } finally { building.delete(req.params.proj) }
 })
 
+// Word, its citations live EndNote fields (sandbox/tydig-docx): out/<file>.docx
+const DOCX = new URL('../sandbox/tydig-docx', import.meta.url).pathname
+p.post('/docx', async (req, res) => {
+  const name = req.params.proj, f = req.body?.file
+  if (!okPath(f) || !f.endsWith('.typ') || GENERATED.test(f) || !existsSync(inProj(name, f)))
+    return res.status(400).json({ ok: false, output: 'not a .typ file of this project' })
+  if (building.has(name)) return res.status(409).json({ ok: false, output: 'a build is already running for this project' })
+  building.add(name)
+  try {
+    const r = await (UNSAFE ? run(DOCX, [f], { cwd: proj(name), timeout: 180_000 }) : inSandbox(name, ['tydig-docx', f], 180))
+    res.json({ ok: true, path: r.stdout.trim().split('\n').pop() })
+  } catch (e) { res.json({ ok: false, output: sandboxHint(e) }) } finally { building.delete(name); scrub(name) }
+})
+
 // The canonical file state a checkpoint signs: every CRDT-managed text file
 // (generated dirs excluded), path -> sha256 of content. Computed from the
 // live document when open, from disk otherwise. The client computes the same
