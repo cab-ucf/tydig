@@ -1,5 +1,6 @@
 // Link ids and relays, shared by the hub (link.mjs) and the page (link.js).
-// n0's US-East relay unless the link names another (#<id>;r=<region|URL>).
+// US East only: the hub homes on the nearer, the page dials both, unless
+// the link pins one (#<id>;r=<n0 region|URL>).
 import { blake3 } from '@noble/hashes/blake3.js'
 
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567'
@@ -15,4 +16,4 @@ export const newSeed = u8 => {
 }
 export const derive = (s, ctx) => blake3(bytes(s), { context: new TextEncoder().encode(ctx) })
 export const relayUrl = r => r.includes('://') ? r : `https://${r}.relay.n0.iroh.link/`
-export const RELAY = 'use1-1'
+export const RELAYS = ['https://iroh.cxn.center/', relayUrl('use1-1')]

@@ -10,17 +10,17 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { WebSocket } from 'ws'
 import { DATA } from './store.mjs'
-import { derive, newSeed, relayUrl, RELAY as N0 } from './relay.mjs'
+import { derive, newSeed, relayUrl, RELAYS } from './relay.mjs'
 
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/'
-const RELAY = process.env.TYDIG_LINK_RELAY || N0
+const PIN = process.env.TYDIG_LINK_RELAY
 const ALPN = [...Buffer.from('irweb/http/1')]
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const secret = PAGE && [...derive(readFileSync(seedFile, 'utf8').trim(), 'irweb v1 endpoint identity')]
 const iroh = PAGE && await import('@number0/iroh')
 export const LINK = PAGE && `${PAGE}#${newSeed(iroh.SecretKey.fromBytes(secret).public().toBytes())}` +
-  (RELAY !== N0 ? `;r=${RELAY}` : '')
+  (PIN ? `;r=${PIN}` : '')
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 export let online = false
 
@@ -28,7 +28,7 @@ export async function start(server) {
   if (!LINK) return
   const b = iroh.Endpoint.builder()
   b.applyMinimal(); b.secretKey(secret); b.alpns([ALPN])
-  b.relayMode(iroh.RelayMode.customFromUrls([relayUrl(RELAY)]))
+  b.relayMode(iroh.RelayMode.customFromUrls(PIN ? [relayUrl(PIN)] : RELAYS))
   const ep = await b.bind()
   ;(async () => {
     for (let inc; (inc = await ep.acceptNext().catch(() => null));) (async () => {
