@@ -1,8 +1,8 @@
 // A link's seed names its hub's key, as irp derives it; the hub (link.mjs)
-// and the page (client/src/link.js) both import this. The relay is n0's
-// US-East one (use1-1) unless the link names another (#<seed>;r=<region or
-// URL>, from TYDIG_LINK_RELAY): networks that block other countries still
-// reach it, where a relay picked by hash or distance could be Singapore.
+// and the page (client/src/link.js) both import this. Relays are US East
+// only: the hub homes on the nearer, the page dials both. A link may pin one
+// (#<id>;r=<n0 region or URL>, from TYDIG_LINK_RELAY). Never one picked by
+// hash or distance, which could be Singapore and networks block it.
 import { blake3 } from '@noble/hashes/blake3.js'
 
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567'
@@ -18,4 +18,4 @@ export const newSeed = u8 => {
 }
 export const derive = (s, ctx) => blake3(bytes(s), { context: new TextEncoder().encode(ctx) })
 export const relayUrl = r => r.includes('://') ? r : `https://${r}.relay.n0.iroh.link/`
-export const RELAY = 'use1-1'
+export const RELAYS = ['https://iroh.cxn.center/', relayUrl('use1-1')]

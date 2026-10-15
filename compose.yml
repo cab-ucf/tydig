@@ -52,10 +52,11 @@ services:
       TYDIG_LINK: "${TYDIG_LINK:-1}"
       # Same absolute path inside and outside the container (see above).
       TYDIG_DATA: "${TYDIG_DATA:-/var/lib/tydig/data}"
-      # Hub-to-hub federation over iroh. n0 = free public relays + discovery
-      # (default), off = direct only, local = LAN/tests. TYDIG_IROH=0 disables.
+      # Hub-to-hub federation over iroh. east = US East relays + n0 discovery
+      # (default), n0 = any n0 region, off = direct only, local = LAN/tests.
+      # TYDIG_IROH=0 disables.
       TYDIG_IROH: "${TYDIG_IROH:-1}"
-      TYDIG_IROH_RELAY: "${TYDIG_IROH_RELAY:-n0}"
+      TYDIG_IROH_RELAY: "${TYDIG_IROH_RELAY:-east}"
       # Institutional SSO (optional; see README > Accounts).
       TYDIG_SSO_DISCOVERY: "${TYDIG_SSO_DISCOVERY:-}"
       TYDIG_SSO_CLIENT_ID: "${TYDIG_SSO_CLIENT_ID:-}"

@@ -14,12 +14,12 @@ const secret = seed => [...derive(seed, KEY)]
 export const hubId = async seed =>
   newSeed((await import('@number0/iroh')).SecretKey.fromBytes(secret(seed)).public().toBytes())
 
-export async function startLink({ server, seed, relay }) {
+export async function startLink({ server, seed, relays }) {
   const iroh = await import('@number0/iroh')
   const b = iroh.Endpoint.builder()
   b.applyMinimal()
   b.secretKey(secret(seed))
-  b.relayMode(iroh.RelayMode.customFromUrls([relay]))
+  b.relayMode(iroh.RelayMode.customFromUrls(relays))
   b.alpns([ALPN])
   const ep = await b.bind()
   ;(async () => {

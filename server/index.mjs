@@ -1195,14 +1195,14 @@ app.use((e, req, res, next) => {
 const PORT = Number(process.env.PORT || 3000)
 // The hub's link: tydig's static page plus the public id of a key only this hub holds (link.mjs).
 import { startLink, newSeed, hubId } from './link.mjs'
-import { RELAY as DEFAULT_RELAY, relayUrl } from './relay.mjs'
+import { RELAYS, relayUrl } from './relay.mjs'
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/'
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
 const LINK_SEED = PAGE && readFileSync(seedFile, 'utf8').trim()
 let linkOnline = false
-const RELAY = process.env.TYDIG_LINK_RELAY || DEFAULT_RELAY // see relay.mjs
-const LINK = PAGE && `${PAGE}#${await hubId(LINK_SEED)}${RELAY !== DEFAULT_RELAY ? `;r=${RELAY}` : ''}`
+const PIN = process.env.TYDIG_LINK_RELAY // see relay.mjs
+const LINK = PAGE && `${PAGE}#${await hubId(LINK_SEED)}${PIN ? `;r=${PIN}` : ''}`
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 const httpServer = app.listen(PORT, e => {
   if (e) throw e
@@ -1213,10 +1213,10 @@ const httpServer = app.listen(PORT, e => {
   if (LINK) {
     console.log(`collaborators, from any browser: ${LINK}`)
     // Say whether the link works: it needs the hub to reach its relay over HTTPS.
-    startLink({ server: httpServer, seed: LINK_SEED, relay: relayUrl(RELAY) })
+    startLink({ server: httpServer, seed: LINK_SEED, relays: PIN ? [relayUrl(PIN)] : RELAYS })
       .then(l => {
         const late = setTimeout(() => console.warn('link: no relay reachable yet, so the link will not connect. ' +
-          'The hub needs outbound HTTPS (port 443) to *.relay.n0.iroh.link.'), 20_000)
+          `The hub needs outbound HTTPS (port 443) to ${PIN || 'iroh.cxn.center or use1-1.relay.n0.iroh.link'}.`), 20_000)
         return l.online().then(() => { clearTimeout(late); linkOnline = true; console.log('link: online; collaborators can connect') })
       })
       .catch(e => console.warn('link: failed to start:', e.message))

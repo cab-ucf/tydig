@@ -5,10 +5,11 @@
 // through irp's wasm client (public/irweb, from github.com/cab-ucf/irp);
 // server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
-import { RELAY, relayUrl } from '../../server/relay.mjs'
+import { RELAYS, relayUrl } from '../../server/relay.mjs'
 const HUB = import.meta.env.VITE_HUB
 const m = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/.exec(location.hash || HUB && '#' + HUB)
-export const link = m && { code: m[1], relay: relayUrl(m[2] ? decodeURIComponent(m[2]) : RELAY), id: m[1].slice(0, 8) }
+const pin = m?.[2] && relayUrl(decodeURIComponent(m[2]))
+export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: m[1].slice(0, 8) }
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {
@@ -16,18 +17,23 @@ const say = (html, fail) => {
   el.className = fail ? 'fail' : ''; el.innerHTML = html
   el.querySelector('button')?.addEventListener('click', () => location.reload())
 }
-// Why a link fails, found by asking the relay directly: an HTTPS ping, then
-// the WebSocket iroh needs. n0's relays refuse Firefox's when its TLS hello
-// carries ECH GREASE, so a ping that works with a socket that does not is
-// usually that.
+// Why a link fails, found by asking each relay directly: an HTTPS ping, then
+// the WebSocket iroh needs (2 = both work). n0's relays refuse Firefox's when
+// its TLS hello carries ECH GREASE, so a ping that works with a socket that
+// does not is usually that.
 const NativeWS = WebSocket
-async function why() {
-  const r = link.relay.replace(/\/?$/, '/'), host = new URL(r).host
+const probe = async r => {
+  r = r.replace(/\/?$/, '/')
   const ping = await fetch(r + 'ping', { cache: 'no-store' }).then(x => x.ok, () => false)
-  const ws = ping && await new Promise(ok => {
+  return ping && await new Promise(ok => {
     const w = new NativeWS(r.replace(/^http/, 'ws') + 'relay', ['iroh-relay-v1'])
-    w.onopen = () => { w.close(); ok(true) }; w.onerror = () => ok(false); setTimeout(() => ok(false), 8000)
+    w.onopen = () => { w.close(); ok(2) }; w.onerror = () => ok(1); setTimeout(() => ok(1), 8000)
   })
+}
+async function why() {
+  const best = Math.max(...await Promise.all(link.relays.map(probe)))
+  const host = link.relays.map(r => new URL(r).host).join('</code> or <code>')
+  const ping = best > 0, ws = best > 1
   if (!ping) return `This network does not reach the relay (<code>${host}</code>): a firewall or
     filter is blocking it. Try another network, a phone hotspot or a VPN.`
   if (!ws) return /Firefox\//.test(navigator.userAgent) ? `The relay refuses Firefox's connection. Open
@@ -43,7 +49,7 @@ const connect = () => client ??= new Promise((ok, no) => {
   const at = f => new URL('irweb/' + f, document.baseURI).href
   const s = Object.assign(document.createElement('script'), { src: at('irweb_web.js'), onerror: no })
   s.onload = () => wasm_bindgen({ module_or_path: at('irweb_web_bg.wasm') })
-    .then(() => wasm_bindgen.Client.connect(link.code, link.relay)).then(ok, no)
+    .then(() => wasm_bindgen.Client.connect(link.code, link.pin)).then(ok, no)
   setTimeout(() => no(new Error('no answer in 30 s')), 30_000)
   document.head.append(s)
 }).then(c => { document.getElementById('link-status')?.remove(); return c }, e => {

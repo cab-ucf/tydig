@@ -2,7 +2,7 @@
 //
 // Each hub runs one iroh endpoint: a QUIC endpoint whose address *is* its
 // public key. Hubs dial each other by that key -- through NAT via hole
-// punching, falling back to n0's public relays, which only ever see
+// punching, falling back to US East relays (relay.mjs), which only ever see
 // ciphertext. No domain, no certificate, no open port, no account with
 // anyone: a hub on a laptop at home can federate with a lab's hub as an
 // equal. Every connection is end-to-end encrypted and mutually authenticated
@@ -22,6 +22,7 @@ import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import * as Y from 'yjs'
+import { RELAYS } from './relay.mjs'
 
 const ALPN = Array.from(new TextEncoder().encode('tydig/federate/1'))
 const MSG = { HELLO: 0, WELCOME: 1, SV: 2, UPDATE: 3, REJECT: 4 }
@@ -53,6 +54,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
   const dialers = new Map()      // `${proj}|${ticket}` -> { stop }
   const docs = new Map()         // proj -> DirectConnection (keeps the doc loaded)
   const enabled = process.env.TYDIG_IROH !== '0'
+  const mode = process.env.TYDIG_IROH_RELAY || 'east' // east, n0 (any region), off, local
 
   async function cfg(proj) {
     try { return JSON.parse(await readFile(cfgPath(proj), 'utf8')) } catch { return null }
@@ -182,10 +184,10 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
       if (existsSync(keyPath)) secret = Array.from(Buffer.from((await readFile(keyPath, 'utf8')).trim(), 'hex'))
       else { secret = Array.from(randomBytes(32)); await writeFile(keyPath, Buffer.from(secret).toString('hex') + '\n', { mode: 0o600 }) }
       const b = iroh.Endpoint.builder()
-      const mode = process.env.TYDIG_IROH_RELAY || 'n0'
       if (mode === 'off') b.applyN0DisableRelay()
       else if (mode === 'local') b.applyMinimal()   // LAN / tests: no external services at all
-      else b.applyN0()                              // n0's public relays + discovery, free
+      else b.applyN0()                              // n0's discovery, free
+      if (mode === 'east') b.relayMode(iroh.RelayMode.customFromUrls(RELAYS))
       b.secretKey(secret)
       b.alpns([ALPN])
       if (process.env.TYDIG_IROH_BIND) b.bindAddr(process.env.TYDIG_IROH_BIND)
@@ -208,7 +210,7 @@ export function createFederation({ hocuspocus, dataDir, okName, log = console.lo
         enabled: enabled && !!endpoint,
         id: endpoint?.id().toString() || null,
         ticket,
-        relay: process.env.TYDIG_IROH_RELAY || 'n0',
+        relay: mode,
         project: proj ? {
           invite: c && ticket ? `tydig-fed:${proj}:${c.token}:${ticket}` : null,
           linked: (c?.peers || []).map(p => ({ ticket: p.ticket.slice(0, 20) + '…', addedAt: p.addedAt })),

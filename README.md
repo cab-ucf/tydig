@@ -47,9 +47,10 @@ encrypted, through NAT, so the hub can be a laptop with no open port, domain or
 certificate. The code is the hub's public id: it reaches the hub and nothing
 more, since only the hub holds the key behind it (`link-seed` in the data
 folder; delete it and restart for a new one). Sign-in and invitations decide
-who gets in. Links go through n0's US-East relay (`use1-1`), which networks that
-block other countries still reach; `TYDIG_LINK_RELAY` picks another region or
-your own relay, and the link then names it (`;r=...`). Firefox
+who gets in. Links go through US East relays only (`iroh.cxn.center`, then
+n0's `use1-1`), which networks that block other countries still reach;
+`TYDIG_LINK_RELAY` pins another region or your own relay, and the link then
+names it (`;r=...`). Firefox
 is refused by n0's relays (its ECH GREASE): use another browser, or set
 `security.tls.ech.grease_probability` to 0 in `about:config`.
 
