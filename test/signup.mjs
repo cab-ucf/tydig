@@ -68,4 +68,24 @@ check('who keeps working in it', (await as(cat, '/p/paper/files')).ok)
 check('a project nobody else was in is gone, files and all', !existsSync('data/solo'))
 check('and the deleted account is signed out', (await as(ann, '/projects')).status === 401)
 
+// join codes: three spoken words, one project, a week
+const joinUp = (email, code) => fetch(`${B}/api/auth/sign-up/email`, { method: 'POST',
+  headers: { 'content-type': 'application/json', origin: B, 'x-tydig-join': code },
+  body: JSON.stringify({ email, password: 'password123', name: email.split('@')[0] }) })
+const { code } = await (await as(cat, '/p/paper/join', { method: 'POST' })).json()
+check('the owner makes a code of three words', code.split('-').length >= 3)
+check('a wrong code signs no one up', (await joinUp('dee@example.com', 'tidy ruby otter')).status === 403)
+const dee = jar(await joinUp('dee@example.com', code.toUpperCase().replaceAll('-', ' ')))
+check('the code as said aloud signs up', !!dee)
+const joined = await (await as(dee, '/join', { method: 'POST', body: JSON.stringify({ code }) })).json()
+check('and joins its project', joined.project === 'paper' && (await as(dee, '/p/paper/files')).ok)
+check('the owner sees the code', (await (await as(cat, '/p/paper/join')).json()).some(c => c.code === code))
+check('a member cannot make one', (await as(dee, '/p/paper/join', { method: 'POST' })).status === 403)
+await as(cat, `/p/paper/join/${code}`, { method: 'DELETE' })
+check('a stopped code signs no one up', (await joinUp('fay@example.com', code)).status === 403)
+check('and its members stay', (await as(dee, '/p/paper/files')).ok)
+const { code: fresh } = await (await as(cat, '/p/paper/join', { method: 'POST' })).json()
+for (let i = 0; i < 30; i++) await joinUp(`g${i}@example.com`, 'no such words')
+check('wrong codes are capped hub-wide, right ones included', (await joinUp('gus@example.com', fresh)).status === 429)
+
 done()

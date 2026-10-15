@@ -1,7 +1,7 @@
 // Accounts: better-auth's client, the sign-in screen that holds the app back
 // until there is a session (a cookie, so fetch and websockets carry it), and
 // the account's own actions.
-import { link } from './link.js'
+import { link, plain } from './link.js'
 import { createAuthClient } from 'better-auth/client'
 import { organizationClient, genericOAuthClient } from 'better-auth/client/plugins'
 
@@ -16,7 +16,7 @@ export const authClient = createAuthClient({
 export async function requireUser() {
   for (;;) {
     const { data } = await authClient.getSession()
-    if (data?.user) return data.user
+    if (data?.user) return join ? joined(data.user) : data.user
     await loginScreen()
   }
 }
@@ -53,8 +53,17 @@ function explain(error, email) {
   return msg
 }
 
-// An invite link (?invite=<id>) opens on Create account and carries its key.
-const invite = new URLSearchParams(location.search).get('invite')
+// An invite link (?invite=<id>) opens on Create account and carries its key;
+// a join link (?join=<code>) carries a code, which works signed in or not.
+const q = new URLSearchParams(location.search), invite = q.get('invite')
+let join = q.get('join')
+async function joined(user) {
+  const r = await fetch('/api/join', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: join }) }).then(r => r.json(), () => ({ error: 'the hub did not answer' }))
+  if (r.error) { alert(r.error); history.replaceState(null, '', location.pathname); return user }
+  location.replace(`${location.pathname}?proj=${encodeURIComponent(r.project)}${location.hash}`)
+  return new Promise(() => {})
+}
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'https://cab-ucf.github.io/tydig/'
 // the static site: open any hub by its link or code
@@ -78,8 +87,10 @@ async function loginScreen() {
     root.innerHTML = `<div class="auth-card"><div class="auth-brand"></div>
       <p><b>Ty</b>pst, <b>d</b>ecentralized collaboration with <b>i</b>roh, saved in <b>g</b>it:
       papers written together in the browser, computed by a hub you run.</p>
+      ${plain ? `<p>The hub is not answering: it may be off or restarting. Try again in a minute.</p>
+      <button class="go" onclick="location.reload()">try again</button>` : `
       <p>${link ? 'That hub did not answer. Another one:' : "Open a hub with the link its owner sent you:"}</p>
-      ${hubBox}<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">Docs</a> ·
+      ${hubBox}`}<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">Docs</a> ·
       <a href="https://github.com/cab-ucf/tydig" target="_blank" rel="noopener">run your own hub</a></p></div>`
     wire(root)
     return new Promise(() => {})
@@ -103,9 +114,11 @@ async function loginScreen() {
         placeholder="you@example.com"></label>
       <label>Password<input name="password" type="password" autocomplete="current-password" required
         minlength="8"></label>
+      <label>Code, if you were given one<input name="code"
+        autocomplete="off" placeholder="tidy ruby otter" value="${esc(join || '')}"></label>
       <p class="auth-err" hidden></p>
       <button type="submit" class="go auth-submit">Sign in</button>
-    </form>${link ? `<div class="auth-or">or another hub</div>${hubBox}` : ''}${foot}</div>`
+    </form>${link && !plain ? `<div class="auth-or">or another hub</div>${hubBox}` : ''}${foot}</div>`
   wire(root)
   const form = root.querySelector('#auth-form'), err = root.querySelector('.auth-err')
   const submit = root.querySelector('.auth-submit'), tabs = root.querySelectorAll('.auth-tabs button')
@@ -118,22 +131,24 @@ async function loginScreen() {
   tabs.forEach(b => b.onclick = () => {
     up = b.dataset.tab === 'up'
     tabs.forEach(x => x.classList.toggle('on', x === b))
-    root.querySelector('.up-only').hidden = !up
+    root.querySelectorAll('.up-only').forEach(l => l.hidden = !up)
     form.name.required = up // shown on comments, so never made from the address
     submit.textContent = up ? 'Create account' : 'Sign in'
     form.password.autocomplete = up ? 'new-password' : 'current-password'
     err.hidden = true
   })
-  if (invite) tabs[1].click()
+  if (invite || join) tabs[1].click()
   return new Promise(resolve => form.onsubmit = async e => {
     e.preventDefault()
     err.hidden = true; submit.disabled = true
     const body = { email: form.email.value, password: form.password.value }
     const res = !up ? await authClient.signIn.email(body) : await authClient.signUp.email({ ...body,
-      name: form.name.value.trim(), fetchOptions: invite ? { headers: { 'x-tydig-invite': invite } } : {} })
+      name: form.name.value.trim(), fetchOptions: { headers: { ...invite && { 'x-tydig-invite': invite },
+        ...form.code.value.trim() && { 'x-tydig-join': form.code.value.trim() } } } })
     submit.disabled = false
     if (res.error) { err.textContent = explain(res.error, form.email.value); err.hidden = false; return }
     if (invite) history.replaceState(null, '', location.href.replace(/[?&]invite=[^&#]*/, ''))
+    if (form.code.value.trim()) join = form.code.value.trim()
     root.remove(); resolve()
   })
 }

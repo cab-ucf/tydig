@@ -7,8 +7,9 @@ just
 ```
 
 Needs [podman](https://podman.io). Prints a link: collaborators open it in
-any browser, nothing to install. `just publish` makes plain `cxn.pub` open
-this hub, no code needed; invitations still decide who gets in.
+any browser, nothing to install. After `just publish`, plain `cxn.pub` opens
+this hub; Settings › Share › new code gives three words to say ("cxn.pub, code
+tidy ruby otter") that let someone make an account and join the project.
 [Docs](https://cab-ucf.github.io/tydig/).
 
 ```typst

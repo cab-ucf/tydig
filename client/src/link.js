@@ -10,6 +10,8 @@ const HUB = import.meta.env.VITE_HUB
 const m = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/.exec(location.hash || HUB && '#' + HUB)
 const pin = m?.[2] && relayUrl(decodeURIComponent(m[2]))
 export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: m[1].slice(0, 8) }
+// the site's own hub, at the bare address (cxn.pub): links to it need no code
+export const plain = !!HUB && !location.hash
 
 // What the visitor sees until the hub answers: never a silent, frozen page.
 const say = (html, fail) => {
@@ -41,6 +43,7 @@ async function why() {
     this link in Chrome, Edge or Safari, or in <code>about:config</code> set
     <code>security.tls.ech.grease_probability</code> to 0.` : `The relay answers, but this network or
     browser blocks its WebSocket (a proxy, filter or extension). Try another network or browser.`
+  if (plain) return 'The hub is off or restarting: try again in a minute.'
   return `The relay works from here, so the hub is not on it: is it running, and does its log say
     <code>link: online</code>? Is this its current link (<code>just link</code> prints it)?`
 }

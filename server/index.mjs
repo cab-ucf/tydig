@@ -8,7 +8,8 @@ import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
 import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save } from './store.mjs'
-import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle } from './auth.mjs'
+import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db }
+  from './auth.mjs'
 import * as build from './build.mjs'
 import * as files from './files.mjs'
 import * as history from './history.mjs'
@@ -66,6 +67,16 @@ app.use('/api', async (req, res, next) => {
 }, express.json())
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
 app.get('/api/link', (req, res) => res.json({ link: link.LINK, online: link.online }))
+// a join code (auth.mjs) makes whoever is signed in a member of its project
+app.post('/api/join', async (req, res) => {
+  let org
+  try { org = joins.org(req.body?.code) } catch (e) { return res.status(429).json({ error: e.message }) }
+  if (!org) return res.status(403).json({ error: 'That code is wrong or has expired: ask for a new one.' })
+  const slug = db.prepare('SELECT slug FROM organization WHERE id = ?').get(org)?.slug
+  if (!access(req.user.id, slug))
+    await auth.api.addMember({ body: { userId: req.user.id, organizationId: org, role: 'member' } })
+  res.json({ project: slug })
+})
 app.get('/api/assist', assist.info)
 app.get('/api/templates', templates.list)
 app.use('/api/keys', history.keys)
@@ -116,6 +127,9 @@ p.post('/members', owner, async (req, res) => {
     body: { email, role: 'member', organizationId: req.org.id } })
   res.json({ ok: true, invited: !u, invite: inv?.id ?? null })
 })
+p.get('/join', owner, (req, res) => res.json(joins.list(req.org.id)))
+p.post('/join', owner, (req, res) => res.json({ code: joins.add(req.org.id) }))
+p.delete('/join/:code', owner, (req, res) => res.json({ ok: !!joins.drop(req.org.id, req.params.code) }))
 // everyone reconnects and is checked again: the removed one is refused
 const kick = n => { hocuspocus.closeConnections(n); build.lspOpen.get(n)?.forEach(ws => ws.close()) }
 p.delete('/members/:id', async (req, res) => {

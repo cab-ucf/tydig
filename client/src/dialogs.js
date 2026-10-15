@@ -1,6 +1,7 @@
 // Dialogs: projects (pick, create, import), sharing (members, invites,
 // agents) and the git remote.
 import { authClient } from './auth.js'
+import { plain } from './link.js'
 import { $, api, post, del, esc, el, toast, projName, P } from './util.js'
 
 const go = n => location.search = `?proj=${n}`
@@ -63,27 +64,34 @@ export async function showShare() {
   body.innerHTML = '<p class="empty">loading...</p>'
   modal('share')
   const org = authClient.organization.getFullOrganization({ query: { organizationSlug: projName } })
-  const [share, orgs, full, agents] = await Promise.all([api('/link'), api('/projects'),
-    org.then(r => r.data, () => null), api(P('/agents')).catch(() => [])])
+  const [share, orgs, full, agents, codes] = await Promise.all([api('/link'), api('/projects'),
+    org.then(r => r.data, () => null), api(P('/agents')).catch(() => []), api(P('/join')).catch(() => [])])
   const owner = ['owner', 'admin'].includes(orgs.find(o => o.name === projName)?.role)
-  // the hub's link (or this page) with the invitation's one-time key
-  const inviteUrl = id => Object.assign(new URL(share.link || location.origin + location.pathname),
-    { search: `invite=${id}` }).href
+  // the hub's address: this page on the site's own hub (cxn.pub), else its link
+  const site = plain || !share.link ? location.origin + location.pathname : share.link
+  const siteWith = q => Object.assign(new URL(site), { search: q }).href
   const row = (who, role, act, id, label = act) => `<div class="share-row"><span>${esc(who)}</span>` +
     `<em>${esc(role)}</em>${owner && role !== 'owner' ? `<button data-${act}="${esc(id)}">${label}</button>` : ''}` +
     '</div>'
   const member = m => row(m.user?.email || m.user?.name || m.userId, m.role, 'remove', m.id)
   const invited = i => row(i.email, 'invited', 'cancel', i.id) + (!owner ? '' : '<div class="share-row">' +
-    `<input readonly value="${esc(inviteUrl(i.id))}" title="their invite link"></div>`)
+    `<input readonly value="${esc(siteWith('invite=' + i.id))}" title="their invite link"></div>`)
+  const code = c => row(c.code.replaceAll('-', ' '), `until ${new Date(c.expires).toLocaleDateString()}`,
+    'uncode', c.code, 'stop') + `<div class="share-row"><input readonly value="${esc(siteWith('join=' + c.code))}"></div>`
   body.innerHTML = `<div class="share-list">${(full?.members || []).map(member).join('')}
       ${(full?.invitations || []).filter(i => i.status === 'pending').map(invited).join('')}</div>
-    ${owner ? `<form id="share-add" class="row">
+    ${owner ? `<div class="share-list">${(Array.isArray(codes) ? codes : []).map(code).join('')}</div>
+      <button id="code-add" class="go">new code</button>
+      <p class="hint">A code lets anyone make an account and join this project for a week: send its link,
+        or just say "${esc(new URL(site).host)}, code ${(codes[0]?.code || 'tidy-ruby-otter').replaceAll('-', ' ')}".
+        Stop it once everyone is in; members stay.</p>
+      <form id="share-add" class="row">
       <input type="email" id="share-email" placeholder="collaborator@email" required><button class="go">add</button></form>
       <p class="hint">An address with no account here is invited: send them its invite link (below it), which
         signs them up with the project waiting. The address alone cannot sign up.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
     ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p>
-      <input readonly value="${esc(share.link)}">` : ''}
+      <input readonly value="${esc(site)}">` : ''}
     <h4>Agents</h4>
     <div class="share-list">${agents.map(a => row('@' + a.name, 'agent', 'agent', a.name, 'remove')).join('')}</div>
     ${owner ? `<form id="agent-add" class="row">
@@ -95,9 +103,11 @@ export async function showShare() {
   on('remove', async id => confirm('Remove this collaborator? They lose access at once.') &&
     then(await del(P('/members/' + id))))
   on('cancel', id => authClient.organization.cancelInvitation({ invitationId: id }).then(showShare))
+  on('uncode', async c => then(await del(P('/join/' + c))))
   on('agent', async a => confirm(`Remove @${a}? Its token stops working at once.`) &&
     then(await del(P('/agents/' + a))))
   if (!owner) return
+  $('code-add').onclick = async () => then(await post(P('/join')))
   $('share-add').onsubmit = async e => {
     e.preventDefault(); then(await post(P('/members'), { email: $('share-email').value }))
   }

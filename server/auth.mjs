@@ -53,8 +53,33 @@ const tooMany = email => {
   return t.length >= 10
 }
 
-// After the first account, signing up takes an invitation (sharing a
-// project with an address makes one) and its id from the invite link.
+// Join codes: three spoken words (cxn.pub, "tidy ruby otter") that let
+// whoever holds them sign up and join one project for a week. They can only
+// be guessed against the hub, so wrong ones are capped hub-wide.
+db.exec('CREATE TABLE IF NOT EXISTS joincode (code TEXT PRIMARY KEY, org TEXT, expires INTEGER)')
+const WORDS = readFileSync(path.join(import.meta.dirname, 'words.txt'), 'utf8').trim().split('\n')
+const norm = c => (String(c || '').toLowerCase().match(/[a-z]+/g) || []).join('-')
+let misses = []
+export const joins = {
+  add: org => {
+    const b = randomBytes(12), code = [0, 4, 8].map(i => WORDS[b.readUInt32LE(i) % WORDS.length]).join('-')
+    db.prepare('DELETE FROM joincode WHERE expires < ?').run(Date.now())
+    db.prepare('INSERT INTO joincode VALUES (?, ?, ?)').run(norm(code), org, Date.now() + 7 * 86400_000)
+    return code
+  },
+  list: org => db.prepare('SELECT code, expires FROM joincode WHERE org = ? AND expires > ?').all(org, Date.now()),
+  drop: (org, code) => db.prepare('DELETE FROM joincode WHERE org = ? AND code = ?').run(org, norm(code)),
+  org: code => {
+    misses = misses.filter(t => Date.now() - t < 15 * 60_000)
+    if (misses.length >= 30) no('TOO_MANY_REQUESTS', 'Too many wrong codes here lately; try again in 15 minutes.')
+    const r = db.prepare('SELECT org FROM joincode WHERE code = ? AND expires > ?').get(norm(code), Date.now())
+    if (!r) misses.push(Date.now())
+    return r?.org
+  },
+}
+
+// After the first account, signing up takes a join code, or an invitation
+// (sharing a project with an address makes one) and its id from the invite link.
 const OPEN = env.TYDIG_SIGNUP === 'open'
 const invitesFor = email => db.prepare("SELECT * FROM invitation WHERE lower(email) = lower(?) " +
   "AND status = 'pending'").all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
@@ -66,10 +91,11 @@ const gate = createAuthMiddleware(async ctx => {
     no('TOO_MANY_REQUESTS', 'Too many sign-in attempts for this account; try again in 15 minutes.')
   if (ctx.path !== '/sign-up/email') return
   if (!String(ctx.body?.name || '').trim()) no('BAD_REQUEST', 'Give a name: collaborators see it.')
-  const invite = ctx.headers?.get?.('x-tydig-invite')
-  if (!OPEN && db.prepare('SELECT 1 FROM user').get() && !invitesFor(ctx.body?.email).some(i => i.id === invite))
-    no('FORBIDDEN', invite ? 'This invite link is for another address, or has expired.'
-      : 'This hub is invite-only: ask a project owner for an invite link. Run this hub? ' +
+  const invite = ctx.headers?.get?.('x-tydig-invite'), join = ctx.headers?.get?.('x-tydig-join')
+  if (OPEN || !db.prepare('SELECT 1 FROM user').get() || invitesFor(ctx.body?.email).some(i => i.id === invite)) return
+  if (join) { if (joins.org(join)) return; no('FORBIDDEN', 'That code is wrong or has expired: ask for a new one.') }
+  no('FORBIDDEN', invite ? 'This invite link is for another address, or has expired.'
+      : 'This hub is invite-only: ask a project owner for a code. Run this hub? ' +
         'Put TYDIG_SIGNUP=open in its .env and run `just`, or reset a password: `just passwd EMAIL`.')
 })
 
