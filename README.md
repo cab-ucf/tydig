@@ -7,7 +7,9 @@ just
 ```
 
 Needs [podman](https://podman.io). Prints a link: collaborators open it in
-any browser, nothing to install. [Docs](https://cab-ucf.github.io/tydig/).
+any browser, nothing to install. `just publish` makes plain `cxn.pub` open
+this hub, no code needed; invitations still decide who gets in.
+[Docs](https://cab-ucf.github.io/tydig/).
 
 ```typst
 #let R = json("build/results.json")

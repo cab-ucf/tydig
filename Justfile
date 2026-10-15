@@ -11,6 +11,10 @@ up:
     {{compose}} up -d --build --force-recreate
     @for i in $(seq 30); do test -s "$TYDIG_DATA/link" && exec cat "$TYDIG_DATA/link"; sleep 1; done
 
+# make the static site (cxn.pub) open this hub with no code after # (gh)
+publish:
+    gh variable set TYDIG_HUB -b "$(sed 's/^[^#]*#//' "$TYDIG_DATA/link")" && gh workflow run pages
+
 down:
     {{compose}} down
 
