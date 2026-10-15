@@ -94,8 +94,8 @@ function missing() {
   }
   return [...out]
 }
-function explain(e) {
-  const raw = String(e?.message || e)
+function explain(e, at) {
+  const raw = at || String(e?.message || e)
   if (!/access denied|outside of project root|not found/.test(raw)) return raw
   const gone = missing() // the compiler's own words first: a guess must never hide them
   return raw.split('\n')[0] + '\n\n' + (gone.length ? 'Missing:\n' + gone.map(([, why]) => '  ' + why).join('\n')
@@ -105,6 +105,10 @@ function explain(e) {
     '\n\nA relative path starts from the file that names it, not from the document; ' +
     'a path starting with / starts at the project root.'
 }
+
+// the same failure as file:line:col, not a span number
+const where = main => serial(async () => (await (await $typst.getCompiler())
+  .compile({ mainFilePath: '/' + main, diagnostics: 'unix' })).diagnostics?.map(d => d.replace(/^\//, '')).join('\n'))
 
 let timer, busy = false, again = false
 export function scheduleCompile() { clearTimeout(timer); timer = setTimeout(compile, 300) }
@@ -120,7 +124,7 @@ async function compile() {
     for (const a of $('page').querySelectorAll('a[href^="javascript:" i], a[href^="data:" i]')) a.removeAttribute('href')
     $('diag').hidden = true
     fitText()
-  } catch (e) { $('diag').textContent = explain(e); $('diag').hidden = false }
+  } catch (e) { $('diag').textContent = explain(e, await where(main).catch(() => '')); $('diag').hidden = false }
   busy = false
   if (again) { again = false; scheduleCompile() }
 }
