@@ -49,7 +49,13 @@ async function exec(n, cmd) {
 }
 const why = e => typeof e.code === 'string' || /image not known|initializing source/.test(e.stderr)
   ? 'the build sandbox is not running or has no image: `just` on the hub starts it'
-  : (e.stdout || '') + (e.stderr || e.message)
+  : (e.stdout || '') + (e.stderr || e.message) + missing(e.stderr)
+// a command the sandbox lacks: either tydig ships it and this hub's image is
+// older than its code, or the project needs it added to sandbox/Containerfile
+const missing = t => (t = /^(?:make: (\S+): No such file or directory|\/bin\/sh: \d+: (\S+): not found)$/m
+  .exec(t || '')?.slice(1).find(Boolean)) ?
+  `\n\`${t}\` is not in this hub's build sandbox. If sandbox/Containerfile installs it, the hub's image ` +
+  'is older than its code: `just up` on the hub rebuilds it. If not, add it there.' : ''
 
 async function recipes(n) {
   const f = makefile(n)
