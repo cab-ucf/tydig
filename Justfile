@@ -2,7 +2,7 @@ set dotenv-load
 # With nixos.nix the hub is the tydig account's, data in /var/lib/tydig/data:
 # these recipes act on that one, never start a second hub with other accounts.
 sys := `systemctl cat tydig-update >/dev/null 2>&1 && [ "$(id -un)" != tydig ] && echo y || true`
-as := if sys == "y" { "sudo -u tydig /usr/bin/env PATH=$PATH XDG_RUNTIME_DIR=/run/user/$(id -u tydig) TYDIG_DATA=$TYDIG_DATA " } else { "" }
+as := if sys == "y" { "sudo -u tydig /usr/bin/env -C /var/lib/tydig PATH=$PATH XDG_RUNTIME_DIR=/run/user/$(id -u tydig) TYDIG_DATA=$TYDIG_DATA " } else { "" }
 src := if sys == "y" { "/var/lib/tydig/src" } else { justfile_directory() }
 export TYDIG_DATA := env("TYDIG_DATA", if sys == "y" { "/var/lib/tydig/data" } else { justfile_directory() / "data" })
 export TYDIG_PORT := env("TYDIG_PORT", "8080")
@@ -41,7 +41,7 @@ down:
     {{compose}} down
 
 logs:
-    {{compose}} logs -f app
+    {{compose}} logs -f app sandbox
 
 # a fresh password for EMAIL; without one, list the accounts
 passwd email='':
