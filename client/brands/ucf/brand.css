@@ -1,5 +1,4 @@
-/* UCF: black and gold. Its official logo is UCF's trademark, so none ships:
-   put it here as logo.svg and add  --logo: url(logo.svg); --logo-w: 2em; */
---logo: url(logo.svg); --logo-w: 2em;
-:root { --brand: 'UCF'; --teal: #ffc904; --on-teal: #000; }
-:root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; }
+/* UCF: black and gold. UCF's logo is its trademark: logo.svg is here for
+   UCF's own hubs, and --logo shows it. */
+:root { --brand: 'UCF'; --teal: #ffc904; --on-teal: #000; --logo: url(logo.svg); --logo-w: 1.6em; }
+:root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; --logo: url(logo-light.svg); }

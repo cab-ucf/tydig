@@ -65,7 +65,7 @@ async function joined(user) {
   return new Promise(() => {})
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
-const DOCS = 'https://cab-ucf.github.io/tydig/'
+const DOCS = 'docs/'
 // the static site: open any hub by its link or code
 const hubBox = `<form class="auth-hub"><input name="hub" required
   placeholder="a hub's link or code"><button class="go">open</button></form>`

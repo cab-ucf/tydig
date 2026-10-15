@@ -10,7 +10,7 @@ Needs [podman](https://podman.io). Prints a link: collaborators open it in
 any browser, nothing to install. After `just publish`, plain `cxn.pub` opens
 this hub; Settings › Share › new code gives three words to say ("cxn.pub, code
 tidy ruby otter") that let someone make an account and join the project.
-[Docs](https://cab-ucf.github.io/tydig/).
+[Docs](https://cxn.pub/docs/).
 
 ```typst
 #let R = json("build/results.json")
