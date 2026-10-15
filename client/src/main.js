@@ -16,8 +16,8 @@
 // The feature modules import one another: at load, each may call only the
 // others' function declarations (hoisted), never their consts.
 import './link.js' // first: patches fetch and WebSocket in link mode
-import { $, settings, projName } from './util.js'
-import { files, provider } from './doc.js'
+import { $, settings, projName, me } from './util.js'
+import { files, provider, user } from './doc.js'
 import { path, openFile } from './editor.js'
 import { renderMains, scheduleCompile } from './preview.js'
 import { refreshDisk } from './tree.js'
@@ -26,6 +26,9 @@ import { renderProjects } from './dialogs.js'
 import { applyLayout } from './menu.js'
 
 $('projname').textContent = projName
+// who this is: your cursor's colour and name in the bar, the address in Settings
+Object.assign($('me'), { textContent: user.name, title: `signed in as ${me.email}` }).style.setProperty('--c', user.color)
+$('whoami').textContent = `Signed in as ${me.name} (${me.email})`
 applyLayout()
 if (settings.sideOpen) openSidebar('comments')
 renderProjects()

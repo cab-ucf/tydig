@@ -70,6 +70,9 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 }
 #toast.click { cursor: pointer; }
 #toast.click:hover { outline: 1px solid var(--teal); }
+#me { flex: none; font-size: .75rem; color: var(--fg-dim); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#me::before { content: '● '; color: var(--c); }
+.dropdown #whoami { margin: 0; padding: .35rem .6rem; font: .75rem var(--sans); color: var(--fg-dim); overflow-wrap: anywhere; }
 #status { font-size: .75rem; padding: .15rem .5rem; border-radius: 999px; background: var(--ink-2); color: var(--fg-dim); }
 #status[data-state="connected"] { color: var(--teal); }
 #status[data-state="disconnected"] { color: var(--red); }
@@ -445,7 +448,7 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
    zooming in ---- */
 #mtabs { display: none; }
 @media (max-width: 800px), (max-height: 500px) and (pointer: coarse) {
-  #brand, #peers, #main-label, #bar-comment, #bar-cite, #bar-build, #bar-check, #wordcount,
+  #brand, #peers, #me, #main-label, #bar-comment, #bar-cite, #bar-build, #bar-check, #wordcount,
   #bar-chat, #bar-cmd, #split, .spacer { display: none !important; }
   #bar { gap: .25rem; padding: 0 .35rem; padding-top: env(safe-area-inset-top); }
   #projname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
