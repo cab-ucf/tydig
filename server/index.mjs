@@ -19,8 +19,16 @@ import * as agents from './agents.mjs'
 import * as assist from './assist.mjs'
 import * as link from './link.mjs'
 
-const PORT = Number(process.env.PORT || 3000), started = new Date().toISOString()
+const PORT = Number(process.env.PORT || 3000)
 const app = express().disable('x-powered-by')
+// No answer says where things live on this machine: errors from git, podman
+// or the filesystem name the data folder, so it never leaves as written.
+app.use((req, res, next) => {
+  const json = res.json.bind(res)
+  res.json = b => { const t = JSON.stringify(b) ?? ''
+    return t.includes(DATA) ? res.type('json').send(t.replaceAll(DATA, '…')) : json(b) }
+  next()
+})
 const TP = process.env.TYDIG_TRUST_PROXY // behind a proxy: hops, 'loopback' or addresses
 app.set('trust proxy', isNaN(TP) ? TP ?? false : +TP)
 app.use(compression())
@@ -45,15 +53,13 @@ app.all('/api/auth/*splat', (req, res, next) => {
   if (/^\/api\/auth\/organization\/(create|update|delete)\b/.test(new URL(req.originalUrl, 'http://h').pathname))
     return res.status(403).json({ error: 'projects are created and removed through tydig' })
   if (!originOk(req.headers.origin)) return res.status(403).json({ code: 'INVALID_ORIGIN',
-    message: `This hub does not trust ${req.headers.origin}; it trusts ${TRUSTED.join(', ')} (TYDIG_URL).`,
-    trusted: TRUSTED })
+    message: `This hub does not trust ${req.headers.origin}: open it at the address it was set up with (TYDIG_URL).` })
   req.headers['x-tydig-ip'] = req.socket.ip || req.ip
   next()
 }, toNodeHandler(auth))
 app.get('/api/auth-config', (req, res) => res.json({
   sso: sso && { providerId: sso.providerId, label: sso.label, only: sso.only },
-  trustedOrigins: TRUSTED, yourOrigin: req.headers.origin || null, originOk: originOk(req.headers.origin),
-  startedAt: started, linkOnline: link.online,
+  originOk: originOk(req.headers.origin), linkOnline: link.online,
 }))
 app.use('/api/agent/:proj', agents.mcp)
 

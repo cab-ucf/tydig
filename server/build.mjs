@@ -65,8 +65,10 @@ async function recipes(n) {
 }
 
 export const router = express.Router({ mergeParams: true })
-router.get('/info', (req, res) => res.json({ root: UNSAFE ? proj(req.params.proj) : '/work',
-  tool: makefile(req.params.proj) ? 'make' : 'just' }))
+// sent past index.mjs's path filter: unsafe builds run tinymist on this
+// machine, so the editor names files by their real path (development only)
+router.get('/info', (req, res) => res.type('json').send(JSON.stringify({
+  root: UNSAFE ? proj(req.params.proj) : '/work', tool: makefile(req.params.proj) ? 'make' : 'just' })))
 router.get('/recipes', async (req, res) =>
   res.json(await recipes(req.params.proj).catch(e => ({ error: why(e) }))))
 router.post('/build/:recipe', async (req, res) => {

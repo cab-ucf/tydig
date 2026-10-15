@@ -71,18 +71,14 @@ const twin = await signUpFrom('http://127.0.0.1:3000', `twin${Date.now()}@exampl
 check('loopback twin of a trusted origin accepted', !!twin.token)
 const foreign = await signUpFrom('http://evil.example.net', `evil${Date.now()}@example.com`)
 check('foreign origin rejected', foreign.code === 'INVALID_ORIGIN')
-check('rejection names the refused origin and what is trusted',
-  /evil\.example\.net/.test(foreign.message) && Array.isArray(foreign.trusted) &&
-  foreign.trusted.some(o => o.includes('3000')))
+check('rejection names the refused origin, never the trusted ones',
+  /evil\.example\.net/.test(foreign.message) && !/3000/.test(JSON.stringify(foreign)))
 const wrongPort = await signUpFrom('http://localhost:9999', `wp${Date.now()}@example.com`)
 check('same host, wrong port rejected', wrongPort.code === 'INVALID_ORIGIN')
-// Sloppy config must still work: trailing slashes and spaces are normalised
-// away, since origins are compared to the Origin header by exact string.
+// what a stranger learns before signing in: whether its own origin is trusted, nothing about the hub
 const cfgDiag = await fetch(`${B}/api/auth-config`, { headers: { origin: B } }).then(r => r.json())
-check('auth-config reports trusted origins and origin verdict',
-  Array.isArray(cfgDiag.trustedOrigins) && cfgDiag.originOk === true && cfgDiag.yourOrigin === B)
-check('trusted origins carry no trailing slash or spaces',
-  cfgDiag.trustedOrigins.every(o => o === o.trim() && !o.endsWith('/')))
+check('auth-config gives a stranger the origin verdict and nothing of the hub\'s addresses',
+  cfgDiag.originOk === true && !/3000|localhost|startedAt/.test(JSON.stringify(cfgDiag)))
 const badOriginDiag = await fetch(`${B}/api/auth-config`, { headers: { origin: 'http://nope.example.net' } }).then(r => r.json())
 check('auth-config flags an untrusted origin before any sign-in attempt',
   badOriginDiag.originOk === false)

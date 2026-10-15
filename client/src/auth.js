@@ -101,9 +101,9 @@ async function loginScreen() {
   // an origin the server does not trust can never sign in: say so first
   root.innerHTML = `<div class="auth-card"><div class="auth-brand"></div>
     ${cfg.originOk === false ? `<p class="auth-warn">This server does not trust <b>${location.origin}</b>.<br>
-      Open the app at <b>${(cfg.trustedOrigins || []).map(esc).join('</b> or <b>')}</b>, or set
+      Open the app at the address it was set up with, or set
       <code>TYDIG_URL</code> and <code>TYDIG_ORIGINS</code> to <b>${location.origin}</b> and restart
-      (<code>just serve</code>).</p>` : ''}
+      (<code>just up</code>).</p>` : ''}
     ${cfg.sso ? `<button type="button" class="go auth-sso">Sign in with ${esc(cfg.sso.label)}</button>
       ${cfg.sso.only ? '' : '<div class="auth-or">or use email</div>'}` : ''}
     <div class="auth-tabs">
