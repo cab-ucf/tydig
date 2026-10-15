@@ -121,7 +121,11 @@ async function compile() {
     $('page').innerHTML = await serial(async () => {
       try { await loadVfs(true); return await svg() } catch { await loadVfs(false); return await svg() }
     })
-    for (const a of $('page').querySelectorAll('a[href^="javascript:" i], a[href^="data:" i]')) a.removeAttribute('href')
+    // a link in the document leads to the web or within it, nowhere else
+    for (const a of $('page').querySelectorAll('a')) for (const h of ['href', 'xlink:href']) {
+      const v = a.getAttribute(h)?.trim(), web = () => /^https?:$/.test(new URL(v, 'https://x/').protocol)
+      if (v && v[0] !== '#' && !(() => { try { return web() } catch { return false } })()) a.removeAttribute(h)
+    }
     $('diag').hidden = true
     fitText()
   } catch (e) { $('diag').textContent = explain(e, await where(main).catch(() => '')); $('diag').hidden = false }

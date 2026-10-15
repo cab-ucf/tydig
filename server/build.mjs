@@ -7,10 +7,11 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
-import { run, proj, inProj, building, editable } from './store.mjs'
+import { run, proj, inProj, building, editable, readIn } from './store.mjs'
 import { at } from './sandbox.mjs'
 
-const UNSAFE = process.env.TYDIG_UNSAFE_BUILDS === '1'
+// builds on this machine itself, for development: never where a sandbox exists
+const UNSAFE = process.env.TYDIG_UNSAFE_BUILDS === '1' && !process.env.TYDIG_SANDBOX
 const MAX = Number(process.env.TYDIG_MAX_BUILDS || 2)
 const SANDBOX = at(process.env.TYDIG_SANDBOX || 'sandbox:7000')
 const DOCX = new URL('../sandbox/tydig-docx', import.meta.url).pathname
@@ -24,7 +25,7 @@ const inSandbox = (n, cmd, secs) => new Promise((ok, no) => {
   let out = ''
   ask(n, cmd, secs).on('data', d => out += d).on('error', no).on('end', () => {
     const r = out.startsWith('{') ? JSON.parse(out)
-      : { code: -1, stdout: '', stderr: 'the build sandbox did not answer' }
+      : { code: -1, stdout: '', stderr: 'the build sandbox did not answer: it may still be making its image (minutes, once per version)' }
     r.code === 0 ? ok(r) : no(Object.assign(new Error(r.stderr), r))
   })
 })
@@ -32,7 +33,7 @@ const inSandbox = (n, cmd, secs) => new Promise((ok, no) => {
 // both go after each run
 const scrub = n => run('find', [proj(n), '-mindepth', '1', '(', '-path', `${proj(n)}/.git`, '-prune', ')',
   '-o', '(', '-name', '.git', '-prune', '-exec', 'rm', '-rf', '{}', '+', ')',
-  '-o', '-type', 'l', '-exec', 'rm', '-f', '{}', '+']).catch(() => {})
+  '-o', '!', '-type', 'f', '!', '-type', 'd', '-exec', 'rm', '-f', '{}', '+']).catch(() => {}) // links, fifos
 const MAKEFILES = ['Makefile', 'makefile', 'GNUmakefile']
 const makefile = n => MAKEFILES.find(f => existsSync(inProj(n, f)))
 // a command in the project (cwd /work in the sandbox)
@@ -61,11 +62,11 @@ async function recipes(n) {
   const f = makefile(n)
   if (!f) return (await sandboxed(n, ['just', '--summary'], 30)).stdout.trim().split(/\s+/).filter(Boolean)
   const phony = new Set(), out = new Set()
-  for (const l of (await readFile(inProj(n, f), 'utf8')).split('\n')) {
+  for (const l of String(await readIn(n, f).catch(() => '')).split('\n')) {
     const ph = /^\.PHONY\s*:\s*(.*)$/.exec(l)
     if (ph) ph[1].split(/\s+/).forEach(t => phony.add(t))
     for (const t of /^([\w.\/ -]+?)\s*&?:(?!=)/.exec(l)?.[1].split(/\s+/) || [])
-      if (/^[\w-]{1,64}$/.test(t)) out.add(t)
+      if (/^\w[\w-]{0,63}$/.test(t)) out.add(t)
   }
   return [...out].sort((a, b) => phony.has(b) - phony.has(a)) // .PHONY verbs first
 }
@@ -79,7 +80,7 @@ router.get('/recipes', async (req, res) =>
   res.json(await recipes(req.params.proj).catch(e => ({ error: why(e) }))))
 router.post('/build/:recipe', async (req, res) => {
   const n = req.params.proj, r = req.params.recipe
-  if (!/^[\w-]{1,64}$/.test(r)) return res.status(400).json({ error: 'bad recipe' })
+  if (!/^\w[\w-]{0,63}$/.test(r)) return res.status(400).json({ error: 'bad recipe' })
   const cmd = makefile(n) ? ['make', ...UNSAFE ? [] : ['-C', '/work'], r] : ['just', r]
   try { const o = await exec(n, cmd); res.json({ ok: true, output: o.stdout + o.stderr }) }
   catch (e) { res.status(e.status || 200).json({ ok: false, output: why(e) }) }

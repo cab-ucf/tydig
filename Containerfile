@@ -33,6 +33,9 @@ COPY server/package.json server/
 RUN npm ci --omit=dev -w server
 COPY server/ server/
 COPY templates/ templates/
+# what the sandbox service builds the build image from (server/sandbox.mjs)
+COPY sandbox/ buildctx/sandbox/
+COPY fonts/ buildctx/fonts/
 COPY --from=client /app/client/dist/ client/dist/
 ENV NODE_ENV=production PORT=3000
 EXPOSE 3000

@@ -91,7 +91,7 @@ const say = (x, where, pane) => {
 }
 comments.observe(e => {
   view?.dispatch({ annotations: changed.of(true) }); redraw('comments'); count()
-  for (const [k, c] of e.changes.keys) if (c.action === 'add') say(comments.get(k), `commented on ${comments.get(k).file}`, 'comments')
+  for (const [k, c] of e.changes.keys) if (c.action === 'add') say(comments.get(k), `commented on ${esc(comments.get(k).file)}`, 'comments')
 })
 chat.observe(e => {
   redraw('chat'); redraw('comments'); count()

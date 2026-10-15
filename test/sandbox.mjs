@@ -9,10 +9,11 @@ import { check, done } from './lib.mjs'
 
 const DATA = mkdtempSync(path.join(tmpdir(), 'tydig-sbx-')), SOCK = path.join(DATA, 's.sock')
 mkdirSync(path.join(DATA, 'p', '.git'), { recursive: true }); writeFileSync(path.join(DATA, 'p', '.git', 'config'), 'ok\n')
+mkdirSync(path.join(DATA, 'p', '.collab')); writeFileSync(path.join(DATA, 'p', '.collab', 'template.json'), 'null\n')
 mkdirSync(path.join(DATA, '.hub')); symlinkSync('/etc', path.join(DATA, 'evil'))
 const srv = spawn(process.execPath, [new URL('../server/sandbox.mjs', import.meta.url).pathname],
   { env: { ...process.env, TYDIG_DATA: DATA, TYDIG_SANDBOX: SOCK, TYDIG_BUILD_NET: '0' }, stdio: 'inherit' })
-await new Promise(r => setTimeout(r, 800))
+for (let i = 0; i < 600 && !existsSync(SOCK); i++) await new Promise(r => setTimeout(r, 500)) // image, gVisor probe
 const ask = (req, input) => new Promise(ok => {
   let out = ''
   const s = net.connect(SOCK).on('data', d => out += d).on('close', () => ok(input ? out : JSON.parse(out)))
@@ -20,9 +21,12 @@ const ask = (req, input) => new Promise(ok => {
 })
 const sh = (c, proj = 'p') => ask({ proj, cmd: ['sh', '-c', c], secs: 60 })
 
-const r = await sh('echo built > out.txt; id -u; ls -A .git | wc -l; touch /etc/x 2>/dev/null || echo ro; ls /sys/class/net')
+const r = await sh('echo built > out.txt; id -u; ls -A .git | wc -l; touch /etc/x 2>/dev/null || echo ro; python3 -c "import socket; socket.create_connection((\'1.1.1.1\', 443), 3)" 2>/dev/null || echo offline')
 check('a build runs in the sandbox and writes its project', r.code === 0 && readFileSync(path.join(DATA, 'p', 'out.txt'), 'utf8') === 'built\n')
-check('as uid 1000, on a read-only root, with no network', /^1000\n0\nro\nlo\n$/.test(r.stdout))
+check('as uid 1000, on a read-only root, with no network', /^1000\n0\nro\noffline\n$/.test(r.stdout))
+const c = await sh('ls -A .collab | wc -l; mkdir -p .collab/crdt && echo forged > .collab/crdt/x.bin')
+check('nor the hub\'s .collab state (peer CRDT, the template record), to read or to forge', c.code !== 0 &&
+  c.stdout.trim() === '0' && !existsSync(path.join(DATA, 'p', '.collab', 'crdt')))
 const g = await sh('echo pwned > .git/config')
 check('it never sees the project\'s git (hooks and config would run on the hub)', g.code !== 0 &&
   readFileSync(path.join(DATA, 'p', '.git', 'config'), 'utf8') === 'ok\n')

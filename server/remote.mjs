@@ -11,7 +11,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { DATA, HUB, git, run, commit, live, mirror, editable, inProj, hubFile,
-  isProj, merge3, putText } from './store.mjs'
+  isProj, merge3, putText, collab, gitPin } from './store.mjs'
 import { publicOnly } from './public.mjs'
 
 const idFile = path.join(DATA, 'hub-id')
@@ -31,13 +31,16 @@ export const sshUrl = u => /^(git@|ssh:\/\/)/.test(String(u))
 // would read other projects) unless TYDIG_GIT_LOCAL=1, no host on the hub's
 // own network unless TYDIG_GIT_PRIVATE=1
 const LOCAL = process.env.TYDIG_GIT_LOCAL === '1'
-async function check(url, branch) {
+async function check(url, branch, n) {
   if (!(LOCAL ? /^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)\S+$/ : /^(https?:\/\/|git@|ssh:\/\/)\S+$/).test(String(url || '')))
     throw new Error(`not a git URL${LOCAL ? '' : ' (local paths need TYDIG_GIT_LOCAL=1)'}`)
   if (!/^(?!-)(?!.*\.\.)[\w./-]{1,100}$/.test(String(branch))) throw new Error('bad branch name')
   const host = (/^[\w.-]+@([^:/]+):/.exec(url) || /^\w+:\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)/.exec(url))?.[1]
-  if (host && process.env.TYDIG_GIT_PRIVATE !== '1')
-    await publicOnly(host.replace(/^\[|\]$/g, '')).catch(e => { throw new Error(`${e.message}; TYDIG_GIT_PRIVATE=1 allows it`) })
+  if (!host || process.env.TYDIG_GIT_PRIVATE === '1') return n && gitPin.delete(n)
+  const h = host.replace(/^\[|\]$/g, ''), [{ address }] = await publicOnly(h)
+    .catch(e => { throw new Error(`${e.message}; TYDIG_GIT_PRIVATE=1 allows it`) })
+  const port = /^https?:\/\/[^/]*:(\d+)/.exec(url)?.[1] ?? (/^http:/.test(url) ? 80 : 443)
+  if (n) gitPin.set(n, { host: h, port, ip: address })
 }
 
 // the project's own SSH key, for a private repo's deploy key
@@ -51,14 +54,14 @@ export async function deployKey(n) {
 }
 
 async function absorb(n, doc) {
-  const dir = inProj(n, '.collab/crdt'), peers = existsSync(dir)
+  const dir = await collab(n, 'crdt'), peers = existsSync(dir)
     ? (await readdir(dir)).filter(f => f.endsWith('.bin') && f !== `${hubId}.bin`) : []
   for (const f of peers) try { Y.applyUpdate(doc, await readFile(path.join(dir, f))) } catch {}
   return peers.length
 }
 async function writeState(n, doc) {
-  await mkdir(inProj(n, '.collab/crdt'), { recursive: true })
-  await writeFile(inProj(n, MINE), Y.encodeStateAsUpdate(doc))
+  await mkdir(await collab(n, 'crdt'), { recursive: true })
+  await writeFile(await collab(n, `crdt/${hubId}.bin`), Y.encodeStateAsUpdate(doc), { flag: 'w' })
 }
 async function outside(n, doc, head) {
   const mb = (await git(n, 'merge-base', head, 'FETCH_HEAD')).trim(), files = doc.getMap('files'), out = []
@@ -80,7 +83,7 @@ export function sync(n, reason = 'manual') {
     const c = await cfg(n)
     if (!c?.url) return { skipped: 'no remote' }
     const branch = c.branch || 'main'
-    await check(c.url, branch)
+    await check(c.url, branch, n)
     return live(n, async doc => {
       await git(n, 'remote', 'remove', 'origin').catch(() => {})
       await git(n, 'branch', '-M', branch).catch(() => {})
@@ -123,10 +126,10 @@ export function sync(n, reason = 'manual') {
 
 // a project from a remote: its history taken whole, then the CRDT from it
 export async function adopt(n, url, branch) {
-  await check(url, branch ?? 'main')
+  await check(url, branch ?? 'main', n)
   branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(n, 'ls-remote', '--symref', url, 'HEAD')
     .catch(() => ''))?.[1] || 'main'
-  await check(url, branch)
+  await check(url, branch, n)
   await setCfg(n, { url, branch })
   await git(n, 'fetch', url, branch)
   await git(n, 'checkout', '-B', branch, 'FETCH_HEAD')
@@ -161,6 +164,6 @@ router.post('/gitremote', admin, async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }) }
 })
 router.delete('/gitremote', admin, async (req, res) => { await setCfg(req.params.proj, {}); res.json({ ok: true }) })
-router.post('/gitremote/sync', async (req, res) => {
+router.post('/gitremote/sync', admin, async (req, res) => {
   try { res.json(await sync(req.params.proj, 'requested')) } catch (e) { res.status(400).json({ error: e.message }) }
 })

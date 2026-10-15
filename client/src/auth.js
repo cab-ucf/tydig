@@ -58,6 +58,10 @@ function explain(error, email) {
 const q = new URLSearchParams(location.search), invite = q.get('invite')
 let join = q.get('join')
 async function joined(user) {
+  // a code typed is meant; one that came inside a link is asked about first
+  if (join === q.get('join') && !confirm(`Join the project this link is for, as ${user.email}? ` +
+    'Its members will see your name and address.'))
+    return history.replaceState(null, '', location.pathname), user
   const r = await fetch('/api/join', { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ code: join }) }).then(r => r.json(), () => ({ error: 'the hub did not answer' }))
   if (r.error) { alert(r.error); history.replaceState(null, '', location.pathname); return user }

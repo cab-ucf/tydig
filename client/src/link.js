@@ -7,9 +7,14 @@
 // Imported first, so everything after sees the patched fetch and WebSocket.
 import { RELAYS, relayUrl } from '../../server/relay.mjs'
 const HUB = import.meta.env.VITE_HUB
-const m = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/.exec(location.hash || HUB && '#' + HUB)
+const code = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/
+// A site with its own hub opens that hub alone: on one origin every hub's
+// sign-in looks alike, so a link to another would get your password filled in.
+const m = HUB ? code.exec('#' + HUB) : code.exec(location.hash)
+if (HUB && code.exec(location.hash)?.[1] !== m?.[1]) history.replaceState(null, '', location.pathname + location.search)
 const pin = m?.[2] && relayUrl(decodeURIComponent(m[2]))
-export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: m[1].slice(0, 8) }
+// id: the whole code, so no other hub can share this one's cookies or drafts
+export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: m[1] }
 // the site's own hub, at the bare address (cxn.pub): links to it need no code
 export const plain = !!HUB && !location.hash
 

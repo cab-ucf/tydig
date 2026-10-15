@@ -7,7 +7,7 @@ import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { git, commit, live, mirror, editable, textOf, walk, proj, inProj, putText,
-  hocuspocus } from './store.mjs'
+  hocuspocus, readIn } from './store.mjs'
 import { db } from './auth.mjs'
 import * as remote from './remote.mjs'
 
@@ -46,7 +46,7 @@ async function digest(n) {
   const doc = hocuspocus.documents.get(n), out = {}
   if (doc) for (const [p, t] of doc.getMap('files')) { if (editable(p)) out[p] = sha256(t.toString()) }
   else for await (const p of walk(proj(n))) {
-    const t = editable(p) ? textOf(await readFile(inProj(n, p))) : null
+    const b = editable(p) && await readIn(n, p).catch(() => null), t = b ? textOf(b) : null
     if (t != null) out[p] = sha256(t)
   }
   return out

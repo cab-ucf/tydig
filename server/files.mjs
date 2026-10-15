@@ -35,11 +35,13 @@ router.get('/files', async (req, res) => {
   }
   res.json(out)
 })
-// served sandboxed: an uploaded .html or .svg runs no script in the app
+// served sandboxed, and typed only as an image or PDF: anything else is bytes,
+// so an uploaded .js, .html or .svg never runs as script in the app
 router.get('/raw/*rel', async (req, res) => {
   const p = rel(req), fh = await openIn(req.params.proj, p)
   if (!/\.pdf$/i.test(p)) res.set('Content-Security-Policy', 'sandbox')
-  res.type(path.extname(p) || 'bin').set('Content-Length', (await fh.stat()).size)
+  res.type(/\.(png|jpe?g|gif|webp|avif|svg|pdf)$/i.test(p) ? path.extname(p) : 'bin')
+    .set('Content-Length', (await fh.stat()).size)
   fh.createReadStream().pipe(res)
 })
 router.put('/raw/*rel', idle, raw, async (req, res) => {
@@ -69,7 +71,7 @@ router.post('/import', idle, raw, async (req, res) => {
   const n = req.params.proj, pre = okPath(req.query.dir) ? req.query.dir + '/' : ''
   const what = String(req.query.name || 'an archive').replace(/[^\w. -]/g, '_').slice(0, 80)
   let entries
-  try { entries = unpack(req.body ?? Buffer.alloc(0), QUOTA) }
+  try { entries = unpack(req.body ?? Buffer.alloc(0), Math.min(QUOTA, 256 << 20)) }
   catch (e) { return res.status(400).json({ error: `${what} is not an archive (.tar.gz, .tar, .zip): ${e.message}` }) }
   const err = await over(n, entries.reduce((a, f) => a + f.data.length, 0))
   if (err) return res.status(413).json({ error: err })

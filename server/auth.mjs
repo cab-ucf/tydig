@@ -59,7 +59,7 @@ const tooMany = email => {
 db.exec('CREATE TABLE IF NOT EXISTS joincode (code TEXT PRIMARY KEY, org TEXT, expires INTEGER)')
 const WORDS = readFileSync(path.join(import.meta.dirname, 'words.txt'), 'utf8').trim().split('\n')
 const norm = c => (String(c || '').toLowerCase().match(/[a-z]+/g) || []).join('-')
-let misses = []
+let misses = [] // [time, address] of wrong codes: 10 per address, 100 hub-wide, per 15 minutes
 export const joins = {
   add: org => {
     const b = randomBytes(12), code = [0, 4, 8].map(i => WORDS[b.readUInt32LE(i) % WORDS.length]).join('-')
@@ -69,11 +69,12 @@ export const joins = {
   },
   list: org => db.prepare('SELECT code, expires FROM joincode WHERE org = ? AND expires > ?').all(org, Date.now()),
   drop: (org, code) => db.prepare('DELETE FROM joincode WHERE org = ? AND code = ?').run(org, norm(code)),
-  org: code => {
-    misses = misses.filter(t => Date.now() - t < 15 * 60_000)
-    if (misses.length >= 30) no('TOO_MANY_REQUESTS', 'Too many wrong codes here lately; try again in 15 minutes.')
+  org: (code, ip) => {
+    misses = misses.filter(([t]) => Date.now() - t < 15 * 60_000)
+    if (misses.length >= 100 || misses.filter(([, a]) => a === ip).length >= 10)
+      no('TOO_MANY_REQUESTS', 'Too many wrong codes lately; try again in 15 minutes.')
     const r = db.prepare('SELECT org FROM joincode WHERE code = ? AND expires > ?').get(norm(code), Date.now())
-    if (!r) misses.push(Date.now())
+    if (!r) misses.push([Date.now(), ip])
     return r?.org
   },
 }
@@ -93,7 +94,7 @@ const gate = createAuthMiddleware(async ctx => {
   if (!String(ctx.body?.name || '').trim()) no('BAD_REQUEST', 'Give a name: collaborators see it.')
   const invite = ctx.headers?.get?.('x-tydig-invite'), join = ctx.headers?.get?.('x-tydig-join')
   if (OPEN || !db.prepare('SELECT 1 FROM user').get() || invitesFor(ctx.body?.email).some(i => i.id === invite)) return
-  if (join) { if (joins.org(join)) return; no('FORBIDDEN', 'That code is wrong or has expired: ask for a new one.') }
+  if (join) { if (joins.org(join, ctx.headers?.get?.('x-tydig-ip'))) return; no('FORBIDDEN', 'That code is wrong or has expired: ask for a new one.') }
   no('FORBIDDEN', invite ? 'This invite link is for another address, or has expired.'
       : 'This hub is invite-only: ask a project owner for a code.')
 })

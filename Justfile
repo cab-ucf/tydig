@@ -15,7 +15,15 @@ compose := as + "podman compose -f " + src + "/compose.yml " + scope
 up:
     #!/usr/bin/env bash
     [ "{{sys}}" = y ] && { {{as}}git -C {{src}} pull -q --ff-only; exec {{as}}just -f {{src}}/Justfile up; }
-    mkdir -p "$TYDIG_DATA" && touch .env && podman build -q -t tydig-build -f sandbox/Containerfile . || exit
+    mkdir -p "$TYDIG_DATA" && touch .env || exit
+    # gVisor: builds get a kernel of their own (server/sandbox.mjs); pinned, checked
+    v=20260928 g=$HOME/.local/share/tydig/gvisor-20260928 a=$(uname -m)
+    case $a in x86_64) s=c8d3a9fd4d4c4f5b8ff213caa4517356be128d18659ec4cde37828fe797f61a9725a602a846c81a8ed19c057a996515d31c081eba343ed4613a89951ba32ed59;;
+      aarch64) s=926538a4f20056d44838f230297ecec9192db2562e2523a207295f706b76126725f2ff7b4e59d747147510c5714057eeec862a0f77d43bf625746592b5f51b00;; esac
+    [ -x $g/runsc ] || { mkdir -p $g && curl -fsSL https://storage.googleapis.com/gvisor/releases/release/$v/$a/gvisor.tar.bz2 -o $g.tbz &&
+      echo "$s  $g.tbz" | sha512sum -c --quiet && tar -xjf $g.tbz -C $g; rm -f $g.tbz; }
+    [ "${TYDIG_RUNTIME:-}" = none ] || { [ -x $g/runsc ] && export TYDIG_RUNTIME=$g/runsc ||
+      echo "gVisor did not install: builds run in plain containers"; }
     systemctl --user enable --now podman.socket 2>/dev/null
     {{compose}} down 2>/dev/null
     ! ss -ltnH "sport = :$TYDIG_PORT" 2>/dev/null | grep -q . ||

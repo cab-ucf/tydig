@@ -118,6 +118,12 @@ const build = await api('/p/demo/build/analysis', { method: 'POST' })
 check('build recipe runs', build.ok === true)
 ;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nwhere:\n\tpwd\n'); await sleep(300)
 const where = await api('/p/demo/build/where', { method: 'POST' })
+// .collab is the hub's: a link there (from an adopted repo, a remote, a build) is removed, never followed
+await me.post('/projects/evil'); rmSync('data/evil/.collab', { recursive: true, force: true })
+;(await import('node:fs')).symlinkSync('../demo/.collab', 'data/evil/.collab')
+await api('/p/evil/template')
+check('a project\'s .collab linked into another project is cut, the other left whole',
+  !(await import('node:fs')).lstatSync('data/evil/.collab', { throwIfNoEntry: false })?.isSymbolicLink() && ex('data/demo/.collab/template.json'))
 check('no answer names the data folder on this machine', /…\/demo/.test(where.output) && !where.output.includes(process.cwd()))
 ;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nnope:\n\tno-such-tool fig.py\n'); await sleep(300)
 check('a command the sandbox lacks is named, with the way out',

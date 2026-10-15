@@ -39,7 +39,7 @@ const CSP = `default-src 'self'; connect-src 'self' ${TRUSTED.map(o => o.replace
   'http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* ' +
   "https://api.crossref.org https://eutils.ncbi.nlm.nih.gov; script-src 'self' 'unsafe-eval'; " +
   "worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
-  "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+  "object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
 app.use((req, res, next) => {
   if (req.socket.link) req.headers.origin = TRUSTED[0]
   res.set({ 'Content-Security-Policy': CSP, 'X-Content-Type-Options': 'nosniff',
@@ -76,7 +76,7 @@ app.get('/api/link', (req, res) => res.json({ link: link.LINK, online: link.onli
 // a join code (auth.mjs) makes whoever is signed in a member of its project
 app.post('/api/join', async (req, res) => {
   let org
-  try { org = joins.org(req.body?.code) } catch (e) { return res.status(429).json({ error: e.message }) }
+  try { org = joins.org(req.body?.code, req.socket.ip || req.ip) } catch (e) { return res.status(429).json({ error: e.message }) }
   if (!org) return res.status(403).json({ error: 'That code is wrong or has expired: ask for a new one.' })
   const slug = db.prepare('SELECT slug FROM organization WHERE id = ?').get(org)?.slug
   if (!access(req.user.id, slug))
@@ -138,7 +138,9 @@ p.post('/join', owner, (req, res) => res.json({ code: joins.add(req.org.id) }))
 p.delete('/join/:code', owner, (req, res) => res.json({ ok: !!joins.drop(req.org.id, req.params.code) }))
 // everyone reconnects and is checked again: the removed one is refused
 const kick = n => { hocuspocus.closeConnections(n); build.lspOpen.get(n)?.forEach(ws => ws.close()) }
-p.delete('/members/:id', async (req, res) => {
+// the owner removes anyone; a member, only themself (leaving)
+p.delete('/members/:id', (req, res, next) => db.prepare('SELECT 1 FROM member WHERE id = ? AND userId = ?')
+  .get(req.params.id, req.user.id) ? next() : owner(req, res, next), async (req, res) => {
   await auth.api.removeMember({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { memberIdOrEmail: req.params.id, organizationId: req.org.id } })
   kick(req.params.proj); res.json({ ok: true })

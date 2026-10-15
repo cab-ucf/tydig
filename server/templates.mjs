@@ -10,7 +10,7 @@ import path from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { proj, inProj, walk, live, mirror, commit, putFile, fileNow, textOf, mergeFile,
-  merge3, setText } from './store.mjs'
+  merge3, setText, collab } from './store.mjs'
 
 const DIR = path.resolve(process.env.TYDIG_TEMPLATES || new URL('../templates', import.meta.url).pathname)
 const LAYERS = readdirSync(DIR, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort()
@@ -29,23 +29,23 @@ async function stack(t, brand) {
     for await (const p of walk(path.join(DIR, l))) files.set(p, await readFile(path.join(DIR, l, p)))
   return files
 }
-const record = async (dir, template, brand, files) => {
-  const b = path.join(dir, '.collab/base')
+const record = async (n, template, brand, files) => {
+  const b = await collab(n, 'base')
   await rm(b, { recursive: true, force: true })
   for (const [p, data] of files) {
     await mkdir(path.dirname(path.join(b, p)), { recursive: true })
     await writeFile(path.join(b, p), data)
   }
-  await writeFile(path.join(dir, '.collab/template.json'), JSON.stringify({ template, brand: brand || null }))
+  await writeFile(await collab(n, 'template.json'), JSON.stringify({ template, brand: brand || null }))
 }
 export async function scaffold(n, template, brand) {
   const t = NAMES.includes(template) ? template : 'report'
   for (const l of layers(t, brand)) await cp(path.join(DIR, l), proj(n), { recursive: true })
-  await record(proj(n), t, brand, await stack(t, brand))
+  await record(n, t, brand, await stack(t, brand))
 }
-const recorded = async n => JSON.parse(await readFile(inProj(n, '.collab/template.json'), 'utf8').catch(() => 'null'))
+const recorded = async n => JSON.parse(await readFile(await collab(n, 'template.json'), 'utf8').catch(() => 'null'))
 async function given(n) { // the files as the template gave them
-  const b = inProj(n, '.collab/base'), out = new Map()
+  const b = await collab(n, 'base'), out = new Map()
   if (existsSync(b)) for await (const p of walk(b)) out.set(p, await readFile(path.join(b, p)))
   return out
 }
@@ -89,7 +89,7 @@ router.post('/template', async (req, res) => {
   if (!NAMES.includes(template) || (brand && !BRANDS.includes(brand)))
     return res.status(400).json({ error: 'no such template or brand' })
   const from = await recorded(n), report = await live(n, doc => swap(n, doc, template, brand))
-  await record(proj(n), template, brand, await stack(template, brand))
+  await record(n, template, brand, await stack(template, brand))
   const name = t => t ? t.template + (t.brand ? '+' + t.brand : '') : 'none'
   await commit(n, `checkpoint: template ${name(from)} -> ${name({ template, brand })}`)
   res.json({ from, ...report })

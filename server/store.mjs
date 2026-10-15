@@ -42,10 +42,16 @@ if (!existsSync(KNOWN)) await fs.writeFile(KNOWN, 'github.com ssh-ed25519 ' +
 const ssh = n => `ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=accept-new` +
   ` -o UserKnownHostsFile='${KNOWN}' -o IdentitiesOnly=yes -o IdentityAgent=none` +
   ` -i '${hubFile(n, 'key')}'`
+// a remote's host as checked public (remote.mjs): git connects to that address,
+// never to what the name resolves to a moment later (DNS rebinding)
+export const gitPin = new Map() // project -> { host, port, ip }
 const gitQ = new Map()
 export const git = (n, ...a) => {
-  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: ssh(n),
-    GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false' }
+  const p = gitPin.get(n), ip = p && (p.ip.includes(':') ? `[${p.ip}]` : p.ip)
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0',
+    GIT_SSH_COMMAND: ssh(n) + (p ? ` -o HostName=${p.ip} -o HostKeyAlias=${p.host}` : ''),
+    GIT_CONFIG_COUNT: p ? '2' : '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false',
+    ...p && { GIT_CONFIG_KEY_1: 'http.curloptResolve', GIT_CONFIG_VALUE_1: `${p.host}:${p.port}:${ip}` } }
   const r = (gitQ.get(n) || Promise.resolve()).then(() =>
     run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28, timeout: 600_000, env }))
   gitQ.set(n, r.catch(() => {}))
@@ -69,8 +75,10 @@ export async function safe(n, rel) {
   return f
 }
 export async function openIn(n, rel, write) {
-  const flags = (write ? FS.O_WRONLY | FS.O_CREAT : FS.O_RDONLY) | (FS.O_NOFOLLOW || 0)
+  // never blocks on a fifo a build left, and only a regular file is used
+  const flags = (write ? FS.O_WRONLY | FS.O_CREAT : FS.O_RDONLY) | (FS.O_NOFOLLOW || 0) | (FS.O_NONBLOCK || 0)
   const fh = await fs.open(await safe(n, rel), flags, 0o644)
+  if (!(await fh.stat()).isFile()) { await fh.close(); throw bad() }
   const at = await fs.realpath(`/proc/self/fd/${fh.fd}`).catch(() => null)
   if (at && !at.startsWith(await fs.realpath(proj(n)) + path.sep)) { await fh.close(); throw bad() }
   return fh
@@ -180,11 +188,23 @@ function watchProject(n, doc) {
   }))
 }
 
+// .collab/ is the hub's: peer hubs' CRDT state, the template's record. It
+// comes from git remotes and adopted repos, so a link anywhere in it could
+// lead into another project: links are removed, never followed.
+export async function collab(n, rel = '') {
+  const root = inProj(n, '.collab')
+  const clean = async d => { for (const e of await fs.readdir(d, { withFileTypes: true }).catch(() => []))
+    e.isDirectory() ? await clean(path.join(d, e.name)) : e.isFile() || await fs.rm(path.join(d, e.name)) }
+  if ((await fs.lstat(root).catch(() => null))?.isSymbolicLink()) await fs.rm(root)
+  await clean(root)
+  return path.join(root, rel)
+}
+
 // This hub's CRDT state lives in .git (never committed); peer hubs' in
 // .collab/crdt/ (from the git remote). Text newer on disk wins.
 const crdtFile = n => inProj(n, '.git/tydig-crdt')
 async function load(n, doc) {
-  const files = doc.getMap('files'), peers = inProj(n, '.collab/crdt')
+  const files = doc.getMap('files'), peers = await collab(n, 'crdt')
   const states = [crdtFile(n), ...existsSync(peers)
     ? (await fs.readdir(peers)).filter(f => f.endsWith('.bin')).map(f => path.join(peers, f)) : []]
   for (const f of states.filter(existsSync))
@@ -192,9 +212,9 @@ async function load(n, doc) {
   const saved = existsSync(crdtFile(n)) ? (await fs.stat(crdtFile(n))).mtimeMs : Infinity, texts = []
   for await (const rel of walk(proj(n))) {
     if (!editable(rel)) continue
-    const s = await fs.stat(inProj(n, rel))
-    if (s.size >= 1e6 || (files.has(rel) && s.mtimeMs <= saved)) continue
-    const t = textOf(await fs.readFile(inProj(n, rel)))
+    const s = await fs.lstat(inProj(n, rel)).catch(() => null) // a build may be swapping it
+    if (!s?.isFile() || s.size >= 1e6 || (files.has(rel) && s.mtimeMs <= saved)) continue
+    const b = await readIn(n, rel).catch(() => null), t = b && textOf(b)
     if (t != null) texts.push([rel, t])
   }
   doc.transact(() => texts.forEach(([rel, t]) => putText(files, rel, t)))
