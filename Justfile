@@ -16,9 +16,11 @@ up:
     {{compose}} up -d --build
     @for i in $(seq 30); do test -s "$TYDIG_DATA/link" && exec cat "$TYDIG_DATA/link"; sleep 1; done
 
-# make the static site (cxn.pub) open this hub with no code after # (gh)
+# make the static site (cxn.pub) open this hub, in this hub's brand (gh)
 publish:
-    gh variable set TYDIG_HUB -b "$(sed 's/^[^#]*#//' "$TYDIG_DATA/link")" && gh workflow run pages
+    gh variable set TYDIG_HUB -b "$(sed 's/^[^#]*#//' "$TYDIG_DATA/link")"
+    gh variable set TYDIG_BRAND -b "${TYDIG_BRAND:-tydig}"
+    gh workflow run pages
 
 down:
     {{compose}} down
