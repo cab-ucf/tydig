@@ -1,5 +1,7 @@
 set dotenv-load
 export TYDIG_DATA := env("TYDIG_DATA", justfile_directory() / "data")
+export TYDIG_PORT := env("TYDIG_PORT", "8080")
+export TYDIG_URL := env("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
 export TYDIG_PODMAN_SOCK := env("TYDIG_PODMAN_SOCK", env("XDG_RUNTIME_DIR", "") / "podman/podman.sock")
 scope := if env("TYDIG_SCOPE", "") == "1" { "--profile scope" } else { "" }
 compose := "podman compose " + scope
@@ -8,7 +10,10 @@ compose := "podman compose " + scope
 up:
     @mkdir -p "$TYDIG_DATA" && touch .env && podman build -q -t tydig-build -f sandbox/Containerfile .
     -@systemctl --user enable --now podman.socket 2>/dev/null
-    {{compose}} up -d --build --force-recreate
+    -@{{compose}} down 2>/dev/null
+    @! ss -ltnH "sport = :$TYDIG_PORT" 2>/dev/null | grep -q . || \
+        { echo "port $TYDIG_PORT is taken (ss -ltnp): stop it, or set TYDIG_PORT=8090 in .env"; exit 1; }
+    {{compose}} up -d --build
     @for i in $(seq 30); do test -s "$TYDIG_DATA/link" && exec cat "$TYDIG_DATA/link"; sleep 1; done
 
 # make the static site (cxn.pub) open this hub with no code after # (gh)

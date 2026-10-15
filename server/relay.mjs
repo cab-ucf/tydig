@@ -1,6 +1,6 @@
 // Link ids and relays, shared by the hub (link.mjs) and the page (link.js).
-// US East only: the hub homes on the nearer, the page dials both, unless
-// the link pins one (#<id>;r=<n0 region|URL>).
+// US East only, in order: the hub takes the first that answers, the page
+// dials both, unless the link pins one (#<id>;r=<n0 region|URL>).
 import { blake3 } from '@noble/hashes/blake3.js'
 
 const B32 = 'abcdefghijklmnopqrstuvwxyz234567'

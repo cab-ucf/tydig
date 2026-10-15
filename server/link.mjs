@@ -26,10 +26,19 @@ export let online = false
 
 export async function start(server) {
   if (!LINK) return
-  const b = iroh.Endpoint.builder()
-  b.applyMinimal(); b.secretKey(secret); b.alpns([ALPN])
-  b.relayMode(iroh.RelayMode.customFromUrls(PIN ? [relayUrl(PIN)] : RELAYS))
-  const ep = await b.bind()
+  // Relays in order, not the nearest: the dedicated one pings slower but moves
+  // more. The page dials them all, so wherever the hub lands it is found.
+  const rs = PIN ? [relayUrl(PIN)] : RELAYS
+  let ep
+  for (const [i, r] of rs.entries()) {
+    const b = iroh.Endpoint.builder()
+    b.applyMinimal(); b.secretKey(secret); b.alpns([ALPN])
+    b.relayMode(iroh.RelayMode.customFromUrls([r]))
+    ep = await b.bind()
+    if (i === rs.length - 1 || await Promise.race([ep.online().then(() => true),
+      new Promise(ok => setTimeout(ok, 10_000, false))])) break
+    await ep.close()
+  }
   ;(async () => {
     for (let inc; (inc = await ep.acceptNext().catch(() => null));) (async () => {
       const conn = await (await inc.accept()).connect(), peer = conn.remoteId().toString()
