@@ -36,8 +36,8 @@ services:
       TYDIG_SANDBOX: 0.0.0.0:7000
       TYDIG_BUILD_NET: ${TYDIG_BUILD_NET:-1}
       TYDIG_BUILD_CONTEXT: /app/buildctx
-      # gVisor's runsc on this host (`just up` fetches it); none: plain containers
-      TYDIG_RUNTIME: ${TYDIG_RUNTIME:-none}
+      # builds under gVisor (in the build image); none: plain containers
+      TYDIG_RUNTIME: ${TYDIG_RUNTIME:-gvisor}
       CONTAINER_HOST: unix:///run/podman/podman.sock
     volumes:
       - ${TYDIG_DATA}:${TYDIG_DATA}:ro

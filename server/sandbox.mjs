@@ -23,6 +23,8 @@ const { TYDIG_DATA: DATA } = process.env
 let IMAGE = process.env.TYDIG_IMAGE
 const podman = (args, o) => new Promise(ok => spawn('podman', args, { stdio: 'ignore', ...o })
   .on('close', c => ok(c === 0)).on('error', () => ok(false)))
+const said = args => new Promise(ok => { let o = ''; const p = spawn('podman', args, { stdio: ['ignore', 'pipe', 'inherit'] })
+  p.on('error', () => ok('')).stdout.on('data', d => o += d).on('end', () => ok(o)) })
 async function image() {
   if (await podman(['image', 'exists', IMAGE])) return
   console.log(`build image ${IMAGE}: building it (a few minutes, once per version)`)
@@ -34,31 +36,35 @@ async function image() {
 }
 const AT = process.env.TYDIG_SANDBOX || '/run/tydig/sandbox.sock'
 const MAX = Number(process.env.TYDIG_MAX_SANDBOXES || 24)
-// network: public HTTPS through egress, or none
-const NET = process.env.TYDIG_BUILD_NET === '0' ? ['--network=none'] : ['--network=tydig-build',
-  ...['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy'].flatMap(v => ['-e', `${v}=http://egress:3128`])]
-// gVisor (runsc, put in place by `just up`): builds get a kernel of their own,
-// so a kernel bug a build reaches is gVisor's, not the host's. Probed at start:
-// with the host's cgroups (the limits below) if they work for it, else without.
-const RT = process.env.TYDIG_RUNTIME !== 'none' && process.env.TYDIG_RUNTIME
-let RUNTIME = []
-const probe = flags => podman(['run', '--rm', ...flags, ...NET, '--log-driver=none', '--memory=64m', IMAGE, 'true'])
+// network: public HTTPS through egress, or none (and never the host's own proxy
+// settings: podman copies them in by default, and a NO_PROXY naming PyPI sends
+// uv past egress, into a network with no way out)
+const NONET = process.env.TYDIG_BUILD_NET === '0'
+const NET = ['--http-proxy=false', ...NONET ? ['--network=none'] : ['--network=tydig-build',
+  ...['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy'].flatMap(v => ['-e', `${v}=http://egress:3128`])]]
+// gVisor (runsc and sandbox/gvisor-run, in the build image): a build's command
+// runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
+// the host's; gVisor hides .git and .collab itself. Its one need of the
+// container is CAP_SYS_CHROOT, to set up its root; the build gets nothing.
+// Probed at start; TYDIG_RUNTIME=none: plain containers.
+let gvisor = false
+const under = cmd => gvisor ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
+const box = secs => ['run', '--rm', ...NET, `--timeout=${secs}`, '--log-driver=none',
+  '--userns=keep-id:uid=1000,gid=1000', '--memory=2g', '--pids-limit=512', '--cpus=2',
+  '--cap-drop=ALL', ...gvisor ? ['--cap-add=SYS_CHROOT'] : [], '--security-opt=no-new-privileges',
+  '--security-opt=label=level:s0', '--read-only', '--tmpfs=/tmp:rw,size=512m']
 export const at = s => s.includes(':') ? [+s.split(':').pop(), s.split(':')[0]] : [s]
 
 // The folder is pinned by inode: swapped for a symlink after this check,
-// the sandbox refuses to run (gVisor shows its own inodes, so there only the
-// check here holds; only the hub writes DATA). .git is never visible.
+// the sandbox refuses to run. .git is never visible.
 const PIN = 'test "$(stat -c %d:%i /work)" = "$0" || { echo project moved >&2; exit 97; }; exec "$@"'
 const args = (proj, secs, i, cmd) => {
   const dir = path.join(DATA, proj), s = lstatSync(dir)
   if (!s.isDirectory()) throw new Error('not a project')
-  return ['run', '--rm', ...i ? ['-i'] : [], ...RUNTIME, ...NET, `--timeout=${secs}`, '--log-driver=none',
-    '--userns=keep-id:uid=1000,gid=1000', '--memory=2g', '--pids-limit=512', '--cpus=2',
-    '--cap-drop=ALL', '--security-opt=no-new-privileges', '--security-opt=label=level:s0',
-    '--read-only', '--tmpfs=/tmp:rw,size=512m', '--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
-    '--tmpfs=/work/.collab:ro,size=4k,notmpcopyup', // the hub's state, never a build's to write
+  return [...box(secs), ...i ? ['-i'] : [], ...gvisor ? [] : ['--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
+    '--tmpfs=/work/.collab:ro,size=4k,notmpcopyup'], // the hub's state, never a build's to write
     '-e', 'HOME=/tmp', '-e', 'MPLCONFIGDIR=/tmp/mpl', '-e', 'TYPST_ROOT=/work',
-    '-v', `${dir}:/work:rw,z`, '-w', '/work', IMAGE, ...RUNTIME.length ? [] : ['sh', '-c', PIN, `${s.dev}:${s.ino}`], ...cmd]
+    '-v', `${dir}:/work:rw,z`, '-w', '/work', IMAGE, 'sh', '-c', PIN, `${s.dev}:${s.ino}`, ...under(cmd)]
 }
 const ok = r => /^[\w-]{1,64}$/.test(r?.proj) && Array.isArray(r.cmd) && r.cmd.length && r.cmd.length < 64 &&
   r.cmd.every(a => typeof a === 'string' && a.length < 4096) && r.secs > 0 && r.secs <= 86400
@@ -101,9 +107,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (!AT.includes(':')) rmSync(AT, { force: true })
   IMAGE ||= named()
   await image()
-  for (const f of RT ? [[], ['--runtime-flag=ignore-cgroups']] : [])
-    if (await probe(['--runtime', RT, ...f])) { RUNTIME = ['--runtime', RT, ...f]; break }
-  if (RT && !RUNTIME.length) console.warn(`builds are NOT under gVisor: ${RT} failed its probe`)
-  net.createServer(serve).listen(...at(AT), () => console.log(`sandboxes on ${AT}, ${NET[0]}, ` +
-    (RUNTIME.length ? `gVisor${RUNTIME[2] ? ' (no cgroup limits)' : ''}` : 'plain containers')))
+  gvisor = process.env.TYDIG_RUNTIME !== 'none'
+  if (gvisor && !/gvisor/.test(await said([...box(30), '--tmpfs=/work', IMAGE, ...under(['uname', '-r'])])))
+    gvisor = false, console.warn('builds are NOT under gVisor: it would not start here')
+  net.createServer(serve).listen(...at(AT), () => console.log(`sandboxes on ${AT}, ` +
+    `${NONET ? 'no network' : 'network through egress'}, ${gvisor ? 'under gVisor' : 'plain containers'}`))
 }

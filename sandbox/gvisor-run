@@ -1,0 +1,20 @@
+#!/bin/sh
+# A build's command under gVisor (server/sandbox.mjs): a kernel of its own,
+# the project at /work with .git and .collab hidden, no capabilities, the
+# container's network (host) or none. gvisor-run host|none command...
+set -e
+b=/tmp/gvisor net=$1; shift; mkdir -p $b
+python3 -I - "$@" > $b/config.json <<'PY'
+import json, os, sys
+hide = lambda d: {"destination": d, "type": "tmpfs", "source": "tmpfs", "options": ["ro", "size=4k", "mode=0555"]}
+print(json.dumps({"ociVersion": "1.0.0", "root": {"path": "/", "readonly": True},
+  "process": {"args": sys.argv[1:], "cwd": "/work", "user": {"uid": 0, "gid": 0}, "noNewPrivileges": True,
+    "env": [f"{k}={v}" for k, v in os.environ.items()],
+    "capabilities": {k: [] for k in ("bounding", "effective", "inheritable", "permitted", "ambient")}},
+  "mounts": [{"destination": "/proc", "type": "proc", "source": "proc"},
+    {"destination": "/tmp", "type": "tmpfs", "source": "tmpfs", "options": ["rw", "size=512m"]},
+    {"destination": "/work", "type": "bind", "source": "/work", "options": ["rbind", "rw"]},
+    hide("/work/.git"), hide("/work/.collab")],
+  "linux": {"namespaces": [{"type": t} for t in ("pid", "ipc", "uts", "mount")]}}))
+PY
+exec runsc --rootless --ignore-cgroups --root=$b/state --network=$net run --bundle=$b tydig

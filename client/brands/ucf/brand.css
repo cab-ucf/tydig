@@ -1,7 +1,9 @@
 /* UCF: black and gold. UCF's logo is its trademark: logo.svg is here for
    UCF's own hubs, and --logo shows it. */
-:root { --brand: 'UCF'; --teal: #ffc904; --on-teal: #000; --logo: url(logo.svg); --logo-w: 1.6em; }
-:root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; --logo: url(logo-light.svg); }
+:root { --brand: 'UCF'; --teal: #ffc904; --on-teal: #000; --logo: url(logo.svg); --logo-w: 2.25rem; }
+:root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; }
+/* the bar keeps its black tile, so the light theme's black-lettered logo is for the sign-in alone */
+:root[data-theme="light"] .auth-brand::before { background-image: url(logo-light.svg); }
 /* sign-in: the logo alone, large */
 :root .auth-brand::after { content: none; }
 :root .auth-brand::before { width: 4.5rem; height: 6rem; margin: 0; }

@@ -35,9 +35,16 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   display: flex; align-items: center; gap: .75rem; padding: 0 .9rem; height: 44px;
   background: var(--ink); color: var(--fg); border-bottom: 1px solid var(--ink-3);
 }
-#brand { font-family: var(--mono); color: var(--teal); font-weight: 700; letter-spacing: .04em; }
-#brand::after, .auth-brand::after { content: var(--brand); }
-#brand::before, .auth-brand::before {
+/* as Outlook's: the hub's own logo on a tile the bar's full height, then tydig's mark and name */
+#brand { display: flex; align-items: center; align-self: stretch; margin-left: calc(var(--logo-w) * -.4); gap: .5rem;
+  font: 600 1.2rem var(--sans); letter-spacing: .01em; color: #239dad; }
+#brand::before { content: ''; align-self: stretch; width: calc(var(--logo-w) * 1.6); margin-right: .15rem;
+  background: #000 var(--logo) center / 72% no-repeat; }
+#brand::after { content: 'tydig'; padding-left: 1.75em; margin-left: .4rem;
+  background: url(./tydig.svg) left center / 1.5em no-repeat; }
+:root[data-theme="light"] #brand { color: #1a7f8c; }
+.auth-brand::after { content: var(--brand); }
+.auth-brand::before {
   content: ''; display: inline-block; vertical-align: middle; width: var(--logo-w); height: 1.4em;
   margin-right: calc(var(--logo-w) / 5); background: var(--logo) left / contain no-repeat;
 }

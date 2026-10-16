@@ -4,8 +4,11 @@ FROM docker.io/library/python:3.12-slim
 RUN pip install --no-cache-dir numpy pandas matplotlib seaborn pooch openpyxl pypdf ruamel.yaml uv==0.12.23
 # uv run: its venv and cache in /tmp, never a .venv in the project
 ENV UV_PROJECT_ENVIRONMENT=/tmp/venv UV_CACHE_DIR=/tmp/uv
-ARG TYPST=0.15.1 JUST=1.46.0 TINYMIST=0.15.8 PANDOC=3.8.2
-RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils curl \
+ARG TYPST=0.15.1 JUST=1.46.0 TINYMIST=0.15.8 PANDOC=3.8.2 GVISOR=20260928
+# gVisor: each build runs under a kernel of its own (server/sandbox.mjs); checked
+ARG GVISOR_x86_64=c8d3a9fd4d4c4f5b8ff213caa4517356be128d18659ec4cde37828fe797f61a9725a602a846c81a8ed19c057a996515d31c081eba343ed4613a89951ba32ed59
+ARG GVISOR_aarch64=926538a4f20056d44838f230297ecec9192db2562e2523a207295f706b76126725f2ff7b4e59d747147510c5714057eeec862a0f77d43bf625746592b5f51b00
+RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils bzip2 curl \
  && a=$(uname -m) && gh=https://github.com \
  && curl -fsSL $gh/typst/typst/releases/download/v$TYPST/typst-$a-unknown-linux-musl.tar.xz \
     | tar -xJ -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
@@ -15,7 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils c
     | tar -xz -C /usr/local/bin --strip-components=1 tinymist-$a-unknown-linux-musl/tinymist \
  && curl -fsSL $gh/jgm/pandoc/releases/download/$PANDOC/pandoc-$PANDOC-linux-$(dpkg --print-architecture).tar.gz \
     | tar -xz -C /usr/local/bin --strip-components=2 pandoc-$PANDOC/bin/pandoc \
- && apt-get purge -y xz-utils curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+ && curl -fsSL -o /tmp/g.tbz https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$a/gvisor.tar.bz2 \
+ && eval sha=\$GVISOR_$a && echo "$sha  /tmp/g.tbz" | sha512sum -c - \
+ && tar -xjf /tmp/g.tbz -C /usr/local/bin runsc gvisor-bin && rm /tmp/g.tbz \
+ && apt-get purge -y xz-utils bzip2 curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 # warm the packages documents import: builds may have no network
 ENV TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages
 RUN printf '#import "@preview/cetz:0.4.2"\n#import "@preview/tablex:0.0.9"\n' > /tmp/w.typ \
@@ -23,5 +29,6 @@ RUN printf '#import "@preview/cetz:0.4.2"\n#import "@preview/tablex:0.0.9"\n' > 
 # the preview's fonts, so PDFs set type alike; Word export (tydig-docx)
 COPY fonts/ /usr/local/share/fonts/tydig/
 COPY sandbox/tydig-docx sandbox/docx.typ sandbox/endnote.lua /usr/local/share/tydig-docx/
+COPY sandbox/gvisor-run /usr/local/bin/
 RUN ln -s /usr/local/share/tydig-docx/tydig-docx /usr/local/bin/tydig-docx
 USER 1000:1000

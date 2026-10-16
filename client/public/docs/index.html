@@ -71,7 +71,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <tr><td><code>TYDIG_SIGNUP=open</code></td><td>anyone who reaches the hub may sign up</td></tr>
 <tr><td><code>TYDIG_LINK=0</code>, <code>TYDIG_LINK_RELAY</code>, <code>TYDIG_PAGE</code></td><td>no link; pin one relay; another static site</td></tr>
 <tr><td><code>TYDIG_MAX_BUILDS</code>, <code>TYDIG_BUILD_NET=0</code>, <code>TYDIG_QUOTA_MB</code></td><td>builds at once (2); no network for builds; MB per project (1000)</td></tr>
-<tr><td><code>TYDIG_RUNTIME=none</code></td><td>builds in plain containers, not under gVisor (which <code>just up</code> installs: each build gets a kernel of its own)</td></tr>
+<tr><td><code>TYDIG_RUNTIME=none</code></td><td>builds in plain containers, not under gVisor (in the build image: each build gets a kernel of its own; <code>just logs</code> says which)</td></tr>
 <tr><td><code>TYDIG_GIT_PRIVATE=1</code>, <code>TYDIG_GIT_PUSH_MINUTES</code></td><td>allow remotes on the hub's network; push interval (5)</td></tr>
 <tr><td><code>TYDIG_SCOPE_MODEL</code>, <code>TYDIG_SCOPE_DETECTOR=</code>, <code>TYDIG_GPU=nvidia.com/gpu=all</code> + <code>TYDIG_TORCH=cu130</code></td><td>another attention-only base model; no MELD; a GPU</td></tr>
 <tr><td><code>TYDIG_BRAND</code>, <code>TYDIG_TEMPLATES</code></td><td>the editor's look (<code>client/brands/</code>); another templates folder</td></tr>
