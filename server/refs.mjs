@@ -35,6 +35,31 @@ const openalex = async q => (await json(`${OA}?search=${encodeURIComponent(q)}&p
   abstract: Object.entries(w.abstract_inverted_index || {}).flatMap(([t, at]) => at.map(i => [i, t])).sort((a, b) => a[0] - b[0]).map(x => x[1]).join(' '),
   url: w.doi || w.id, from: 'openalex' }))
 export const SEARCH = { pubmed, crossref, ...env.OPENALEX_API_KEY && { openalex } }
+// What a passage is about, for an index: its words but the common ones,
+// longest (roughly, rarest) first; or, for a document's topic, most frequent
+const STOP = new Set(('about above after again against also among because been before being below between both ' +
+  'could does doing down during each from further have having here into itself more most must only other over ' +
+  'same should some such than that their them then there these they this those through under until very were ' +
+  'what when where which while with would your using used based show shows shown however thus therefore within ' +
+  'without whether might will first well data result results study studies every').split(' '))
+export const terms = (text, n, byCount) => {
+  const ws = (plain(text).match(/[a-z][a-z0-9]{3,}/g) || []).filter(w => !STOP.has(w))
+  const count = ws.reduce((m, w) => m.set(w, (m.get(w) || 0) + 1), new Map())
+  return [...count.keys()].sort((a, b) => byCount && count.get(b) - count.get(a) || b.length - a.length).slice(0, n)
+}
+// Papers for a passage: a short query as typed; else its telling words,
+// steered by the context's topic. PubMed wants every word to match, so is
+// asked for fewer; Crossref ranks, and answers when PubMed has none.
+export async function lookFor(text, context = '', source = 'pubmed') {
+  const t = terms(text, 10), c = terms(context, 8, true).filter(w => !t.includes(w)).slice(0, 3)
+  const or = c.length > 1 ? `(${c.join(' OR ')})` : c[0]
+  const tries = [text.trim().split(/\s+/).length <= 6 && text.trim(), ...source === 'pubmed'
+    ? [[...t.slice(0, 4), or], t.slice(0, 4), t.slice(0, 2)] : [[...t, ...c]]]
+  for (const q of new Set(tries.filter(Boolean).map(q => [].concat(q).filter(Boolean).join(' '))))
+    if (q) { const papers = await SEARCH[source](q); if (papers.length) return { papers, q } }
+  const q = [...t, ...c].join(' ')
+  return { papers: source === 'crossref' || !q ? [] : await SEARCH.crossref(q), q }
+}
 export const byPmid = async id => (await pmids([id]))[0]
 export const byDoi = async doi => fromCrossref((await json(`${CR}/${encodeURIComponent(doi)}`)).message)
 

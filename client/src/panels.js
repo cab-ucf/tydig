@@ -4,10 +4,12 @@
 import * as Y from 'yjs'
 import { parse as parseYaml } from 'yaml'
 import { diffArrays } from 'diff'
-import { renderCite } from './cite.js'
+import { renderCite, citeAt, bibOf } from './cite.js'
+import { parseBib } from '../../server/refs.mjs'
+import { prose } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
-import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl } from './util.js'
+import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose } from './util.js'
 import { files, provider, local, okPath, GEN, setText } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -25,14 +27,13 @@ export function openSidebar(m) {
   applyLayout(); tabs()
   redraw(m)
 }
-// the panes always at hand, each with what is new in it; any other is named
+// the panes always at hand, each with what is new in it; any other, a tab while open
 const TABS = { comments: 'Comments', chat: 'Discussion', history: 'History', build: 'Build' }
 export function tabs() {
-  const n = unseen()
-  $('side-tabs').replaceChildren(...Object.entries(TABS).map(([m, t]) => el('button',
+  const n = unseen(), extra = mode && !TABS[mode] ? { [mode]: mode[0].toUpperCase() + mode.slice(1) } : {}
+  $('side-tabs').replaceChildren(...Object.entries({ ...TABS, ...extra }).map(([m, t]) => el('button',
     { className: m === mode ? 'on' : '', onclick: () => openSidebar(m) }, t,
     n[m] ? el('b', { className: 'badge', textContent: n[m] }) : '')))
-  $('side-title').textContent = TABS[mode] ? '' : mode
 }
 // the pane again, if it is the one open
 export function redraw(m) { if (mode === m) panes()[m]($('side-body')) }
@@ -42,13 +43,29 @@ export function toggleSide() {
 }
 $('side-close').onclick = () => { settings.sideOpen = false; mode = null; applyLayout() }
 
-// Cite: papers for the selected words; the citation goes after them
-export function cite() {
+// Cite: papers for the selection, alone or steered by the file's topic; the
+// citation goes after it
+export function cite(alone) {
   const s = view?.state.selection.main, sel = s && !s.empty && view.state.sliceDoc(s.from, s.to)
-  const words = sel && sel.replace(/#\w+(\([^)]*\))?|[*_=\[\]\\@]/g, ' ').trim().split(/\s+/)
+  const typ = path?.endsWith('.typ'), text = t => typ ? prose(t).text : t
   citeCtx = { files, view: () => view, current: () => path, at: sel ? s.to : undefined,
-    query: sel ? words.slice(0, 25).join(' ') : '' }
+    query: sel ? text(sel) : '', context: sel && !alone ? text(view.state.doc.toString()) : '' }
   openSidebar('cite')
+}
+// a reference already in the bibliography, found by any of its words
+export function citeFromBib() {
+  const s = view?.state.selection.main, entries = parseBib(files.get(bibOf(files))?.toString() || '')
+  if (!entries.length) return toast(`no references in ${bibOf(files)} yet: find papers instead`)
+  choose(entries.map(e => ({ label: `${e.fields.title || e.key} · ${(e.fields.author || '').split(/,| and /)[0]} ${
+    e.fields.year || ''}`, hint: `@${e.key}`, run: () => { citeAt(view, e.key, s?.to); view.focus() } })),
+  `cite from ${bibOf(files)}: a title, author, year or key`)
+}
+// the selection's bubble: comment, or cite, which asks how
+export function citeBubble(dom) {
+  const b = (textContent, onclick) => el('button', { textContent, onclick, onmousedown: e => e.preventDefault() })
+  dom.replaceChildren(b('From the bibliography…', citeFromBib), b('Find papers, in context', () => cite()),
+    b('Find papers for this text alone', () => cite(true)))
+  dom.classList.add('open')
 }
 
 // ---- history ----

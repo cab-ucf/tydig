@@ -10,7 +10,8 @@ import { toggleGhost } from './ghost.js'
 import { addComment, discuss } from './comments.js'
 import { exportPdf, exportDocx, fitText, zoom, scheduleCompile } from './preview.js'
 import { newFile, uploadTo, quickOpen } from './tree.js'
-import { mode, openSidebar, toggleSide, checkpoint, cite } from './panels.js'
+import { mode, openSidebar, toggleSide, checkpoint, cite, citeFromBib } from './panels.js'
+import { toggleComment } from '@codemirror/commands'
 import { openPicker, showShare, showGitRemote } from './dialogs.js'
 
 const flip = k => () => { settings[k] = !settings[k]; applyLayout() }
@@ -21,11 +22,13 @@ export const actions = {
   save: () => checkpoint('save'), checkpoint: () => checkpoint(), 'export-pdf': exportPdf, 'export-docx': exportDocx,
   'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
-  undo: () => undo.get(path)?.undo(), redo: () => undo.get(path)?.redo(), comment: () => addComment(), cite,
+  undo: () => undo.get(path)?.undo(), redo: () => undo.get(path)?.redo(), comment: () => addComment(), cite: () => cite(),
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
   'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
   'toggle-preview': () => show(settings.view === 'split' ? 'editor' : 'split')(),
   'reset-layout': () => { Object.assign(settings, LAYOUT); applyLayout() },
+  close: () => settings.focus ? actions.focus() : $('side-close').click(),
+  'line-comment': () => view && toggleComment(view), 'cite-bib': citeFromBib, 'cite-alone': () => cite(true),
   focus: () => { flip('focus')(); view?.focus() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen()
     : document.documentElement.requestFullscreen(),

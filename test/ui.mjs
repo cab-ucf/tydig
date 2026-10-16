@@ -28,7 +28,7 @@ page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(answer 
 let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden,
-  title: (document.querySelector('#side-tabs .on')?.firstChild.textContent || document.getElementById('side-title').textContent).toLowerCase(), body: document.getElementById('side-body').innerText.slice(0, 300) }))
+  title: document.querySelector('#side-tabs .on')?.firstChild.textContent.toLowerCase(), body: document.getElementById('side-body').innerText.slice(0, 300) }))
 
 await page.goto(B, { waitUntil: 'networkidle2', timeout: 60000 })
 await page.waitForSelector('#auth-form'); await page.click('.auth-tabs button[data-tab="up"]')
@@ -102,6 +102,10 @@ check('Ctrl-K finds a command and runs it', (await side()).title === 'discussion
 // a selection in the editor offers to comment on it; Ctrl-B makes it bold
 await page.click('.cm-line:nth-child(22)'); await page.keyboard.press('End'); await page.keyboard.down('Shift'); await page.keyboard.press('Home'); await page.keyboard.up('Shift'); await sleep(300)
 check('selected text offers a comment button', await page.evaluate(() => !!document.querySelector('.cm-ask')))
+check('and a cite button, which asks how: the bibliography, papers in context, or for the text alone', await page.evaluate(() => {
+  [...document.querySelectorAll('.cm-ask button')].find(b => /Cite/.test(b.textContent)).click()
+  return [...document.querySelectorAll('.cm-ask button')].map(b => b.textContent).join('|') ===
+    'From the bibliography…|Find papers, in context|Find papers for this text alone' }))
 await page.keyboard.press('ArrowRight'); await page.keyboard.type(' boldme'); for (let i = 0; i < 6; i++) await page.keyboard.down('Shift'), await page.keyboard.press('ArrowLeft'), await page.keyboard.up('Shift')
 await page.keyboard.down('Control'); await page.keyboard.press('b'); await page.keyboard.up('Control'); await sleep(200)
 check('Ctrl-B wraps the selection in Typst bold', await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('*boldme*')))

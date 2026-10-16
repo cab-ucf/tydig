@@ -7,7 +7,7 @@ import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/v
 import { $, el, esc, dot, uid, toast, settings, projName } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
-import { openSidebar, redraw, mode, tabs } from './panels.js'
+import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
 import { pinSafe } from './preview.js'
 
 // an anchor's start sticks to the text after it, its end to the text before:
@@ -55,8 +55,12 @@ const ask = StateField.define({
   update: (t, tr) => tr.docChanged || tr.selection ? at(tr.state.selection.main) : t,
   provide: f => showTooltip.from(f),
 })
-const at = r => r.empty ? null : { pos: r.to, arrow: false, create: () => ({ dom: el('button', {
-  className: 'cm-ask', textContent: '💬 comment', onmousedown: e => e.preventDefault(), onclick: () => addComment(null) }) }) }
+const at = r => r.empty ? null : { pos: r.to, arrow: false, create: () => {
+  const b = (textContent, onclick) => el('button', { textContent, onclick, onmousedown: e => e.preventDefault() })
+  const dom = el('div', { className: 'cm-ask' }, b('💬 Comment', () => addComment(null)),
+    b('❝ Cite', () => citeBubble(dom)))
+  return { dom }
+} }
 export const commentExt = [marks, hover, ask]
 
 // ---- what is new: counted on the bar, said as it arrives ----

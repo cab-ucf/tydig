@@ -83,10 +83,15 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   background: var(--teal); color: var(--on-teal);
 }
 .cm-tooltip.cm-tooltip-below:has(.cm-ask), .cm-tooltip:has(> .cm-ask) { background: none; border: 0; }
-.cm-ask {
-  font: .75rem var(--sans); padding: .2rem .55rem; margin-top: .3rem; cursor: pointer; border-radius: 999px;
-  background: var(--teal); color: var(--on-teal); border: 0; box-shadow: 0 2px 8px #0005;
-}
+/* on a selection: Comment | Cite; Cite opens into how to cite */
+.cm-ask { display: flex; gap: 2px; margin-top: .3rem; padding: 2px; border-radius: 999px; background: var(--teal);
+  box-shadow: 0 2px 8px #0005; }
+.cm-ask button { font: 500 .75rem var(--sans); padding: .2rem .65rem; border: 0; border-radius: 999px; cursor: pointer;
+  background: none; color: var(--on-teal); white-space: nowrap; }
+.cm-ask button:hover { background: #0002; }
+.cm-ask.open { flex-direction: column; padding: .25rem; border-radius: 8px; background: var(--ink-2); border: 1px solid var(--ink-3); }
+.cm-ask.open button { color: var(--fg); text-align: left; border-radius: 5px; padding: .35rem .6rem; }
+.cm-ask.open button:hover { background: var(--ink-3); }
 #toast.click { cursor: pointer; }
 #toast.click:hover { outline: 1px solid var(--teal); }
 #me { flex: none; font-size: .75rem; color: var(--fg-dim); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -215,7 +220,6 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
   display: flex; justify-content: space-between; align-items: center; gap: .3rem;
   height: 34px; padding: 0 .4rem; border-bottom: 1px solid var(--ink-3);
 }
-#side-title { font-variant: small-caps; letter-spacing: .08em; color: var(--fg-dim); }
 #side-tabs { display: flex; gap: .15rem; flex: 1; min-width: 0; overflow-x: auto; }
 #side-tabs button { height: 26px; padding: 0 .55rem; border-radius: 6px; font: 500 .78rem var(--sans); }
 #side-tabs button:hover { color: var(--fg); }
@@ -417,6 +421,7 @@ kbd { font: .7rem var(--mono); padding: .1rem .35rem; border: 1px solid var(--in
 #leader div { display: flex; align-items: baseline; gap: .6rem; padding: .2rem 0; break-inside: avoid; }
 #leader kbd { min-width: 3.2rem; text-align: center; }
 #leader[hidden] { display: none; }
+#leader .group { color: var(--teal); }
 /* vim's mode and : line, quiet under the text */
 .cm-vim-panel { padding: .15rem .6rem !important; font: .75rem var(--mono) !important; background: var(--ink) !important;
   color: var(--fg-dim); border-top: 1px solid var(--ink-3); }
@@ -479,15 +484,15 @@ kbd { font: .7rem var(--mono); padding: .1rem .35rem; border: 1px solid var(--in
 }
 .auth-warn code { font-size: 11px; background: #00000040; padding: 0 3px; border-radius: 2px; }
 
-/* ---- focus (Alt-0): the text alone, centred, in a face made to be read;
-   Alt-0 or the corner button leaves ---- */
+/* ---- focus: the text alone, centred, in a face made to be read; the
+   corner button, Esc (vim keys: Space z, :q) leaves ---- */
 #focus-exit {
   display: none; position: fixed; bottom: 14px; right: 14px; z-index: 60; padding: .35rem .75rem; cursor: pointer;
   background: var(--ink); color: var(--fg-dim); border: 1px solid var(--ink-3); border-radius: 999px;
   font: .72rem var(--sans); opacity: .55;
 }
 #focus-exit:hover { opacity: 1; color: var(--hi); border-color: var(--teal); }
-body.focus #focus-exit { display: block; opacity: 0; }
+body.focus #focus-exit { display: block; opacity: .45; }
 body.focus #focus-exit:hover, body.focus #focus-exit:focus-visible { opacity: 1; }
 body.focus #bar, body.focus #tree-pane, body.focus #side, body.focus .cm-gutters,
 body.focus #preview, body.focus #split, body.focus #mtabs, body.focus .pane-head { display: none !important; }

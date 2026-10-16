@@ -5,20 +5,29 @@
 // (or, without a DOI, the best Crossref match) and offers the fix.
 import * as Y from 'yjs'
 // searching and checking: shared with agent members (server/agent-mcp.mjs)
-import { SEARCH, parseBib, keyFor, bibtex, check } from '../../server/refs.mjs'
+import { SEARCH, parseBib, keyFor, bibtex, check, lookFor, terms } from '../../server/refs.mjs'
 
 const el = (tag, props = {}, ...kids) => {
   const e = Object.assign(document.createElement(tag), props)
   e.append(...kids)
   return e
 }
-const bibOf = files => files.has('refs.bib') ? 'refs.bib'
+export const bibOf = files => files.has('refs.bib') ? 'refs.bib'
   : [...files.keys()].find(p => p.endsWith('.bib')) || 'refs.bib'
 const MARK = { ok: '✓', differs: '!', missing: '✗', error: '?', web: '~' }
+// @key into the text at `at` (a position, or one found in the text then),
+// before the sentence's full stop
+export function citeAt(v, key, at) {
+  const doc = v.state.doc.toString()
+  let pos = typeof at === 'function' ? at(doc) : at ?? v.state.selection.main.to
+  while (pos > 0 && /\s/.test(doc[pos - 1])) pos--
+  if (/[.,;:!?]/.test(doc[pos - 1] || '')) pos--
+  v.dispatch({ changes: { from: pos, insert: ` @${key}` } })
+}
 
 // ctx: { files (the Y.Map), view (the editor, or null), current (its path), query, at }
 export function renderCite(body, ctx) {
-  const results = el('div'), q = el('input', { className: 'cite-q', placeholder: 'search papers', value: ctx.query || '' })
+  const results = el('div'), q = el('input', { className: 'cite-q', placeholder: 'search papers', value: '' })
   const src = el('select', {}, ...[['pubmed', 'PubMed'], ['crossref', 'Crossref']]
     .map(([value, textContent]) => el('option', { value, textContent })))
   src.value = localStorage.citeSource || 'pubmed'; src.onchange = () => localStorage.citeSource = src.value
@@ -40,13 +49,7 @@ export function renderCite(body, ctx) {
       })
     }
     const v = ctx.view()
-    if (v && ctx.current()?.endsWith('.typ')) {
-      const doc = v.state.doc.toString()
-      let pos = typeof at === 'function' ? at(doc) : at ?? v.state.selection.main.to
-      while (pos > 0 && /\s/.test(doc[pos - 1])) pos-- // back onto the text, then before its full stop
-      if (/[.,;:!?]/.test(doc[pos - 1] || '')) pos--
-      v.dispatch({ changes: { from: pos, insert: ` @${key}` } })
-    }
+    if (v && ctx.current()?.endsWith('.typ')) citeAt(v, key, at)
     btn.textContent = `cited @${key}`
   }
   const byline = p => [p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : ''), p.year,
@@ -58,12 +61,17 @@ export function renderCite(body, ctx) {
       onclick: e => e.target.classList.toggle('open') }) : '',
     el('button', { textContent: 'cite', onclick: e => cite(p, at, e.target) }))
 
-  async function search() {
-    if (!q.value.trim()) return
+  // what is typed, or the selection's telling words, steered by the file's topic
+  async function search(text = q.value, context = '') {
+    if (!text.trim()) return
     status('searching...')
     try {
-      const ps = await SEARCH[src.value](q.value)
-      ps.length ? results.replaceChildren(...ps.map(p => card(p))) : status('nothing found')
+      const r = await lookFor(text, context, src.value), how = context ? `, steered by this file's topic (${
+        terms(context, 3, true).join(', ')})` : ''
+      if (text !== q.value) q.value = r.q
+      results.replaceChildren(el('p', { className: 'hint', textContent: r.papers.length
+        ? `${r.papers.length} for "${r.q}"${how}` : `nothing found for "${r.q}"; try fewer words` }),
+        ...r.papers.map(p => card(p, ctx.at)))
     } catch (e) { status(`search failed: ${e.message}`) }
   }
   // each paragraph of the open file with no citation, and papers that could back it
@@ -120,8 +128,8 @@ export function renderCite(body, ctx) {
       'attention' : `all ${entries.length} match their published records` }), ...rows)
   }
   q.onkeydown = e => e.key === 'Enter' && search()
-  body.replaceChildren(el('div', { className: 'cite-bar' }, q, src, el('button', { textContent: 'search', onclick: search })),
+  body.replaceChildren(el('div', { className: 'cite-bar' }, q, src, el('button', { textContent: 'search', onclick: () => search() })),
     el('div', { className: 'cite-bar' }, el('button', { textContent: 'suggest for this file', onclick: suggest }),
       el('button', { textContent: 'check references', onclick: verify })), results)
-  if (ctx.query) search()
+  if (ctx.query) search(ctx.query, ctx.context)
 }

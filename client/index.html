@@ -33,6 +33,8 @@
         <hr/>
         <button data-act="comment">Comment on the selection<kbd>Mod-Alt-M</kbd></button>
         <button data-act="cite">Cite: find papers, check references</button>
+        <button data-act="cite-bib">Cite from the bibliography</button>
+        <button data-act="cite-alone">Find papers for the selection alone</button>
         <button data-act="spelling">Check spelling, every file</button>
       </div></div>
       <div class="menu"><button>View</button><div class="dropdown">
@@ -143,7 +145,7 @@
       </div>
     </section>
     <aside id="side" hidden>
-      <div id="side-head"><nav id="side-tabs"></nav><span id="side-title"></span>
+      <div id="side-head"><nav id="side-tabs"></nav>
         <button id="side-close" title="close the panel">&times;</button></div>
       <div id="side-body"></div>
     </aside>
@@ -152,7 +154,7 @@
     <button data-m="files">Files</button><button data-m="edit" id="mt-edit">Edit</button>
     <button data-m="preview">Preview</button><button data-m="side">Discuss<b class="badge" hidden></b></button>
   </nav>
-  <button id="focus-exit" data-act="focus" title="leave focus (Esc)">⤢ leave focus</button>
+  <button id="focus-exit" data-act="focus" title="Leave focus (Esc; with vim keys, Space z or :q)">Leave focus</button>
   <dialog id="keys"><h3>Keyboard shortcuts</h3><div id="keys-body"></div>
     <form method="dialog" class="dlg-close"><button>close</button></form></dialog>
   <div id="leader" hidden></div>
