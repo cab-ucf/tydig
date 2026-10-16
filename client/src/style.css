@@ -83,15 +83,20 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   background: var(--teal); color: var(--on-teal);
 }
 .cm-tooltip.cm-tooltip-below:has(.cm-ask), .cm-tooltip:has(> .cm-ask) { background: none; border: 0; }
-/* on a selection: Comment | Cite; Cite opens into how to cite */
-.cm-ask { display: flex; gap: 2px; margin-top: .3rem; padding: 2px; border-radius: 999px; background: var(--teal);
-  box-shadow: 0 2px 8px #0005; }
-.cm-ask button { font: 500 .75rem var(--sans); padding: .2rem .65rem; border: 0; border-radius: 999px; cursor: pointer;
-  background: none; color: var(--on-teal); white-space: nowrap; }
-.cm-ask button:hover { background: #0002; }
-.cm-ask.open { flex-direction: column; padding: .25rem; border-radius: 8px; background: var(--ink-2); border: 1px solid var(--ink-3); }
-.cm-ask.open button { color: var(--fg); text-align: left; border-radius: 5px; padding: .35rem .6rem; }
-.cm-ask.open button:hover { background: var(--ink-3); }
+/* on a selection: Comment | Cite, one pill; Cite opens into a card of how */
+.cm-ask { display: flex; margin-top: .4rem; border-radius: 8px; overflow: hidden; background: var(--ink-2);
+  border: 1px solid var(--ink-3); box-shadow: 0 4px 16px #0006; font: 500 .78rem var(--sans); }
+.cm-ask button { display: flex; align-items: center; gap: .4rem; padding: .35rem .7rem; border: 0; cursor: pointer;
+  background: none; color: var(--fg); white-space: nowrap; font: inherit; text-align: left; }
+.cm-ask button + button { border-left: 1px solid var(--ink-3); }
+.cm-ask button:hover { background: var(--ink-3); color: var(--hi); }
+.cm-ask svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--teal); stroke-width: 1.3;
+  stroke-linecap: round; stroke-linejoin: round; }
+.cm-ask.open { flex-direction: column; width: 19rem; padding: .3rem; }
+.cm-ask.open h4 { margin: .3rem .5rem .35rem; font: 600 .68rem var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim); }
+.cm-ask.open button { align-items: flex-start; gap: .6rem; padding: .45rem .55rem; border: 0; border-radius: 6px; white-space: normal; }
+.cm-ask.open button svg { margin-top: .1rem; }
+.cm-ask.open small { display: block; margin-top: .1rem; font-weight: 400; font-size: .72rem; color: var(--fg-dim); }
 #toast.click { cursor: pointer; }
 #toast.click:hover { outline: 1px solid var(--teal); }
 #me { flex: none; font-size: .75rem; color: var(--fg-dim); max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -13,6 +13,17 @@ export const el = (tag, props, ...kids) => {
 // a person's colour, as a dot (never trusted as CSS beyond a colour)
 export const dot = (color, title = '') =>
   el('i', { className: 'dot', title, style: `background:${CSS.supports('color', color) ? color : 'gray'}` })
+// a few line icons, 16 px, in the text's colour
+const ICONS = { comment: '<path d="M2.5 3h11v7.5h-6L4.5 13v-2.5h-2z"/>',
+  cite: '<path d="M7 4.5C4.8 5.3 3.5 7 3.5 9.5v2h3.5V8.5H5.3c.1-1.3.9-2.3 2.2-2.8zM13 4.5c-2.2.8-3.5 2.5-3.5 5v2H13V8.5h-1.7c.1-1.3.9-2.3 2.2-2.8z"/>',
+  book: '<path d="M3 3.5a1.5 1.5 0 0 1 1.5-1.5H13v9.5H4.5A1.5 1.5 0 0 0 3 13zm0 9.5A1.5 1.5 0 0 0 4.5 14.5H13v-3"/>',
+  context: '<path d="M8 13.5H3.5v-11h5l3 3v2"/><circle cx="11" cy="11" r="2.3"/><path d="m12.7 12.7 1.8 1.8"/>',
+  search: '<circle cx="7" cy="7" r="4.3"/><path d="m10.2 10.2 3.8 3.8"/>' }
+export const icon = n => {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  s.setAttribute('viewBox', '0 0 16 16'); s.innerHTML = ICONS[n]
+  return s
+}
 // randomUUID exists only in secure contexts; a hub on plain-http LAN is not one
 export const uid = () => crypto.getRandomValues(new Uint32Array(4)).join('-')
 

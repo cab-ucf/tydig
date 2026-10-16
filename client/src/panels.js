@@ -9,7 +9,7 @@ import { parseBib } from '../../server/refs.mjs'
 import { prose } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { registerDeviceKey, signCheckpoint } from './prov.js'
-import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose } from './util.js'
+import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon } from './util.js'
 import { files, provider, local, okPath, GEN, setText } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -62,9 +62,12 @@ export function citeFromBib() {
 }
 // the selection's bubble: comment, or cite, which asks how
 export function citeBubble(dom) {
-  const b = (textContent, onclick) => el('button', { textContent, onclick, onmousedown: e => e.preventDefault() })
-  dom.replaceChildren(b('From the bibliography…', citeFromBib), b('Find papers, in context', () => cite()),
-    b('Find papers for this text alone', () => cite(true)))
+  const b = (i, text, small, onclick) => el('button', { onclick, onmousedown: e => e.preventDefault() },
+    icon(i), el('span', {}, text, el('small', { textContent: small })))
+  dom.replaceChildren(el('h4', { textContent: 'Cite the selection' }),
+    b('book', 'From the bibliography…', `search ${bibOf(files)}: title, author, year, key`, citeFromBib),
+    b('context', 'Find papers, in context', "the selection, steered by this file's topic", () => cite()),
+    b('search', 'Find papers for this text alone', 'its words only', () => cite(true)))
   dom.classList.add('open')
 }
 

@@ -104,7 +104,7 @@ await page.click('.cm-line:nth-child(22)'); await page.keyboard.press('End'); aw
 check('selected text offers a comment button', await page.evaluate(() => !!document.querySelector('.cm-ask')))
 check('and a cite button, which asks how: the bibliography, papers in context, or for the text alone', await page.evaluate(() => {
   [...document.querySelectorAll('.cm-ask button')].find(b => /Cite/.test(b.textContent)).click()
-  return [...document.querySelectorAll('.cm-ask button')].map(b => b.textContent).join('|') ===
+  return [...document.querySelectorAll('.cm-ask button span')].map(s => s.firstChild.textContent).join('|') ===
     'From the bibliography…|Find papers, in context|Find papers for this text alone' }))
 await page.keyboard.press('ArrowRight'); await page.keyboard.type(' boldme'); for (let i = 0; i < 6; i++) await page.keyboard.down('Shift'), await page.keyboard.press('ArrowLeft'), await page.keyboard.up('Shift')
 await page.keyboard.down('Control'); await page.keyboard.press('b'); await page.keyboard.up('Control'); await sleep(200)

@@ -125,10 +125,11 @@ const scopeField = StateField.define({
 
 // opts: url () an engine's address on this machine, or null; hub () the hub's
 // route, or null; by () 'bits' | 'ent' | 'ai'; typst () is this a .typ;
-// report ({ ppl, ai } | { error })
+// report ({ ppl, ai } | { error }); after, a promise to wait for first
 export function surprise(opts) {
   let ws, seq = 0, sent = null, view, last = null
-  const ask = () => {
+  const ask = async () => {
+    await opts.after
     const url = opts.url(), hub = opts.hub()
     if (!(url || hub) || !view) return
     const p = prose(view.state.doc.toString(), opts.typst())

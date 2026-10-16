@@ -5,6 +5,7 @@
 // harper-ls keeps them.
 import * as Y from 'yjs'
 import MEDICAL from './dict/medical.txt?url'
+import { later } from './warm.js'
 import { prose } from './surprise.js'
 import { Decoration, EditorView, ViewPlugin, showTooltip } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
@@ -22,13 +23,13 @@ const OFF = { Dashes: false, DisjointPrefixes: false, EllipsisLength: false, Exp
   OxfordComma: false, SentenceCapitalization: false, Spaces: false, SplitWords: false, UnclosedQuotes: false }
 // as word processors do: no spelling for ACRONYMS, NSF's, sha256, scRNA or (f)
 const CODE = /\d|^[^\p{Ll}]+(['’]s)?$|.\p{Lu}|^\p{L}\.?$/u
-const load = () => harper ??= Promise.all([import('harper.js'), import('harper.js/binary'), fetch(MEDICAL).then(r => r.text())])
+const load = () => harper ??= later.then(() => Promise.all([import('harper.js'), import('harper.js/binary'), fetch(MEDICAL).then(r => r.text())])
   .then(async ([{ WorkerLinter }, { binary }, med]) => {
     terms = new Set(med.toLowerCase().split('\n'))
     const h = new WorkerLinter({ binary })
     await h.setLintConfig({ ...await h.getLintConfig(), ...OFF })
     return h
-  })
+  }))
 
 // Harper counts characters; the editor, UTF-16 units
 const units = text => {

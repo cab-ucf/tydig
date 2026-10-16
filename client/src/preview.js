@@ -1,22 +1,21 @@
 // The live preview: typst compiled in the browser on every edit, with comment
 // pins; which file is missing when one is; PDF and Word export; zoom and fit.
 import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
-import { preloadRemoteFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
-import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url'
-import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
+import { loadFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
 import { typst } from 'codemirror-lang-typst'
 import { $, esc, post, toast, download, settings, phone, P, rawUrl, saveAs } from './util.js'
 import { files, comments } from './doc.js'
 import { numbered } from './comments.js'
 import { disk } from './tree.js'
 import { applyLayout } from './menu.js'
+import { compiler, renderer, fonts, previewed } from './warm.js'
 
-// fonts/ at the repo root, bundled: the build sandbox installs the same files,
-// so the preview needs no network and sets type like the built PDF
-const fonts = Object.values(import.meta.glob('../../fonts/*.{otf,ttf}', { query: '?url', import: 'default', eager: true }))
-$typst.setCompilerInitOptions({ getModule: () => compilerWasm,
-  beforeBuild: [preloadRemoteFonts(fonts, { assets: false })] })
-$typst.setRendererInitOptions({ getModule: () => rendererWasm })
+// begun by warm.js; both made ready now, while the document syncs
+$typst.setCompilerInitOptions({ getModule: () => compiler,
+  beforeBuild: [Object.assign(async (...a) => loadFonts(await fonts, { assets: false })(...a),
+    { _kind: 'fontLoader', _preloadRemoteFontOptions: { assets: false } })] }) // or typst.ts adds a CDN's
+$typst.setRendererInitOptions({ getModule: () => renderer })
+$typst.getCompiler(); $typst.getRenderer()
 
 // which file to compile: main.typ unless another is picked
 export function renderMains() {
@@ -65,8 +64,9 @@ async function loadVfs(pins) {
   await $typst.resetShadow()
   for (const [p, t] of files)
     await $typst.addSource('/' + p, pins && p.endsWith('.typ') ? pinned(p, t.toString(), cs) : t.toString())
-  for (const f of disk) if (!files.has(f.path) && !f.path.startsWith('out/') && f.size < 8e6)
-    await $typst.mapShadow('/' + f.path, await fetchBin(f))
+  const bin = disk.filter(f => !files.has(f.path) && !f.path.startsWith('out/') && f.size < 8e6)
+  for (const [f, bytes] of await Promise.all(bin.map(async f => [f, await fetchBin(f)])))
+    await $typst.mapShadow('/' + f.path, bytes)
 }
 // one virtual filesystem: a compile and a PDF export take turns
 let vfs = Promise.resolve()
@@ -110,8 +110,8 @@ function explain(e, at) {
 const where = main => serial(async () => (await (await $typst.getCompiler())
   .compile({ mainFilePath: '/' + main, diagnostics: 'unix' })).diagnostics?.map(d => d.replace(/^\//, '')).join('\n'))
 
-let timer, busy = false, again = false
-export function scheduleCompile() { clearTimeout(timer); timer = setTimeout(compile, 300) }
+let timer, busy = false, again = false, first = true
+export function scheduleCompile() { clearTimeout(timer); timer = setTimeout(compile, first ? 0 : 300) }
 async function compile() {
   const main = $('main-sel').value, svg = () => $typst.svg({ mainFilePath: '/' + main })
   if (!main) return
@@ -129,6 +129,7 @@ async function compile() {
     $('diag').hidden = true
     fitText()
   } catch (e) { $('diag').textContent = explain(e, await where(main).catch(() => '')); $('diag').hidden = false }
+  if (first) { first = false; previewed() }
   busy = false
   if (again) { again = false; scheduleCompile() }
 }

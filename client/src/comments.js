@@ -4,7 +4,7 @@
 import * as Y from 'yjs'
 import { Annotation, StateField } from '@codemirror/state'
 import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
-import { $, el, esc, dot, uid, toast, settings, projName } from './util.js'
+import { $, el, esc, dot, uid, toast, settings, projName, icon } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
 import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
@@ -56,9 +56,9 @@ const ask = StateField.define({
   provide: f => showTooltip.from(f),
 })
 const at = r => r.empty ? null : { pos: r.to, arrow: false, create: () => {
-  const b = (textContent, onclick) => el('button', { textContent, onclick, onmousedown: e => e.preventDefault() })
-  const dom = el('div', { className: 'cm-ask' }, b('💬 Comment', () => addComment(null)),
-    b('❝ Cite', () => citeBubble(dom)))
+  const b = (i, text, onclick) => el('button', { onclick, onmousedown: e => e.preventDefault() }, icon(i), text)
+  const dom = el('div', { className: 'cm-ask' }, b('comment', 'Comment', () => addComment(null)),
+    b('cite', 'Cite', () => citeBubble(dom)))
   return { dom }
 } }
 export const commentExt = [marks, hover, ask]

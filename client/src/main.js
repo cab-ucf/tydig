@@ -17,6 +17,7 @@
 // The feature modules import one another: at load, each may call only the
 // others' function declarations (hoisted), never their consts.
 import './link.js' // first: patches fetch and WebSocket in link mode
+import './warm.js' // then: the preview's compiler and fonts start downloading
 import { $, settings, projName, me } from './util.js'
 import { files, provider, user } from './doc.js'
 import { path, openFile } from './editor.js'

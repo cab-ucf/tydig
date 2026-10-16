@@ -23,10 +23,11 @@ import { commentExt } from './comments.js'
 import { scheduleCompile } from './preview.js'
 import { renderTree } from './tree.js'
 import { applyLayout } from './menu.js'
+import { later } from './warm.js'
 
 export let view = null, path = null
 export const undo = new Map() // path -> Y.UndoManager: own edits only
-const vimC = new Compartment(), themeC = new Compartment(), spellC = new Compartment()
+const vimC = new Compartment(), themeC = new Compartment(), spellC = new Compartment(), lspC = new Compartment()
 
 // Syntax colours for the dark themes; light keeps CodeMirror's own.
 const palette = c => Prec.high(syntaxHighlighting(HighlightStyle.define([
@@ -110,12 +111,12 @@ let opening = 0
 export async function openFile(p) {
   const yt = files.get(p)
   if (!yt) return
-  const my = ++opening, [lang, lsp] = await Promise.all([langFor(p), lspExt(p)])
+  const my = ++opening, lang = await langFor(p)
   if (my !== opening) return // another file was opened meanwhile
   path = p
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
-    vimC.of(settings.vim ? vim({ status: true }) : []), basicSetup, themeC.of(themeExt()), lang, lsp, spellC.of(spellExt(p)),
+    vimC.of(settings.vim ? vim({ status: true }) : []), basicSetup, themeC.of(themeExt()), lang, lspC.of([]), spellC.of(spellExt(p)),
     keymap.of([indentWithTab, ...yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
     yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,
@@ -123,6 +124,8 @@ export async function openFile(p) {
   ] }))
   provider.setAwarenessField('file', p)
   localStorage['last:' + projName] = p
+  // tinymist joins once the preview is up, if this file is still open
+  later.then(() => lspExt(p)).then(ext => my === opening && view?.dispatch({ effects: lspC.reconfigure(ext) }))
 }
 
 // Files outside the CRDT: build output as read-only text, an image as itself,
@@ -159,7 +162,7 @@ const modes = Object.keys(MODES)
 const nextMode = () => modes[(modes.indexOf(settings.scope?.by) + 1) % modes.length]
 const scope = surprise({
   url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api${P('/surprise')}`,
-  by: () => settings.scope?.by, typst: () => !!path?.endsWith('.typ'),
+  by: () => settings.scope?.by, typst: () => !!path?.endsWith('.typ'), after: later,
   report: r => {
     const b = $('scope')
     b.hidden = !settings.scope
