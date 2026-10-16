@@ -5,9 +5,9 @@ import express from 'express'
 import compression from 'compression'
 import { toNodeHandler } from 'better-auth/node'
 import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { rm, mkdir, writeFile, rename } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
-import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save } from './store.mjs'
+import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, hubFile } from './store.mjs'
 import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db }
   from './auth.mjs'
 import * as build from './build.mjs'
@@ -122,6 +122,24 @@ app.use('/api/p/:proj', (req, res, next) => {
   req.org ? next() : res.status(403).json({ error: 'you do not have access to this project' })
 }, p)
 for (const m of [files, build, history, remote, templates, agents, assist]) p.use(m.router)
+
+// The last preview a member's browser compiled, and the key (a hash) of what
+// it shows: a page opens on it before its own compiler has even loaded.
+// Served as an image, sandboxed, so nothing in it can run.
+p.get('/preview', (req, res) => {
+  const f = hubFile(req.params.proj, 'preview.svg')
+  if (!existsSync(f)) return res.status(204).end()
+  res.set({ 'Content-Security-Policy': 'sandbox', 'Cache-Control': 'no-cache' })
+  res.sendFile(f, { dotfiles: 'allow', headers: { 'Content-Type': 'image/svg+xml' } })
+})
+p.put('/preview', express.text({ type: 'image/svg+xml', limit: '16mb' }), async (req, res) => {
+  const key = String(req.query.key || '')
+  if (!/^\w{1,32}$/.test(key) || !req.body?.startsWith('<svg')) return res.status(400).json({ error: 'not a preview' })
+  const f = hubFile(req.params.proj, 'preview.svg')
+  await mkdir(hubFile(req.params.proj, ''), { recursive: true })
+  await writeFile(f + '.new', `<!--${key}-->` + req.body); await rename(f + '.new', f) // whole, or not at all
+  res.json({ ok: true })
+})
 
 // sharing: an account joins at once; an address without one is invited
 const owner = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()

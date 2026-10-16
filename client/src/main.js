@@ -17,11 +17,10 @@
 // The feature modules import one another: at load, each may call only the
 // others' function declarations (hoisted), never their consts.
 import './link.js' // first: patches fetch and WebSocket in link mode
-import './warm.js' // then: the preview's compiler and fonts start downloading
 import { $, settings, projName, me } from './util.js'
 import { files, provider, user } from './doc.js'
 import { path, openFile } from './editor.js'
-import { renderMains, scheduleCompile } from './preview.js'
+import { renderMains, start } from './preview.js'
 import { refreshDisk } from './tree.js'
 import { openSidebar } from './panels.js'
 import { renderProjects } from './dialogs.js'
@@ -36,11 +35,10 @@ applyLayout()
 if (settings.sideOpen) openSidebar('comments')
 renderProjects()
 provider.on('synced', () => {
-  refreshDisk(); renderMains()
+  refreshDisk().then(start); renderMains()
   const last = localStorage['last:' + projName]
   const first = files.has(last) ? last : files.has('main.typ') ? 'main.typ'
     : [...files.keys()].sort().find(p => p.endsWith('.typ'))
   if (!path && first) openFile(first)
-  scheduleCompile()
 })
 provider.connect()

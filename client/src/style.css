@@ -203,7 +203,7 @@ body:not([data-view="split"]) :is(#editor, #preview) { flex: 1 1 0 !important; }
 @container (max-width: 380px) { #main-label { font-size: 0; gap: 0; } #zoomctl { padding-left: .4rem; } }
 #pv { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 1.5rem; }
 #page { background: var(--paper); box-shadow: 0 2px 14px #0003; margin: 0 auto; min-height: 90%; }
-#page svg { display: block; width: 100%; height: auto; }
+#page > :is(svg, img) { display: block; width: 100%; height: auto; }
 /* dark themes dim the page too: inverted, hues kept */
 body.dark-preview #pv { background: var(--ink-2); }
 body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 0 1px #ccc; }

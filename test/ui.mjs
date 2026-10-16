@@ -263,6 +263,14 @@ await key('Escape'); await page.evaluate(() => { document.querySelector('#menuba
 check('Mod-\\ hides the preview; in vim Space 3 shows it alone, :only the editor; ? lists the keys',
   hid === 'editor' && leader === 'preview' && ex === 'editor' && help)
 
+// a page opens on the preview the hub keeps, before its own compiler has loaded; then compiles its own
+await sleep(6500); const wasm = [], onWasm = r => /typst_ts_web_compiler/.test(r.url()) && wasm.push(r.url())
+page.on('request', onWasm); await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForFunction(() => document.querySelector('#page img, #page svg'), { timeout: 30000 })
+const kept = await page.evaluate(() => !!document.querySelector('#page img')), early = wasm.length
+await page.waitForFunction(() => document.querySelector('#page svg'), { timeout: 90000 }); page.off('request', onWasm)
+check('a page opens on the preview the hub keeps, before loading a compiler; then compiles its own', kept && !early)
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)

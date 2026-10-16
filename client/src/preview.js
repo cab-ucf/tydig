@@ -1,21 +1,44 @@
 // The live preview: typst compiled in the browser on every edit, with comment
 // pins; which file is missing when one is; PDF and Word export; zoom and fit.
-import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
-import { loadFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
 import { typst } from 'codemirror-lang-typst'
 import { $, esc, post, toast, download, settings, phone, P, rawUrl, saveAs } from './util.js'
 import { files, comments } from './doc.js'
 import { numbered } from './comments.js'
 import { disk } from './tree.js'
 import { applyLayout } from './menu.js'
-import { compiler, renderer, fonts, previewed } from './warm.js'
+import { typst as compilerOf, previewed } from './warm.js'
 
-// begun by warm.js; both made ready now, while the document syncs
-$typst.setCompilerInitOptions({ getModule: () => compiler,
-  beforeBuild: [Object.assign(async (...a) => loadFonts(await fonts, { assets: false })(...a),
-    { _kind: 'fontLoader', _preloadRemoteFontOptions: { assets: false } })] }) // or typst.ts adds a CDN's
-$typst.setRendererInitOptions({ getModule: () => renderer })
-$typst.getCompiler(); $typst.getRenderer()
+// The preview a member last saw, kept by the hub (early.js asks before the
+// app loads; a link visitor's page asks now), and the key of what it shows:
+// the sources, the pins and the files the document reads. While it is
+// what this browser would compile, nothing is compiled or downloaded.
+const cached = self.tydigPreview ?? (location.hash ? fetch(`/api${P('/preview')}`)
+  .then(r => r.status === 200 ? r.text() : null).then(svg => svg && (show(svg), { key: /^<!--(\w+)-->/.exec(svg)?.[1] }))
+  .catch(() => null) : Promise.resolve(null))
+function show(svg) {
+  const img = new Image(); img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+  if (!$('page').querySelector('svg')) $('page').replaceChildren(img)
+}
+const hash = s => { // cyrb53: equality, not secrecy (crypto.subtle needs https)
+  let a = 0xdeadbeef, b = 0x41c6ce57
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677) }
+  a = Math.imul(a ^ a >>> 16, 2246822507) ^ Math.imul(b ^ b >>> 13, 3266489909)
+  b = Math.imul(b ^ b >>> 16, 2246822507) ^ Math.imul(a ^ a >>> 13, 3266489909)
+  return (b >>> 0).toString(36) + (a >>> 0).toString(36)
+}
+const keyOf = main => hash(JSON.stringify([main, [...files].map(([p, t]) => [p, t.toString()]).sort(),
+  disk.map(f => [f.path, f.size, f.mtime]).sort(), numbered().map(c => [c.file, c.from, c.n])]))
+// what this browser compiled, back to the hub once it has been still a while
+let sent = null, upload
+const keep = (main, svg) => { clearTimeout(upload); upload = setTimeout(() => {
+  const key = keyOf(main)
+  if (key !== sent) fetch(`/api${P('/preview')}?key=${key}`, { method: 'PUT', body: svg,
+    headers: { 'content-type': 'image/svg+xml' } }).then(r => r.ok && (sent = key), () => {})
+}, 5000) }
+// once the page is idle, the compiler loads anyway, so an edit has it at hand
+// (and the preview's text can be selected); not if data is to be saved
+const idle = () => navigator.connection?.saveData ||
+  setTimeout(() => (self.requestIdleCallback || setTimeout)(() => scheduleCompile()), 3000)
 
 // which file to compile: main.typ unless another is picked
 export function renderMains() {
@@ -60,7 +83,7 @@ async function fetchBin(f) {
   return bytes
 }
 async function loadVfs(pins) {
-  const cs = pins ? numbered() : []
+  const cs = pins ? numbered() : [], $typst = await compilerOf()
   await $typst.resetShadow()
   for (const [p, t] of files)
     await $typst.addSource('/' + p, pins && p.endsWith('.typ') ? pinned(p, t.toString(), cs) : t.toString())
@@ -107,16 +130,21 @@ function explain(e, at) {
 }
 
 // the same failure as file:line:col, not a span number
-const where = main => serial(async () => (await (await $typst.getCompiler())
+const where = main => serial(async () => (await (await (await compilerOf()).getCompiler())
   .compile({ mainFilePath: '/' + main, diagnostics: 'unix' })).diagnostics?.map(d => d.replace(/^\//, '')).join('\n'))
 
-let timer, busy = false, again = false, first = true
-export function scheduleCompile() { clearTimeout(timer); timer = setTimeout(compile, first ? 0 : 300) }
+// nothing until the document has synced and the disk's files are known (start)
+let timer, busy = false, again = false, first = true, synced = false, live = false
+export function scheduleCompile() { if (synced) clearTimeout(timer), timer = setTimeout(compile, first ? 0 : 300) }
+export function start() { synced = true; scheduleCompile() }
 async function compile() {
-  const main = $('main-sel').value, svg = () => $typst.svg({ mainFilePath: '/' + main })
+  const main = $('main-sel').value, svg = async () => (await compilerOf()).svg({ mainFilePath: '/' + main })
   if (!main) return
   if (busy) return again = true
   busy = true
+  if (first && (await cached)?.key === keyOf(main)) { // the hub's is this: shown, and enough for now
+    first = false; sent = keyOf(main); busy = false; return idle()
+  }
   try { // with pins, or (should a pin break it) without
     $('page').innerHTML = await serial(async () => {
       try { await loadVfs(true); return await svg() } catch { await loadVfs(false); return await svg() }
@@ -127,9 +155,9 @@ async function compile() {
       if (v && v[0] !== '#' && !(() => { try { return web() } catch { return false } })()) a.removeAttribute(h)
     }
     $('diag').hidden = true
-    fitText()
+    fitText(); keep(main, $('page').innerHTML)
   } catch (e) { $('diag').textContent = explain(e, await where(main).catch(() => '')); $('diag').hidden = false }
-  if (first) { first = false; previewed() }
+  first = false; live || previewed(); live = true // the optional waits for this
   busy = false
   if (again) { again = false; scheduleCompile() }
 }
@@ -137,7 +165,7 @@ async function compile() {
 export async function exportPdf() { // never with pins
   const main = $('main-sel').value
   if (!main) return
-  const pdf = await serial(async () => { await loadVfs(false); return $typst.pdf({ mainFilePath: '/' + main }) })
+  const pdf = await serial(async () => { await loadVfs(false); return (await compilerOf()).pdf({ mainFilePath: '/' + main }) })
   saveAs(pdf, main.replace(/\.typ$/, '.pdf'), 'application/pdf', false)
 }
 

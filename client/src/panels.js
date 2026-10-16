@@ -2,13 +2,11 @@
 // citations (cite.js) and spelling (spell.js): history and checkpoints, builds (and watch), the
 // grant checklist, the template switch, and changes made while you were away.
 import * as Y from 'yjs'
-import { parse as parseYaml } from 'yaml'
 import { diffArrays } from 'diff'
 import { renderCite, citeAt, bibOf } from './cite.js'
 import { parseBib } from '../../server/refs.mjs'
 import { prose } from './surprise.js'
 import { renderSpelling } from './spell.js'
-import { registerDeviceKey, signCheckpoint } from './prov.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon } from './util.js'
 import { files, provider, local, okPath, GEN, setText } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
@@ -79,6 +77,7 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
   toast('saving&hellip;', true, 0)
   let signed = {}
   try {
+    const { registerDeviceKey, signCheckpoint } = await import('./prov.js')
     await registerDeviceKey(api, me.id)
     const texts = [...files].filter(([p]) => okPath(p) && !GEN.test(p)).map(([p, t]) => [p, t.toString()])
     signed = await signCheckpoint({ user: me.id, project: projName, message, files: texts })
@@ -145,9 +144,11 @@ async function renderBuild(body) {
 // A project with a package.yaml (the grant templates) lists every component
 // its application needs: each is here or not, live, and a missing upload goes
 // straight to where it belongs. (lib/package.typ expands `each:` alike.)
+let parseYaml = null // yaml, loaded once a project has a package.yaml
 function checklist() {
   const pkg = files.get('package.yaml')
   if (!pkg) return null
+  if (!parseYaml) return import('yaml').then(m => { parseYaml = m.parse; checklistBadge() }), null
   try {
     const G = parseYaml(files.get('grant.yaml')?.toString() || '') || {}
     const key = p => p.name.split(' ').pop().toLowerCase(), here = [...files.keys(), ...disk.map(f => f.path)]

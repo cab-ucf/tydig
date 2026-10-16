@@ -10,10 +10,7 @@ import { indentWithTab } from '@codemirror/commands'
 import { tags as t } from '@lezer/highlight'
 import * as Y from 'yjs'
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next'
-import { vim } from '@replit/codemirror-vim'
 import { typst } from 'codemirror-lang-typst'
-import { LanguageServerClient, WebSocketTransport, languageServerWithTransport as lspExtension }
-  from 'codemirror-languageserver'
 import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { spellcheck } from './spell.js'
 import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asText } from './util.js'
@@ -27,6 +24,11 @@ import { later } from './warm.js'
 
 export let view = null, path = null
 export const undo = new Map() // path -> Y.UndoManager: own edits only
+// vim, loaded only when wanted; who needs its Vim (keys.js) hears when it is
+export const onVim = []
+let vimMod
+const vimExt = async () => { vimMod ??= import('@replit/codemirror-vim').then(m => (onVim.forEach(f => f(m.Vim)), m))
+  return (await vimMod).vim({ status: true }) }
 const vimC = new Compartment(), themeC = new Compartment(), spellC = new Compartment(), lspC = new Compartment()
 
 // Syntax colours for the dark themes; light keeps CodeMirror's own.
@@ -53,9 +55,9 @@ const PALETTES = {
 const dark = EditorView.theme({}, { dark: true })
 const themeExt = () => PALETTES[theme()] ? [PALETTES[theme()], dark] : []
 export function restyle() { view?.dispatch({ effects: themeC.reconfigure(themeExt()) }) }
-export function toggleVim() {
+export async function toggleVim() {
   settings.vim = !settings.vim; applyLayout()
-  view?.dispatch({ effects: vimC.reconfigure(settings.vim ? vim({ status: true }) : []) })
+  view?.dispatch({ effects: vimC.reconfigure(settings.vim ? await vimExt() : []) })
 }
 
 // spelling and grammar (spell.js), in .typ files
@@ -71,11 +73,13 @@ const langFor = async p => p.endsWith('.typ') ? typst() : await LanguageDescript
 
 // tinymist, through the hub; off (until toggled) once its socket closes,
 // and nothing is sent down a closed one
-class Socket extends WebSocketTransport { send(m) { this.connection.readyState === 1 && super.send(m) } }
 let tinymist = null, lspDead = false
 async function lspExt(p) {
   if (!settings.lsp || lspDead || !p.endsWith('.typ')) return []
   const gone = () => { lspDead = true; tinymist = null }
+  const { LanguageServerClient, WebSocketTransport, languageServerWithTransport: lspExtension } =
+    await import('codemirror-languageserver')
+  class Socket extends WebSocketTransport { send(m) { this.connection.readyState === 1 && super.send(m) } }
   tinymist ??= api(P('/info')).then(({ root }) => ({ root, client: new LanguageServerClient({
     transport: new Socket(`${ws}/lsp?proj=${projName}&t=${encodeURIComponent(token())}`),
     rootUri: `file://${root}`, workspaceFolders: [{ name: projName, uri: `file://${root}` }],
@@ -111,12 +115,12 @@ let opening = 0
 export async function openFile(p) {
   const yt = files.get(p)
   if (!yt) return
-  const my = ++opening, lang = await langFor(p)
+  const my = ++opening, [lang, vimKeys] = await Promise.all([langFor(p), settings.vim ? vimExt() : []])
   if (my !== opening) return // another file was opened meanwhile
   path = p
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
-    vimC.of(settings.vim ? vim({ status: true }) : []), basicSetup, themeC.of(themeExt()), lang, lspC.of([]), spellC.of(spellExt(p)),
+    vimC.of(vimKeys), basicSetup, themeC.of(themeExt()), lang, lspC.of([]), spellC.of(spellExt(p)),
     keymap.of([indentWithTab, ...yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
     yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,

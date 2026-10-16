@@ -3,9 +3,8 @@
 // which-key does), :w :e :q :vs :only :make, and :map that is remembered.
 // Esc is vim's: with vim keys, Space z, :q or the corner button leave focus.
 // ? lists them all.
-import { Vim, getCM } from '@replit/codemirror-vim'
 import { $, el, settings, saveSettings, MOD } from './util.js'
-import { view, open } from './editor.js'
+import { view, open, onVim } from './editor.js'
 import { actions } from './menu.js'
 
 const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save',
@@ -35,7 +34,7 @@ const stop = e => { e.preventDefault(); e.stopPropagation() }
 const typing = e => e.target.closest('input, textarea, select, [contenteditable]')
 // vim's normal or visual mode, nothing half typed
 const normal = e => {
-  const v = e.target.closest('.cm-content') && getCM(view)?.state.vim, s = v?.inputState
+  const v = e.target.closest('.cm-content') && view?.cm?.state.vim, s = v?.inputState
   return v && !v.insertMode && !s.operator && !s.keyBuffer.length && !s.prefixRepeat.length
 }
 
@@ -81,23 +80,25 @@ actions.shortcuts = () => {
   $('keys').showModal()
 }
 
-const ex = (cmd, short, f) => Vim.defineEx(cmd, short, (cm, p) => f(p.args?.join(' ') || ''))
-ex('write', 'w', () => actions.save())
-ex('edit', 'e', f => f ? open(f) : actions['quick-open']())
-ex('quit', 'q', () => actions.close())
-ex('vsplit', 'vs', () => actions['view-split']())
-ex('only', 'on', () => actions['view-editor']())
-ex('make', 'mak', () => actions.build())
-// :map and kin, kept in settings and made again at each start
-const MAPS = { map: ['map'], nmap: ['nm', 'normal'], imap: ['im', 'insert'], vmap: ['vm', 'visual'],
-  noremap: ['no', , 1], nnoremap: ['nn', 'normal', 1], inoremap: ['ino', 'insert', 1], vnoremap: ['vn', 'visual', 1] }
-const map = (cmd, lhs, rhs) => { const [, ctx, nore] = MAPS[cmd]; (nore ? Vim.noremap : Vim.map)(lhs, rhs, ctx) }
-for (const [cmd, [short]] of Object.entries(MAPS)) Vim.defineEx(cmd, short, (cm, { args = [] }) => {
-  const [lhs, rhs] = args
-  if (!rhs) return
-  map(cmd, lhs, rhs)
-  settings.vimrc = [...(settings.vimrc || []).filter(([c, l]) => c !== cmd || l !== lhs), [cmd, lhs, rhs]]
-  saveSettings()
+onVim.push(Vim => {
+  const ex = (cmd, short, f) => Vim.defineEx(cmd, short, (cm, p) => f(p.args?.join(' ') || ''))
+  ex('write', 'w', () => actions.save())
+  ex('edit', 'e', f => f ? open(f) : actions['quick-open']())
+  ex('quit', 'q', () => actions.close())
+  ex('vsplit', 'vs', () => actions['view-split']())
+  ex('only', 'on', () => actions['view-editor']())
+  ex('make', 'mak', () => actions.build())
+  // :map and kin, kept in settings and made again at each start
+  const MAPS = { map: ['map'], nmap: ['nm', 'normal'], imap: ['im', 'insert'], vmap: ['vm', 'visual'],
+    noremap: ['no', , 1], nnoremap: ['nn', 'normal', 1], inoremap: ['ino', 'insert', 1], vnoremap: ['vn', 'visual', 1] }
+  const map = (cmd, lhs, rhs) => { const [, ctx, nore] = MAPS[cmd]; (nore ? Vim.noremap : Vim.map)(lhs, rhs, ctx) }
+  for (const [cmd, [short]] of Object.entries(MAPS)) Vim.defineEx(cmd, short, (cm, { args = [] }) => {
+    const [lhs, rhs] = args
+    if (!rhs) return
+    map(cmd, lhs, rhs)
+    settings.vimrc = [...(settings.vimrc || []).filter(([c, l]) => c !== cmd || l !== lhs), [cmd, lhs, rhs]]
+    saveSettings()
+  })
+  Vim.defineEx('mapclear', 'mapc', () => { Vim.mapclear(); settings.vimrc = []; saveSettings() })
+  for (const m of settings.vimrc || []) map(...m)
 })
-Vim.defineEx('mapclear', 'mapc', () => { Vim.mapclear(); settings.vimrc = []; saveSettings() })
-for (const m of settings.vimrc || []) map(...m)
