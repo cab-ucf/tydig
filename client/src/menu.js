@@ -1,7 +1,7 @@
 // What every button and shortcut does (any element with data-act names an
 // action here), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
-import { $, settings, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
+import { $, settings, LAYOUT, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
   from './util.js'
 import { MODES } from './surprise.js'
 import { signOut, changePassword, deleteAccount } from './auth.js'
@@ -14,7 +14,7 @@ import { mode, openSidebar, toggleSide, checkpoint, cite } from './panels.js'
 import { openPicker, showShare, showGitRemote } from './dialogs.js'
 
 const flip = k => () => { settings[k] = !settings[k]; applyLayout() }
-const only = m => () => { settings.max = settings.max === m ? null : m; applyLayout() }
+const show = v => () => { settings.view = v; applyLayout() }
 const pane = m => () => openSidebar(m)
 const actions = {
   'new-file': () => newFile(), upload: () => uploadTo(), projects: openPicker, 'quick-open': quickOpen,
@@ -23,7 +23,8 @@ const actions = {
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
   undo: () => undo.get(path)?.undo(), redo: () => undo.get(path)?.redo(), comment: () => addComment(), cite,
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
-  'max-editor': only('editor'), 'max-preview': only('preview'),
+  'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
+  'reset-layout': () => { Object.assign(settings, LAYOUT); applyLayout() },
   focus: () => { flip('focus')(); view?.focus() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen()
     : document.documentElement.requestFullscreen(),
@@ -48,7 +49,6 @@ const HELP = { 'Mod-K': 'find any command', 'Mod-P': 'open a file', 'Mod-S': 'sa
   'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus' }
 for (const k of document.querySelectorAll('kbd')) k.textContent = k.textContent.replaceAll('Mod', MOD)
 for (const k of document.querySelectorAll('[title*="Mod-"]')) k.title = k.title.replaceAll('Mod', MOD)
-$('bar-cmd').textContent = `${MOD}-K`
 // a click on a menu opens it; anything else closes them
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act], .menu > button')
@@ -70,10 +70,9 @@ document.addEventListener('keydown', e => e.key === 'Escape' && !e.defaultPreven
 
 export function applyLayout() {
   const b = document.body, on = (c, x) => b.classList.toggle(c, !!x), t = theme()
-  b.dataset.m = settings.m
+  b.dataset.m = settings.m; b.dataset.view = settings.view
   for (const x of $('mtabs').querySelectorAll('[data-m]')) x.classList.toggle('on', x.dataset.m === settings.m)
   on('no-tree', !settings.treeOpen); on('focus', settings.focus)
-  on('max-editor', settings.max === 'editor'); on('max-preview', settings.max === 'preview')
   document.querySelectorAll('.sect-head').forEach(h => {
     h.parentNode.classList.toggle('closed', !settings[h.dataset.sect])
     h.firstElementChild.textContent = settings[h.dataset.sect] ? '▾' : '▸'
@@ -82,11 +81,14 @@ export function applyLayout() {
   $('scope').hidden = !settings.scope
   document.documentElement.dataset.theme = t; on('dark-preview', t !== 'light'); restyle()
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
+  $('zoom-pct').textContent = settings.zoom ? `${Math.round(100 * settings.zoom)}%` : 'Fit'
   fitText()
   $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
   for (const x of document.querySelectorAll('[data-check]')) {
     const k = x.dataset.check
-    x.classList.toggle('checked', k.startsWith('scope-') ? settings.scope?.by === k.slice(6) : !!settings[k])
+    const [key, is] = k.split('='), on = k.startsWith('scope-') ? settings.scope?.by === k.slice(6)
+      : is ? settings[key] === is : !!settings[key]
+    x.classList.toggle('checked', on); x.setAttribute('aria-pressed', on)
   }
   saveSettings()
 }
@@ -100,19 +102,19 @@ split.onpointerdown = e => {
   const left = $('editor').getBoundingClientRect().left, total = $('editor').offsetWidth + $('preview').offsetWidth
   split.setPointerCapture(e.pointerId)
   split.onpointermove = m => {
-    settings.split = Math.min(0.9, Math.max(0.1, (m.clientX - left) / total)); applyLayout()
+    settings.split = Math.min(0.8, Math.max(0.2, (m.clientX - left) / total)); applyLayout()
   }
   split.onpointerup = () => split.onpointermove = null
 }
 split.ondblclick = () => { settings.split = 0.5; applyLayout() }
 
 // Phones show one pane at a time, picked in the bottom tab bar; what their bar
-// has no room for moves: which file to compile above the preview, the word
-// count under the Edit tab, build into the tab bar.
+// has no room for moves: the word count under the Edit tab, build into the
+// tab bar.
 // (iOS zooms into a field under 16px when tapped; maximum-scale stops it.)
 if (/iP(hone|ad|od)/.test(navigator.userAgent))
   document.querySelector('meta[name=viewport]').content += ', maximum-scale=1'
-const moves = [['main-label', 'zoomctl', 'prepend'], ['wordcount', 'mt-edit', 'append'],
+const moves = [['wordcount', 'mt-edit', 'append'],
   ['bar-build', 'mtabs', 'append']].map(([id, to, how]) => [$(id), $(id).parentNode, $(id).nextSibling, $(to), how])
 const place = () => moves.forEach(([e, home, next, to, how]) => phone() ? to[how](e) : home.insertBefore(e, next))
 phoneQ.addEventListener('change', place); place()

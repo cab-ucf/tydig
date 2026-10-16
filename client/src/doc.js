@@ -28,7 +28,7 @@ export const provider = new HocuspocusProvider({
 provider.setAwarenessField('user', { ...user, colorLight: user.color })
 provider.on('status', ({ status }) => {
   $('status').dataset.state = status
-  $('status').textContent = { connected: 'online', connecting: 'connecting' }[status]
+  $('status').title = $('status').textContent = { connected: 'online', connecting: 'connecting' }[status]
     ?? 'offline (saving locally)'
 })
 

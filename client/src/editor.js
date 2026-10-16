@@ -96,8 +96,8 @@ const countWords = () => { // the prose, not the markup
 }
 const show = (state, ...dom) => {
   view?.destroy()
-  $('editor').replaceChildren(...dom)
-  view = state && new EditorView({ state, parent: $('editor') })
+  $('cm').replaceChildren(...dom); $('filepath').textContent = path || ''
+  view = state && new EditorView({ state, parent: $('cm') })
   countWords(); renderTree()
 }
 

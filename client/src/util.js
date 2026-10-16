@@ -16,11 +16,16 @@ export const dot = (color, title = '') =>
 // randomUUID exists only in secure contexts; a hub on plain-http LAN is not one
 export const uid = () => crypto.getRandomValues(new Uint32Array(4)).join('-')
 
+// the layout: which panes, and the editor's share of the two; Reset layout's
+export const LAYOUT = { view: 'split', treeOpen: true, sideOpen: false, focus: false, split: 0.5, zoom: null }
 export const settings = {
-  vim: false, lsp: true, spell: true, theme: null, m: 'edit', ghost: null, scope: null, treeOpen: true,
-  sideOpen: false, focus: false, projectsOpen: true, filesOpen: true,
-  zoom: null, split: 0.5, max: null, ...JSON.parse(localStorage.settings || '{}'),
+  vim: false, lsp: true, spell: true, theme: null, m: 'edit', ghost: null, scope: null,
+  projectsOpen: true, filesOpen: true, ...LAYOUT, ...JSON.parse(localStorage.settings || '{}'),
 }
+// what an older tydig left, or a bad drag: never a layout without a way back
+if ('max' in settings) { settings.view = settings.max || 'split'; delete settings.max }
+if (!['editor', 'split', 'preview'].includes(settings.view)) settings.view = 'split'
+settings.split = Math.min(0.8, Math.max(0.2, +settings.split || 0.5))
 export const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // dark, cyber or light; the system's until Alt-D picks one
 export const system = matchMedia('(prefers-color-scheme: light)')

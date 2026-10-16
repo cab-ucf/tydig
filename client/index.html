@@ -43,10 +43,14 @@
         <button data-act="checklist">Grant checklist</button>
         <button data-act="review">Changes made while away</button>
         <hr/>
+        <button data-act="view-editor" data-check="view=editor">Editor only</button>
+        <button data-act="view-split" data-check="view=split">Editor and preview</button>
+        <button data-act="view-preview" data-check="view=preview">Preview only</button>
+        <hr/>
         <button data-act="toggle-tree" data-check="treeOpen">File tree</button>
         <button data-act="toggle-side" data-check="sideOpen">Side panel</button>
-        <button data-act="max-editor">Editor only</button>
-        <button data-act="max-preview">Preview only</button>
+        <button data-act="reset-layout">Reset layout</button>
+        <hr/>
         <button data-act="focus" data-check="focus">Focus: the text alone<kbd>Esc leaves</kbd></button>
         <button data-act="fullscreen">Full screen</button>
         <button data-act="theme">Theme: dark, cyberpunk, light</button>
@@ -80,16 +84,29 @@
     <span id="projname"></span>
     <span id="peers" title="who is here"></span>
     <span class="spacer"></span>
-    <label id="main-label">compile <select id="main-sel"></select></label>
-    <button id="bar-comment" data-act="comment" title="Comment on the selected text (Mod-Alt-M)">comment</button>
-    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references">cite</button>
-    <button id="bar-build" data-act="build" title="Run the project's build (make)">build</button>
-    <button id="bar-check" data-act="checklist" title="What the application needs, and what is here" hidden>checklist</button>
-    <button id="bar-chat" data-act="discuss" title="Comments and the Discussion">discuss<b class="badge" hidden></b></button>
-    <button id="bar-share" data-act="share" class="go" title="Invite people; the link they open">share</button>
-    <span id="wordcount" title="words in this file"></span>
+    <button id="bar-cmd" data-act="palette" title="Find any command"><span>Find a command</span><kbd>Mod-K</kbd></button>
+    <span class="spacer"></span>
+    <button id="bar-comment" data-act="comment" title="Comment on the selected text (Mod-Alt-M)">Comment</button>
+    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references">Cite</button>
+    <button id="bar-build" data-act="build" title="Run the project's build (make)">Build</button>
+    <button id="bar-check" data-act="checklist" title="What the application needs, and what is here" hidden>Checklist</button>
+    <button id="bar-chat" data-act="discuss" title="Comments and the Discussion">Discuss<b class="badge" hidden></b></button>
     <button id="scope" class="tgl" data-act="scope-next" hidden></button>
-    <button id="bar-cmd" class="tgl" data-act="palette" title="Find any command">Mod-K</button>
+    <span id="views" role="group" aria-label="layout">
+      <button data-act="toggle-tree" data-check="treeOpen" title="File tree"><svg viewBox="0 0 16 16">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11"/></svg></button>
+      <span class="seg">
+        <button data-act="view-editor" data-check="view=editor" title="Editor only"><svg viewBox="0 0 16 16">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6h7M4.5 8.5h7M4.5 11h4"/></svg></button>
+        <button data-act="view-split" data-check="view=split" title="Editor and preview"><svg viewBox="0 0 16 16">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg></button>
+        <button data-act="view-preview" data-check="view=preview" title="Preview only"><svg viewBox="0 0 16 16">
+          <path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5"/></svg></button>
+      </span>
+      <button data-act="toggle-side" data-check="sideOpen" title="Side panel"><svg viewBox="0 0 16 16">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10.5 2.5v11"/></svg></button>
+    </span>
+    <button id="bar-share" data-act="share" class="go" title="Invite people; the link they open">Share</button>
     <span id="me"></span>
     <span id="status" data-state="connecting">connecting</span>
   </header>
@@ -102,20 +119,27 @@
       </div>
       <div class="sect grow">
         <div class="sect-head" data-sect="filesOpen"><span class="tw">&#9662;</span> files
-          <span><button id="new-file" data-act="new-file" title="New file (use / for directories)">+file</button>
-          <button id="upload" data-act="upload" title="Upload binary (image, data)">up</button></span></div>
+          <span><button id="new-file" data-act="new-file" title="New file (use / for directories)">+</button>
+          <button id="upload" data-act="upload" title="Upload files or an archive">&uarr;</button></span></div>
         <div class="sect-body" id="tree"></div>
       </div>
       <input id="upload-input" type="file" hidden multiple />
     </nav>
-    <section id="editor"></section>
+    <section id="editor">
+      <div class="pane-head"><span id="filepath"></span><span id="wordcount" title="words in this file"></span></div>
+      <div id="cm"></div>
+    </section>
     <div id="split" title="drag to resize; double-click to even out"></div>
     <section id="preview">
-      <div id="zoomctl">
-        <button data-z="-">&minus;</button><button data-z="fit">fit</button><button data-z="+">+</button>
+      <div class="pane-head" id="zoomctl">
+        <label id="main-label">Compile <select id="main-sel"></select></label><span class="spacer"></span>
+        <button data-z="-" title="Zoom out">&minus;</button><button data-z="fit" id="zoom-pct"
+          title="Fit the pane">Fit</button><button data-z="+" title="Zoom in">+</button>
       </div>
-      <div id="page"></div><pre id="diag" hidden></pre>
-      <button id="pv-comment" hidden title="Comment on the selected text (Mod-Alt-M)">comment</button>
+      <div id="pv">
+        <div id="page"></div><pre id="diag" hidden></pre>
+        <button id="pv-comment" hidden title="Comment on the selected text (Mod-Alt-M)">comment</button>
+      </div>
     </section>
     <aside id="side" hidden>
       <div id="side-head"><nav id="side-tabs"></nav><span id="side-title"></span>

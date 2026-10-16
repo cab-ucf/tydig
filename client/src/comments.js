@@ -168,7 +168,7 @@ function previewContext() {
 // A button follows a selection in the preview. Its context is taken now: a
 // re-render (someone typing) would drop the selection before the click.
 document.addEventListener('mouseup', () => setTimeout(() => {
-  const ctx = previewContext(), b = $('pv-comment'), pv = $('preview')
+  const ctx = previewContext(), b = $('pv-comment'), pv = $('pv')
   if (b.hidden = !ctx) return
   const r = getSelection().getRangeAt(0).getBoundingClientRect(), p = pv.getBoundingClientRect()
   b.style.left = `${r.right - p.left + pv.scrollLeft}px`

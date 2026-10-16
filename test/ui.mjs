@@ -100,7 +100,7 @@ await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.
 await page.keyboard.type('discussion'); await page.keyboard.press('Enter'); await sleep(500)
 check('Ctrl-K finds a command and runs it', (await side()).title === 'discussion')
 // a selection in the editor offers to comment on it; Ctrl-B makes it bold
-await page.click('.cm-content'); await page.keyboard.press('End'); await page.keyboard.down('Shift'); await page.keyboard.press('Home'); await page.keyboard.up('Shift'); await sleep(300)
+await page.click('.cm-line:nth-child(22)'); await page.keyboard.press('End'); await page.keyboard.down('Shift'); await page.keyboard.press('Home'); await page.keyboard.up('Shift'); await sleep(300)
 check('selected text offers a comment button', await page.evaluate(() => !!document.querySelector('.cm-ask')))
 await page.keyboard.press('ArrowRight'); await page.keyboard.type(' boldme'); for (let i = 0; i < 6; i++) await page.keyboard.down('Shift'), await page.keyboard.press('ArrowLeft'), await page.keyboard.up('Shift')
 await page.keyboard.down('Control'); await page.keyboard.press('b'); await page.keyboard.up('Control'); await sleep(200)
@@ -236,6 +236,16 @@ await page.click('#toast'); await sleep(600)
 check('a click on the note opens the Discussion, and the count clears', (await side()).title === 'discussion' &&
   await page.evaluate(() => document.querySelector('#bar-chat .badge').hidden && !/^\(/.test(document.title)))
 beaDoc.provider.destroy()
+
+// the layout: one of three views, each a button in the bar; Reset layout restores the standard
+const vis = () => page.evaluate(() => ['editor', 'preview', 'side']
+  .map(id => getComputedStyle(document.getElementById(id)).display !== 'none' ? id[0] : '-').join(''))
+await page.evaluate(() => document.querySelector('#menubar [data-act=comments]').click())
+await page.click('#views [data-act=view-editor]'); const onlyEd = await vis()
+await page.click('#views [data-act=view-preview]'); const onlyPv = await vis()
+await page.evaluate(() => document.querySelector('#menubar [data-act=reset-layout]').click()); await sleep(200)
+check('editor only, preview only, then Reset layout brings back both, panel closed', onlyEd === 'e-s' && onlyPv === '-ps' &&
+  await vis() === 'ep-' && await page.evaluate(() => document.querySelector('#views [data-act=view-split]').ariaPressed === 'true'))
 
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
