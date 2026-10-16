@@ -47,8 +47,9 @@
         <button data-act="view-split" data-check="view=split">Editor and preview</button>
         <button data-act="view-preview" data-check="view=preview">Preview only</button>
         <hr/>
-        <button data-act="toggle-tree" data-check="treeOpen">File tree</button>
-        <button data-act="toggle-side" data-check="sideOpen">Side panel</button>
+        <button data-act="toggle-preview">Show or hide the preview<kbd>Mod-\</kbd></button>
+        <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Mod-Shift-E</kbd></button>
+        <button data-act="toggle-side" data-check="sideOpen">Side panel<kbd>Mod-J</kbd></button>
         <button data-act="reset-layout">Reset layout</button>
         <hr/>
         <button data-act="focus" data-check="focus">Focus: the text alone<kbd>Esc leaves</kbd></button>
@@ -76,7 +77,7 @@
       </div></div>
       <div class="menu"><button>Help</button><div class="dropdown">
         <button data-act="palette">Find a command<kbd>Mod-K</kbd></button>
-        <button data-act="shortcuts">Shortcuts</button>
+        <button data-act="shortcuts">Keyboard shortcuts<kbd>?</kbd></button>
         <a href="docs/" target="_blank" rel="noopener">tydig docs</a>
         <a href="https://typst.app/docs/" target="_blank" rel="noopener">Typst docs</a>
       </div></div>
@@ -93,17 +94,17 @@
     <button id="bar-chat" data-act="discuss" title="Comments and the Discussion">Discuss<b class="badge" hidden></b></button>
     <button id="scope" class="tgl" data-act="scope-next" hidden></button>
     <span id="views" role="group" aria-label="layout">
-      <button data-act="toggle-tree" data-check="treeOpen" title="File tree"><svg viewBox="0 0 16 16">
+      <button data-act="toggle-tree" data-check="treeOpen" title="File tree (Mod-Shift-E)"><svg viewBox="0 0 16 16">
         <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11"/></svg></button>
       <span class="seg">
         <button data-act="view-editor" data-check="view=editor" title="Editor only"><svg viewBox="0 0 16 16">
           <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6h7M4.5 8.5h7M4.5 11h4"/></svg></button>
-        <button data-act="view-split" data-check="view=split" title="Editor and preview"><svg viewBox="0 0 16 16">
+        <button data-act="view-split" data-check="view=split" title="Editor and preview (Mod-\)"><svg viewBox="0 0 16 16">
           <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg></button>
         <button data-act="view-preview" data-check="view=preview" title="Preview only"><svg viewBox="0 0 16 16">
           <path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5"/></svg></button>
       </span>
-      <button data-act="toggle-side" data-check="sideOpen" title="Side panel"><svg viewBox="0 0 16 16">
+      <button data-act="toggle-side" data-check="sideOpen" title="Side panel (Mod-J)"><svg viewBox="0 0 16 16">
         <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10.5 2.5v11"/></svg></button>
     </span>
     <button id="bar-share" data-act="share" class="go" title="Invite people; the link they open">Share</button>
@@ -152,6 +153,9 @@
     <button data-m="preview">Preview</button><button data-m="side">Discuss<b class="badge" hidden></b></button>
   </nav>
   <button id="focus-exit" data-act="focus" title="leave focus (Esc)">⤢ leave focus</button>
+  <dialog id="keys"><h3>Keyboard shortcuts</h3><div id="keys-body"></div>
+    <form method="dialog" class="dlg-close"><button>close</button></form></dialog>
+  <div id="leader" hidden></div>
   <dialog id="qo"><input id="qo-input" /><div id="qo-list"></div></dialog>
   <dialog id="picker">
     <h3>Projects</h3>

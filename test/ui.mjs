@@ -247,6 +247,18 @@ await page.evaluate(() => document.querySelector('#menubar [data-act=reset-layou
 check('editor only, preview only, then Reset layout brings back both, panel closed', onlyEd === 'e-s' && onlyPv === '-ps' &&
   await vis() === 'ep-' && await page.evaluate(() => document.querySelector('#views [data-act=view-split]').ariaPressed === 'true'))
 
+// keys: Mod-\ hides the preview; in vim, Space 3 is the preview alone, :only the editor; ? lists them
+const v = () => page.evaluate(() => document.body.dataset.view), key = async (...k) => { for (const x of k) await page.keyboard.press(x); await sleep(150) }
+await page.keyboard.down('Control'); await key('Backslash'); await page.keyboard.up('Control'); const hid = await v()
+await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
+await page.click('.cm-line:nth-child(22)'); await key('Escape', 'Space', '3'); const leader = await v()
+await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click())
+await page.click('.cm-line:nth-child(22)'); await key('Escape'); await page.keyboard.type(':only'); await key('Enter'); const ex = await v()
+await page.click('#projname'); await key('?'); const help = await page.evaluate(() => document.getElementById('keys').open)
+await key('Escape'); await page.evaluate(() => { document.querySelector('#menubar [data-act=vim]').click(); document.querySelector('#menubar [data-act=reset-layout]').click() })
+check('Mod-\\ hides the preview; in vim Space 3 shows it alone, :only the editor; ? lists the keys',
+  hid === 'editor' && leader === 'preview' && ex === 'editor' && help)
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)

@@ -56,7 +56,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   font: 500 .8rem var(--sans); background: none; color: var(--fg-dim); border: 0; border-radius: 6px;
 }
 :is(#bar, .pane-head) button:not(.dropdown *):hover { background: var(--ink-3); color: var(--hi); }
-button:focus-visible, select:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
+:is(button, select, a, input):focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 #bar button.go { background: var(--teal); color: var(--on-teal); padding: 0 .9rem; }
 #bar button.go:hover { filter: brightness(1.1); }
 .tgl { font-size: .75rem !important; }
@@ -97,6 +97,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--teal); out
 #status[data-state="connected"] { font-size: 0; }
 #status[data-state="connected"]::before { font-size: .7rem; }
 /* narrower: what the menus also hold goes from the bar first */
+@media (max-width: 1360px) { #bar-cmd span { display: none; } }
 @media (max-width: 1280px) { #peers, #me { display: none; } }
 @media (max-width: 1100px) { #bar-cite, #bar-check, #bar-comment, #bar-build { display: none !important; } }
 #status[data-state="connected"] { color: var(--teal); }
@@ -358,9 +359,10 @@ textarea.say {
 .dl.same { color: var(--fg-dim); }
 
 /* ---- dialogs ---- */
-dialog { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 8px; padding: 1.2rem 1.5rem; }
+dialog { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 12px; padding: 1.3rem 1.5rem;
+  box-shadow: 0 16px 48px #0006; }
 dialog::backdrop { background: #0009; }
-dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; color: var(--teal); }
+dialog h3 { margin: 0 0 .9rem; font: 600 1rem var(--sans); color: var(--hi); }
 .go { background: var(--teal); border: none; border-radius: 4px; color: var(--on-teal); cursor: pointer; padding: .35rem .8rem; }
 .danger { color: var(--red); border-color: #e0574f66; }
 .err { color: var(--red); }
@@ -369,7 +371,7 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
   flex: 1; min-width: 0; padding: .35rem .5rem; font: .8rem var(--mono);
   background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 4px;
 }
-.row select { flex: 0; }
+.row select { flex: none; font-family: var(--sans); }
 .dlg-close { margin-top: .6rem; text-align: right; }
 .dlg-close button {
   background: none; border: 1px solid var(--ink-3); border-radius: 4px; color: var(--fg-dim);
@@ -378,12 +380,13 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
 #picker { min-width: 320px; }
 #proj-list { display: flex; flex-direction: column; gap: .3rem; margin-bottom: 1rem; }
 #proj-list a {
-  color: var(--fg); font-family: var(--mono); text-decoration: none; padding: .35rem .6rem;
+  color: var(--fg); font-family: var(--sans); text-decoration: none; padding: .35rem .6rem;
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 5px;
 }
 #proj-list a:hover { border-color: var(--teal); }
 #proj-list a.current { border-color: var(--teal); color: var(--teal); }
-#share { min-width: 340px; padding: 1.1rem 1.3rem; }
+#share { width: min(560px, 94vw); }
+#share h3 + * h3, #share-body h3 { font-size: .9rem; margin-top: 1.2rem; }
 .share-list { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .7rem; }
 .share-row { display: flex; gap: .5rem; align-items: center; font: .8rem var(--sans); padding: .3rem .5rem; background: var(--ink-2); border-radius: 5px; }
 .share-row span { flex: 1; }
@@ -396,6 +399,28 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
   display: block; width: 100%; margin: .35rem 0; font: .7rem var(--mono); resize: none;
   background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 4px;
 }
+/* the list of keys, two columns; the vim leader's, at the foot of the screen */
+#keys { width: min(860px, 94vw); max-height: 88vh; }
+#keys-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 2rem; }
+#keys h4 { margin: .9rem 0 .4rem; font: 600 .7rem var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim); }
+#keys dl { display: grid; grid-template-columns: auto 1fr; gap: .3rem .8rem; margin: 0; font-size: .8rem; align-items: center; }
+#keys dd { margin: 0; }
+#keys dt { display: flex; gap: .25rem; }
+kbd { font: .7rem var(--mono); padding: .1rem .35rem; border: 1px solid var(--ink-3); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--ink-2); color: var(--fg); white-space: nowrap; }
+.dropdown kbd { border: 0; background: none; padding: 0; }
+#leader {
+  position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 70; padding: .8rem 1rem;
+  width: min(64rem, 94vw); columns: 4 14rem; column-gap: 1.5rem; font-size: .8rem;
+  background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 10px; box-shadow: 0 8px 28px #0008;
+}
+#leader div { display: flex; align-items: baseline; gap: .6rem; padding: .2rem 0; break-inside: avoid; }
+#leader kbd { min-width: 3.2rem; text-align: center; }
+#leader[hidden] { display: none; }
+/* vim's mode and : line, quiet under the text */
+.cm-vim-panel { padding: .15rem .6rem !important; font: .75rem var(--mono) !important; background: var(--ink) !important;
+  color: var(--fg-dim); border-top: 1px solid var(--ink-3); }
+.cm-vim-panel input { color: var(--fg); background: none; }
 #qo { padding: .5rem; min-width: 420px; margin-top: 8vh; }
 #qo::backdrop { background: #0006; }
 #qo-input {
@@ -404,7 +429,8 @@ dialog h3 { margin: 0 0 .8rem; font-variant: small-caps; letter-spacing: .08em; 
 }
 #qo-input:focus { border-color: var(--teal); }
 #qo-list { margin-top: .35rem; display: flex; flex-direction: column; }
-#qo-list div { font: .8rem var(--mono); color: var(--fg); padding: .3rem .55rem; border-radius: 4px; cursor: pointer; }
+#qo-list div { display: flex; justify-content: space-between; gap: 1rem; font: .82rem var(--sans); color: var(--fg);
+  padding: .35rem .6rem; border-radius: 5px; cursor: pointer; }
 #qo-list div:hover, #qo-list div.sel { background: var(--ink-3); }
 
 #toast {

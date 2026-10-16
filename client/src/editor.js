@@ -54,7 +54,7 @@ const themeExt = () => PALETTES[theme()] ? [PALETTES[theme()], dark] : []
 export function restyle() { view?.dispatch({ effects: themeC.reconfigure(themeExt()) }) }
 export function toggleVim() {
   settings.vim = !settings.vim; applyLayout()
-  view?.dispatch({ effects: vimC.reconfigure(settings.vim ? vim() : []) })
+  view?.dispatch({ effects: vimC.reconfigure(settings.vim ? vim({ status: true }) : []) })
 }
 
 // spelling and grammar (spell.js), in .typ files
@@ -115,7 +115,7 @@ export async function openFile(p) {
   path = p
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
-    vimC.of(settings.vim ? vim() : []), basicSetup, themeC.of(themeExt()), lang, lsp, spellC.of(spellExt(p)),
+    vimC.of(settings.vim ? vim({ status: true }) : []), basicSetup, themeC.of(themeExt()), lang, lsp, spellC.of(spellExt(p)),
     keymap.of([indentWithTab, ...yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
     yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,

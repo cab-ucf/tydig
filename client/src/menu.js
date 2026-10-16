@@ -1,5 +1,5 @@
-// What every button and shortcut does (any element with data-act names an
-// action here), and the layout: panes, themes, focus mode, the
+// What every button and key does (any element with data-act names an
+// action here; keys.js binds the keys), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
 import { $, settings, LAYOUT, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
   from './util.js'
@@ -16,7 +16,7 @@ import { openPicker, showShare, showGitRemote } from './dialogs.js'
 const flip = k => () => { settings[k] = !settings[k]; applyLayout() }
 const show = v => () => { settings.view = v; applyLayout() }
 const pane = m => () => openSidebar(m)
-const actions = {
+export const actions = {
   'new-file': () => newFile(), upload: () => uploadTo(), projects: openPicker, 'quick-open': quickOpen,
   save: () => checkpoint('save'), checkpoint: () => checkpoint(), 'export-pdf': exportPdf, 'export-docx': exportDocx,
   'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
@@ -24,6 +24,7 @@ const actions = {
   undo: () => undo.get(path)?.undo(), redo: () => undo.get(path)?.redo(), comment: () => addComment(), cite,
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
   'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
+  'toggle-preview': () => show(settings.view === 'split' ? 'editor' : 'split')(),
   'reset-layout': () => { Object.assign(settings, LAYOUT); applyLayout() },
   focus: () => { flip('focus')(); view?.focus() },
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen()
@@ -39,14 +40,7 @@ const actions = {
   palette: () => choose([...document.querySelectorAll('#menubar [data-act]')].map(b => ({
     label: b.firstChild.textContent.trim(), hint: b.querySelector('kbd')?.textContent,
     run: () => actions[b.dataset.act]() })), 'find a command...'),
-  shortcuts: () => alert(Object.entries(HELP).map(([k, v]) => `${k.replaceAll('Mod', MOD).padEnd(14)}${v}`).join('\n')),
 }
-// Few keys, each what other editors use, none an Alt-letter (browser menus,
-// a Mac's Option characters, AltGr layouts). Everything else: Mod-K.
-const KEYS = { 'mod+k': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save', 'mod+alt+m': 'comment' }
-const HELP = { 'Mod-K': 'find any command', 'Mod-P': 'open a file', 'Mod-S': 'save: commit, sign, push',
-  'Mod-Alt-M': 'comment on the selection', 'Mod-B Mod-I': 'bold, italic', 'Mod-Z Mod-Shift-Z': 'undo, redo',
-  'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus' }
 for (const k of document.querySelectorAll('kbd')) k.textContent = k.textContent.replaceAll('Mod', MOD)
 for (const k of document.querySelectorAll('[title*="Mod-"]')) k.title = k.title.replaceAll('Mod', MOD)
 // a click on a menu opens it; anything else closes them
@@ -58,15 +52,6 @@ document.addEventListener('click', e => {
 })
 // buttons that act on the selection must not take it away
 for (const id of ['pv-comment', 'bar-comment', 'bar-cite']) $(id).onmousedown = e => e.preventDefault()
-// capture: before CodeMirror sees the key; never AltGr (a character there)
-document.addEventListener('keydown', e => {
-  if (e.getModifierState('AltGraph') || !(e.ctrlKey || e.metaKey)) return
-  const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : e.code.replace(/^Key/, '').toLowerCase()
-  const act = KEYS[`mod+${e.altKey ? 'alt+' : ''}${e.shiftKey ? 'shift+' : ''}${k}`]
-  if (act) { e.preventDefault(); e.stopPropagation(); actions[act]() }
-}, true)
-// Esc leaves focus, unless the editor wanted it (a suggestion, vim)
-document.addEventListener('keydown', e => e.key === 'Escape' && !e.defaultPrevented && settings.focus && actions.focus())
 
 export function applyLayout() {
   const b = document.body, on = (c, x) => b.classList.toggle(c, !!x), t = theme()

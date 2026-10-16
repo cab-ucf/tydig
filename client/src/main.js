@@ -9,7 +9,8 @@
 //   panels.js    side panel: history and checkpoints, build, checklist,
 //                template switch, changes made while away
 //   dialogs.js   projects, sharing (members, invites, agents), git remote
-//   menu.js      menubar actions, shortcuts, layout
+//   menu.js      menubar actions, layout
+//   keys.js      keys: Mod-, vim's leader and ex commands, the list
 //   auth.js (sign-in, account), link.js (a hub reached by its link),
 //   cite.js (citations), spell.js (spelling and grammar), surprise.js
 //   (surprise engine), prov.js (signing)
@@ -24,6 +25,7 @@ import { refreshDisk } from './tree.js'
 import { openSidebar } from './panels.js'
 import { renderProjects } from './dialogs.js'
 import { applyLayout } from './menu.js'
+import './keys.js'
 
 $('projname').textContent = projName
 // who this is: your cursor's colour and name in the bar, the address in Settings

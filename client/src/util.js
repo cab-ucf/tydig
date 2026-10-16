@@ -75,7 +75,7 @@ export function choose(items, placeholder) {
   input.placeholder = placeholder; input.value = ''; sel = 0; render()
   input.oninput = () => { sel = 0; render() }
   input.onkeydown = e => {
-    const k = { ArrowDown: 1, ArrowUp: -1 }[e.key]
+    const k = { ArrowDown: 1, ArrowUp: -1, ...e.ctrlKey && { j: 1, n: 1, k: -1, p: -1 } }[e.key]
     if (k) { sel = Math.max(0, sel + k); render() } else if (e.key === 'Enter') list.children[sel]?.click()
     else return
     e.preventDefault()
