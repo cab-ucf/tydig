@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="#239dad" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-  <title>tydig</title>
-  <!-- a t that is a Feynman diagram: a photon (the bar) meets a fermion (the stem, Typst's hooked t) at a vertex -->
-  <path d="M3 11q2.17-3.6 4.33 0t4.33 0 4.33 0 4.33 0 4.33 0 4.33 0"/>
-  <path d="M16 3v18q0 7 7 7h5"/>
-  <path d="M16 20.5l-2.9-4.6h5.8z" fill="#239dad" stroke-width="1"/>
-  <circle cx="16" cy="11" r="3" fill="#239dad" stroke="none"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><text x="16" y="27" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="32" fill="#239dad">t</text></svg>
