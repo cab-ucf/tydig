@@ -1,0 +1,78 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the description, summary, budget and letters all follow.
+# NSF 26-512, Unlocking Dataset Value for AI-Enabled Scientific Discovery:
+# existing scientific datasets made ready for AI. Due the first Wednesday of
+# November (November 4, 2026), 5 p.m. local time. Questions, and Flagships
+# early: aidatasets@nsf.gov.
+title: "AIDatasets:Impact: One harmonized atlas of soil microbial communities, ready for AI"
+nofo: NSF 26-512
+years: 3
+style: american-chemical-society
+
+mechanism:
+  code: AI Datasets
+  name: Unlocking Dataset Value for AI-Enabled Scientific Discovery (NSF 26-512)
+  # The track is the prefix's middle: AIDatasets:Impact: (up to $2,000,000),
+  # AIDatasets:Flagship: ($5,000,000) or AIDatasets:Planning: ($200,000);
+  # set cap: to match. A Flagship adds section 5, Flagship Justification.
+  prefix: "AIDatasets:Impact:"
+  budget_rule: >-
+    Impact up to $2,000,000, Flagship up to $5,000,000, both up to three
+    years; Planning up to $200,000. No cost sharing. Travel to an annual
+    in-person meeting (a PI meeting, NSF's NAIRR community meeting, or one
+    in the discipline) is expected, besides twice-yearly virtual ones.
+  cap: { award: 2000000 }
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+
+limits: { description: 15 }   # pages, Results from Prior NSF Support within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Computer Science
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    prior: { award: OAC-0000000, amount: "$600,000", period: 2022-2025, title: An earlier related project }
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: co-PI
+
+# The existing datasets this enhances: section 1 tabulates them.
+datasets:
+  - { name: Example Soil Survey, holds: 16S and metagenome samples with site metadata, size: "40 TB, 120,000 samples", community: soil and microbial ecologists }
+  - { name: Example Climate Reanalysis, holds: gridded hourly weather since 1950, size: 2 PB, community: Earth system scientists }
+
+# The Project Summary's last line: 2 to 5 keywords or phrases, most important
+# first, naming the directorates or scientific communities that benefit most.
+keywords: [Biological Sciences, Geosciences, microbial ecology, soil carbon]
+
+program:
+  name: AI Datasets
+  contact: aidatasets@nsf.gov
+  # NSF 26-512's measures of success: advance one or more
+  measures:
+    - Datasets expanded or established
+    - New technologies or techniques for leveraged AI or AI-guided exploration established
+    - Undergraduates and graduate students trained in AI use of scientific datasets
+    - New built infrastructure that leverages existing datasets
+    - Research facility usage
+
+# The enhancements, each an aim of section 2, Research plan.
+aims:
+  - title: Harmonize the samples
+    summary: One schema and one set of units across both datasets, every value traced to its source.
+  - title: Generate the metadata AI needs
+    summary: Site, method and quality labels inferred where missing, and marked as inferred.
+  - title: Join soil to weather
+    summary: Each sample linked to the climate it lived through, at the resolution that matters.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators:
+  - { name: Mary Somerville, title: Data Manager, organization: Example Soil Survey }

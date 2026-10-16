@@ -20,6 +20,16 @@ focused.
   share of effort, adding to 100). `make` cuts it at `references`.
 - `#todo[...]` (grey) says what a passage must cover. Replace it with the
   text; never leave one in a finished section.
+- The abstract (`summary.typ`): the laboratory's research, its goals for
+  the next five years, and the program's overall vision; no aims there
+  either.
+- The biosketch (made in SciENcv, uploaded into `docs/`): the PD/PI's only,
+  and of collaborators the MIRA pays. Tailor the personal statement to the
+  MIRA (mentoring, and service to the community beyond what the institution
+  expects; no person-months or dollars for listed projects); contributions
+  to science from the past five years, without figures or preliminary data.
+- A renewal (`mechanism.renewal: true`, established MIRA): Recent progress is
+  the current MIRA's; reviewers weigh it.
 - `summary.typ`, `narrative.typ`, `budget.typ`, `resources.typ`,
   `dmsp.typ`, `letters.typ`: one NIH attachment each.
 - `lib/nih.typ`: NIH formatting; `lib/grant.typ`: the `section` and `letter` helpers.

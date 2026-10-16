@@ -14,6 +14,8 @@ mechanism:
   cap: { year: 750000 }
   modular: false
   effort: 45              # percent of total research effort, at least, on the MIRA
+  renewal: false          # true for a renewal: Recent progress is the current MIRA's, and a
+                          # Progress Report Publication List is due (no resubmissions)
   forbid: [aims?]         # the word withdraws the application
 
 institution:

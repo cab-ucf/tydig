@@ -7,7 +7,7 @@
   == Overview
   #todo[What the project does and for whom, in plain terms.]
   This project pursues #G.aims.len() aims:
-  #G.aims.enumerate().map(((i, a)) => [(#(i + 1)) #lower(a.title)]).join("; ", last: "; and ").
+  #G.aims.enumerate().map(((i, a)) => [(#(i + 1)) #lower(a.title.first())#a.title.slice(a.title.first().len())]).join("; ", last: "; and ").
 
   == Intellectual Merit
   #todo[The new knowledge, and why it matters to the field.]

@@ -1,0 +1,68 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the description, summary, budget and letters all follow.
+# NSF 26-515, Civil, Mechanical and Manufacturing Innovation (CMMI): one
+# solicitation for its programs, proposals accepted any time. Before
+# submitting, email the program director onepager.typ (strongly encouraged;
+# guidance, not review).
+title: Programmable damping in architected lattices for resilient structures
+nofo: NSF 26-515
+years: 3                  # up to five where the work warrants it; commensurate with its scope
+style: american-society-of-civil-engineers
+
+mechanism:
+  code: CMMI
+  name: Engineering (ENG) Civil, Mechanical and Manufacturing Innovation (NSF 26-515)
+  budget_rule: >-
+    No set size or length: commensurate with the scope, up to five years
+    where that suits the work. No cost sharing. Collaborations between
+    organizations go through Research.gov.
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+
+limits: { description: 15 }   # pages, Results from Prior NSF Support (at most 5) within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Mechanical and Aerospace Engineering
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    prior: { award: CMMI-0000000, amount: "$420,000", period: 2022-2025, title: An earlier related project }
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: co-PI
+
+program:
+  # Advanced Manufacturing, Design, and Operations (AMDO); Engineering for the
+  # Built Environment (EBE); Intelligent and Interactive Dynamic Systems
+  # (IIDS); Mechanics of Advanced Materials Systems (MAMS). Spanning more than
+  # one is welcome: name them all, and their program directors.
+  name: Mechanics of Advanced Materials Systems (MAMS)
+  director: Dr. Example Director
+  contact: example@nsf.gov
+  rigor: true             # NSF 26-515 asks for rigor, transparency, reproducibility, integrity
+  # NSF 26-515's measures of success
+  measures:
+    - Publications
+    - Datasets
+    - Patents
+    - New techniques or technologies
+    - Students and postdoctoral researchers supported or trained
+
+aims:
+  - title: Design lattices whose damping can be programmed
+    summary: We find the cell geometries whose energy loss can be set after they are built.
+  - title: Build and test them at structural scale
+    summary: We print and load full-size members, and measure what they dissipate.
+  - title: Predict it before building
+    summary: We validate a model that gives damping from geometry alone.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators:
+  - { name: Mary Somerville, title: Senior Engineer, organization: Example Structures Laboratory }

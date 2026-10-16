@@ -1,8 +1,9 @@
-// The Project Description (15 pages, Results from Prior NSF Support within
-// them) and References Cited: one document, so @citations resolve, cut where
-// References Cited starts by `make`. Facts come from grant.yaml; program:
-// there adds the sections a program asks for (GOALI, instrument development,
-// measures of success). A grey [prompt] is what reviewers look for there.
+// The Project Description (limits: description pages, Results from Prior NSF
+// Support within them) and References Cited: one document, so @citations
+// resolve, cut where References Cited starts by `make`. Facts come from
+// grant.yaml; program: there adds the sections a program asks for (EAGER,
+// GOALI, instrument development, rigor, measures of success). A grey
+// [prompt] is what reviewers look for there.
 #import "/lib/nsf.typ": *
 #show: nsf
 #let P = G.program
@@ -11,6 +12,14 @@
   = Overview and objectives
   #todo[The problem, why it matters to the field, and what this project will establish @pappg.]
   #for (i, a) in G.aims.enumerate() [*Aim #(i + 1). #a.title.* #a.summary \ ]
+
+  #if "eager" in P [
+    = Why EAGER
+    #todo[Why the idea is untested and potentially transformative, and the risk worth taking; why it
+    fits no existing program or regular proposal, and is neither a planning grant nor preliminary data
+    for one; what #G.years years will show, either way. Concurred by #P.eager.officer
+    (#P.eager.date).]
+  ]
 
   = Background and relation to prior work
   #todo[The state of the art, and the gap this work fills.]
@@ -24,14 +33,18 @@
     #todo[Approach, expected results, risks and alternatives; who does it.]
   ]
 
+  #if P.at("rigor", default: false) [
+    == Rigor, transparency and reproducibility
+    #todo[How the results will be checked and repeated: controls, uncertainty, the data and code
+    released with them, and how others can reproduce them.]
+  ]
+
   #if P.at("instrument", default: false) [
     = Development timeline
   ] else [
     == Timeline
   ]
-  #table(columns: (auto,) + (1fr,) * (G.years * 2), align: center + horizon,
-    [*Aim*], ..range(G.years * 2).map(h => [Y#(calc.quo(h, 2) + 1)H#(calc.rem(h, 2) + 1)]),
-    ..G.aims.enumerate().map(((i, a)) => ([Aim #(i + 1)],) + range(G.years * 2).map(_ => [■])).flatten())
+  #timeline()
 
   #if P.at("instrument", default: false) [
     = Potential utility and prospects for extension
@@ -52,21 +65,9 @@
   #todo[Benefit to society: training, broadening participation, infrastructure, public engagement,
   partnerships; how each is done and assessed.]
 
-  #if "measures" in P [
-    = Measures of success
-    #table(columns: (auto, 1fr), stroke: 0.4pt, inset: 4pt, [*Measure*], [*This project*],
-      ..P.measures.map(m => ([#m], todo[target, reported each year])).flatten())
-  ]
+  #if "measures" in P { measures(P.measures) }
 
-  = Results from Prior NSF Support
-  // Each PI and co-PI with an NSF award in the past five years: the most closely related one.
-  #for p in G.investigators.filter(p => p.at("prior", default: none) != none) [
-    *#name(p).* (a) #p.prior.award, #p.prior.amount, #p.prior.period. (b) #p.prior.title.
-    (c) *Intellectual Merit:* #todo[results]. *Broader Impacts:* #todo[results].
-    (d) *Publications:* #todo[complete citations, or "No publications were produced under this award."]
-    (e) *Research products and their availability:* #todo[data, software, samples].
-    (f) #p.prior.at("renewal", default: [Not a renewal.]) \
-  ]
+  #prior()
 ]
 
 #section("references", "References Cited")[

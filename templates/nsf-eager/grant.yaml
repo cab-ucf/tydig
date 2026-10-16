@@ -1,0 +1,56 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the description, summary, budget and letters all follow.
+# An EAGER (PAPPG 24-1 II.F.3): untested, potentially transformative work,
+# high risk for high payoff, to one NSF program. Not for work a regular
+# proposal fits, nor a planning grant, nor preliminary data for one. First a
+# Concept Outline (concept.typ) by email to the program officer; their
+# approving email lets the proposal be submitted, and is uploaded with it.
+title: "EAGER: Can a measurement choose what it measures next?"
+nofo: PAPPG 24-1 II.F.3 (EAGER), as Supplement 1 (NSF 26-200) amends it
+years: 2
+style: american-chemical-society
+
+mechanism:
+  code: EAGER
+  name: Early-concept Grant for Exploratory Research (PAPPG II.F.3)
+  prefix: "EAGER:"
+  budget_rule: >-
+    Up to $400,000, indirect costs included, for up to two years (NSF 26-200,
+    for awards made on or after December 8, 2025; it was $300,000). Only
+    internal review; a decline cannot be reconsidered. No cost sharing.
+  cap: { award: 400000 }
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+
+limits: { description: 8 }   # pages, Results from Prior NSF Support within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Chemistry
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    prior: { award: CHE-0000000, amount: "$450,000", period: 2022-2025, title: An earlier related project }
+
+# The program the EAGER goes to, and who concurred: the Concept Outline is
+# addressed to them, and Why EAGER names them.
+program:
+  name: Chemical Measurement and Imaging (CMI)
+  contact: chem-cmi@nsf.gov
+  eager:
+    officer: Dr. Example Officer
+    date: "[date of the concurrence email]"
+
+aims:
+  - title: Make the instrument ask its own next question
+    summary: We let the measurement pick its next setting by what it expects to learn.
+  - title: Find out whether it learns faster
+    summary: We race it against a fixed scan on samples whose answer we know.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators: []

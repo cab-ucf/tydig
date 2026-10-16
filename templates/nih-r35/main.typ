@@ -13,7 +13,12 @@
 
   = Recent progress
   #let skills = if G.mechanism.at("esi", default: false) [, technical expertise and skills such as mentoring included]
-  #todo[What #pi.name has accomplished in the past five years#skills. Not what the biosketch already says. About a page.]
+  #if G.mechanism.at("renewal", default: false) [
+    #todo[The progress of the current MIRA: what it made possible, the directions it took that were not
+    foreseen, and why. Reviewers weigh it. About a page.]
+  ] else [
+    #todo[What #pi.name has accomplished in the past five years#skills. Not what the biosketch already says. About a page.]
+  ]
 
   = Overview of future research plans
   #todo[The key questions or challenges of the next five years, why they matter, and the general

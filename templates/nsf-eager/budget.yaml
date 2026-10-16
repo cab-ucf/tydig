@@ -1,0 +1,18 @@
+# The budget's inputs; lib/budget.typ computes everything else from them
+# (budget-report.typ shows it, budget.typ justifies it in Research.gov's
+# lines, `make budget` gives it as Excel). One entry per year where a list is
+# given; category: is the budget line (equipment, travel, participant,
+# materials, publication, consultant, computing, subaward, other).
+# An EAGER: at most $400,000 in all, indirect costs included.
+rates:
+  fringe: 0.30    # of salary, unless a person sets their own
+  fa: 0.50        # the institution's negotiated rate, on modified total direct costs
+  raise: 0.03
+personnel:        # base salary, calendar months of effort per year (senior: 2 at most)
+  - { name: Ada Lovelace, salary: 110000, months: [1, 1] }
+  - { name: Postdoctoral researcher (TBN), salary: 60000, months: [10, 10], fringe: 0.25 }
+  - { name: Graduate student (TBN), salary: 30000, months: [12, 12], fringe: 0.05 }
+other:            # fa: false keeps one out of the F&A base
+  - { item: Samples, reagents and calibration standards, cost: [9000, 7000], category: materials }
+  - { item: Travel to present the results, cost: [2000, 3000], category: travel }
+  - { item: Graduate tuition, cost: [12000, 12000], category: other, fa: false }

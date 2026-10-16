@@ -12,7 +12,7 @@ run('compile', '--input', 'present=' + json.dumps([k for k, v in have.items() if
 out = PdfWriter()
 out.append('build/checklist.pdf')
 for i in items:
-    if not i.get('file'): continue  # a form, filled in online
+    if not i.get('file') or i.get('before'): continue  # a form online, or sent before (a concept outline)
     for f in have[i['id']]: out.append(f)
     if not have[i['id']] and i.get('when', 'always') == 'always':
         run('compile', '--input', f"name={i['name']}", '--input', f"from={i.get('from', 'build it: make')}", 'lib/missing.typ', f"build/missing-{i['id']}.pdf")

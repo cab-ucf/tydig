@@ -1,0 +1,22 @@
+# The budget's inputs; lib/budget.typ computes everything else from them
+# (budget-report.typ shows it, budget.typ justifies it in Research.gov's
+# lines, `make budget` gives it as Excel). One entry per year where a list is
+# given; category: is the budget line (equipment, travel, participant,
+# materials, publication, consultant, computing, subaward, other).
+# Impact: at most $2,000,000 in all, indirect costs included.
+rates:
+  fringe: 0.30    # of salary, unless a person sets their own
+  fa: 0.50        # the institution's negotiated rate, on modified total direct costs
+  raise: 0.03
+personnel:        # base salary, calendar months of effort per year (senior: 2 at most)
+  - { name: Ada Lovelace, salary: 120000, months: [1.5, 1.5, 1.5] }
+  - { name: Charles Babbage, salary: 150000, months: [1, 1, 1] }
+  - { name: Research software engineer (TBN), salary: 95000, months: [12, 12, 12] }
+  - { name: Data curator (TBN), salary: 65000, months: [12, 12, 6] }
+  - { name: Graduate students, two (TBN), salary: 60000, months: [12, 12, 12], fringe: 0.05 }
+other:            # fa: false keeps one out of the F&A base
+  - { item: Storage and compute for the harmonized datasets, cost: [40000, 40000, 30000], category: computing }
+  - { item: "Annual in-person meeting (PI meeting, NSF NAIRR community meeting), two people", cost: [6000, 6000, 6000], category: travel }
+  - { item: Community workshop for dataset users, cost: [0, 15000, 0], category: participant, fa: false }
+  - { item: Open-access publication, cost: [0, 3000, 4000], category: publication }
+  - { item: Graduate tuition, two students, cost: [24000, 24000, 24000], category: other, fa: false }

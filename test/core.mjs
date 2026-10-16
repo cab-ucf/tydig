@@ -14,8 +14,9 @@ mkdirSync('data/demo/old'); put('data/demo/old/a.typ', 'a\n'); put('data/demo/ol
 const mk = () => me.doc('demo')
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
-const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established']) made.push(await nih(t))
-const [r21, r03, sepa, goali, esi, mira] = made
+const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established',
+  'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research']) made.push(await nih(t))
+const [r21, r03, sepa, goali, esi, mira, eager, aid, cmmi, cmi] = made
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
@@ -35,6 +36,13 @@ check('a MIRA, ESI or established: no Specific Aims anywhere, the word itself fl
 check('an NSF CMI GOALI: PAPPG format, the GOALI letter, no NIH files',
   ['lib/nsf.typ', 'goali-letter.typ', 'subaward.typ', 'mentoring.typ'].every(f => goali.includes(f)) && !goali.includes('lib/nih.typ') &&
   /^title: "GOALI: /m.test(get('data/nsf-cmi-goali/grant.yaml', 'utf8')))
+const yml = t => get(`data/${t}/grant.yaml`, 'utf8')
+check('NSF EAGER, AI Datasets, CMMI and CMI: each its solicitation\'s rules on the shared NSF layer',
+  [eager, aid, cmmi, cmi].every(f => f.includes('lib/nsf.typ') && f.includes('package.yaml')) &&
+  eager.includes('concept.typ') && /prefix: "EAGER:"/.test(yml('nsf-eager')) && /description: 8/.test(yml('nsf-eager')) &&
+  /award: 400000/.test(yml('nsf-eager')) && /1\. Vision and community benefit for dataset enhancement/.test(get('data/nsf-aidatasets/main.typ', 'utf8')) &&
+  /Keywords:/.test(get('data/nsf-aidatasets/summary.typ', 'utf8')) && cmmi.includes('onepager.typ') && /NSF 26-515/.test(yml('nsf-cmmi')) &&
+  /prefix: "Instrument Development:"/.test(yml('nsf-cmi-research')) && !cmi.includes('goali-letter.typ'))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -142,7 +150,7 @@ else {
   const out = (await api('/p/nih-r21/files')).map(f => f.path)
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
-  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established']) {
+  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established', 'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research']) {
     const r = await api(`/p/${t}/build/full`, { method: 'POST' })
     check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
   }

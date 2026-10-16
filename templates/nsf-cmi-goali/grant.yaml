@@ -9,6 +9,7 @@ style: american-chemical-society
 
 mechanism:
   code: GOALI
+  prefix: "GOALI:"        # NSF 26-519: a GOALI's title begins so
   name: Grant Opportunities for Academic Liaison with Industry (PAPPG II.F.5)
   budget_rule: >-
     No cost sharing, voluntary or otherwise. A small-business subaward is at

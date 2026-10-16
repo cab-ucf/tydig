@@ -1,0 +1,68 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the description, summary, budget and letters all follow.
+# Chemical Measurement and Imaging (CMI), under NSF 26-519, MPS Chemistry
+# Research Programs: proposals any time from September 1, 2026. No more than
+# two a year (September 1 to August 31) may name the same person as PI, co-PI
+# or senior personnel across the nine programs, and if two, one must be
+# multi-investigator or collaborative; more are returned without review.
+# Instrument development begins its title "Instrument Development:" and adds
+# a Development timeline and Potential utility; for other CMI research drop
+# prefix: and instrument: below. With an industrial partner, use nsf-cmi-goali.
+title: "Instrument Development: A mass spectrometer that chooses its next scan"
+nofo: NSF 26-519            # MPS Chemistry Research Programs (MPS Chem); program: CMI
+years: 3                    # up to five for ambitious work
+style: american-chemical-society
+
+mechanism:
+  code: CMI
+  name: Chemical Measurement and Imaging, MPS Chemistry Research Programs (NSF 26-519)
+  prefix: "Instrument Development:"
+  budget_rule: >-
+    No set size; up to five years for ambitious work. No cost sharing.
+    Collaborations between organizations go through Research.gov.
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+
+limits: { description: 15 }   # pages, Results from Prior NSF Support (at most 5) within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Chemistry
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    prior: { award: CHE-0000000, amount: "$450,000", period: 2022-2025, title: An earlier related project }
+  - name: Charles Babbage
+    degrees: PhD
+    title: Professor
+    role: co-PI
+
+program:
+  name: Chemical Measurement and Imaging (CMI)
+  # Unsure of the fit? One email to every program that might fit, copied, not blind-copied.
+  contact: cfoss@nsf.gov, cecostel@nsf.gov, twhitmer@nsf.gov
+  instrument: true          # adds Development timeline and Potential utility (CMI program page)
+  # NSF 26-519's measures of success, reported in each annual report
+  measures:
+    - Publications or other scholarly outputs
+    - Data sets established or expanded
+    - Invention disclosures
+    - New technologies or techniques
+    - Undergraduate, graduate and postdoctoral researchers supported
+
+aims:
+  - title: Give the instrument a model of the sample
+    summary: We infer, scan by scan, what the sample most likely contains.
+  - title: Choose each scan by what it will teach
+    summary: The next scan is the one expected to settle the most.
+  - title: Show it on mixtures that matter
+    summary: We test it on metabolite mixtures whose answer we know, then on ones we do not.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators:
+  - { name: Mary Somerville, title: Senior Scientist, organization: Example National Laboratory }

@@ -8,9 +8,13 @@ work, so keep each change small and focused.
 
 - `grant.yaml`: every fact stated more than once (title, people, aims,
   program, collaborators). Change a fact here, never in the `.typ` files.
-  `program:` adds the sections a program asks for: `goali:` (University–
-  industry interaction, the GOALI letter), `instrument: true` (Development
-  timeline, Potential utility), `measures:` (Measures of success).
+  `program:` adds the sections a program asks for: `eager:` (Why EAGER),
+  `goali:` (University–industry interaction, the GOALI letter),
+  `instrument: true` (Development timeline, Potential utility),
+  `rigor: true` (Rigor, transparency and reproducibility), `measures:`
+  (Measures of success). `mechanism.prefix:` is how the title must begin
+  (`EAGER:`, `GOALI:`); a title that does not shows red. `cap: { award: }`
+  is a limit on the whole award, indirect costs included.
 - `main.typ`: the Project Description and References Cited in one document,
   so `@citations` resolve; `make` cuts it where References Cited starts, so
   keep the section keys (`description`, `references`). Keep "Broader
@@ -20,8 +24,11 @@ work, so keep each change small and focused.
   text; never leave one in a finished section.
 - `summary.typ` (Overview, Intellectual Merit, Broader Impacts: keep the
   three headings), `budget.typ`, `facilities.typ` (no dollar figures),
-  `mentoring.typ`, `letters.typ` (NSF's one sentence, nothing more),
-  `goali-letter.typ`, `subaward.typ`: one upload each.
+  `mentoring.typ`, `letters.typ` (NSF's one sentence, nothing more), and
+  where the template has them `goali-letter.typ`, `subaward.typ`: one
+  upload each. `concept.typ` (an EAGER's Concept Outline) and
+  `onepager.typ` (a summary for the program director) are emailed before
+  submitting, not uploaded.
 - The Data Management and Sharing Plan is written in Research.gov's DMSP
   tool, not here.
 - `lib/nsf.typ`: PAPPG formatting; `lib/grant.typ`: the `section`, `letter`
