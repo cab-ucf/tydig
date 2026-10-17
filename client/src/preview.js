@@ -215,10 +215,10 @@ function patch([head, ...pages]) {
 }
 
 // Nothing until the document has synced and the disk's files are known
-// (start). Then a compile follows an edit within a beat, and keeps following
-// while one types (one at a time; the next waits for the last).
+// (start). Then a compile follows an edit at once, and keeps following while
+// one types: one at a time, the next with every edit made meanwhile.
 let timer, busy = false, again = false, first = true, synced = false, live = false
-export function scheduleCompile() { if (synced && !timer) timer = setTimeout(compile, first ? 0 : 120) }
+export function scheduleCompile() { if (synced && !timer) timer = setTimeout(compile) }
 export function start() { synced = true; scheduleCompile() }
 async function compile() {
   timer = null

@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="/src/style.css" />
   <link rel="stylesheet" href="@brand/brand.css" />
   <script src="early.js" defer></script>
+  <!-- the editor's syntax (wasm): fetched with the app, not after it -->
+  <link rel="preload" as="fetch" type="application/wasm" crossorigin
+    href="../node_modules/codemirror-lang-typst/wasm/typst_syntax_bg.wasm" />
 </head>
 <body>
   <header id="bar">
