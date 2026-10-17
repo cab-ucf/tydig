@@ -16,7 +16,7 @@ Dear Dr. #pi.name.split(" ").last(),
 
 #g.company confirms that #ind.map(p => [#name(p), #p.title,]).join([ and ]) will serve as industrial co-Principal
 Investigator on the above proposal to the National Science Foundation, devoting
-#ind.map(p => str(p.at("months", default: todo[N]))).join(", ") month(s) a year to the project.
+#ind.map(p => [#p.at("months", default: todo[N])]).join(", ") month(s) a year to the project.
 
 #g.company will contribute #g.contributes. #todo[Any further support the company gives the university.]
 #if g.at("small_business", default: false) [#g.company will perform the subaward work described in the proposal

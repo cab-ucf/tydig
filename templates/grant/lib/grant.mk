@@ -6,7 +6,8 @@ full: all
 	TYPST=$(TYPST) python3 lib/assemble.py
 
 budget: out/budget.xlsx
-out/budget.xlsx: budget.yaml lib/budget.typ lib/budget_xlsx.py $(wildcard budget-excel.yaml docs/*.xlsx)
+out/budget.xlsx: grant.yaml budget.yaml lib/budget.typ lib/budget_xlsx.py \
+  $(wildcard budget-excel.yaml docs/*.xlsx)
 	TYPST=$(TYPST) python3 lib/budget_xlsx.py
 
 # a filled-in workbook (upload it as docs/budget-filled.xlsx) back into budget.yaml
@@ -15,8 +16,14 @@ budget-import:
 	TYPST=$(TYPST) python3 lib/budget_xlsx.py import $(FILLED)
 
 out/%.pdf: %.typ $(DEPS)
-	@mkdir -p out
-	$(TYPST) compile $< $@
+	@mkdir -p out build
+	$(TYPST) compile $(call deps,$*) $< $@
+
+# A PDF also depends on every file its last compile read (typst's list, in
+# build/), wherever it is; one since deleted (an empty rule each) rebuilds it.
+deps = --deps build/$(1).d --deps-format make
+-include $(wildcard build/*.d)
+$(filter-out %:,$(foreach d,$(wildcard build/*.d),$(file <$d))):
 
 clean:
 	rm -rf out build

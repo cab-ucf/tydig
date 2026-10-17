@@ -33,6 +33,4 @@
   #milestones()
 ]
 
-#section("references", "References")[
-  #bibliography("/refs.bib", title: none, style: "ieee")
-]
+#references("ieee")

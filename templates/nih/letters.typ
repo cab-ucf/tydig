@@ -5,4 +5,4 @@
 #show: nih
 #set page(margin: 1in)
 
-#for l in G.letters { letter(l) }
+#for l in G.at("letters", default: ()) { letter(l) }

@@ -1,7 +1,7 @@
 // Switching a project's template: merged three ways, so what the new template
 // changes lands and what people wrote stays.
 import { rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs'
-import { person, check, done, sleep, until } from './lib.mjs'
+import { person, check, done, until } from './lib.mjs'
 
 const Ann = await person('Ann'), Bob = await person('Bob'), ann = Ann.cookie, bob = Bob.cookie
 const as = (cookie, p, o = {}) => (cookie === ann ? Ann : Bob).res(p, { ...o, headers: { 'content-type': 'application/json' } })
@@ -9,6 +9,7 @@ const json = async (cookie, p, body) => (await as(cookie, p, body && { method: '
 const open = async name => { const d = Ann.doc(name); await until(async () => d.files.size > 0); return d }
 const text = (doc, f) => doc.getMap('files').get(f)?.toString()
 const edit = (doc, f, a, b) => { const t = doc.getMap('files').get(f), i = t.toString().indexOf(a); t.delete(i, a.length); t.insert(i, b) }
+const synced = doc => until(async () => !doc.provider.hasUnsyncedChanges) // the hub has every edit
 
 // an R21, edited, becomes an R03: the mechanism changes, the writing stays
 await json(ann, '/projects/grant', { template: 'nih-r21' })
@@ -16,12 +17,12 @@ const g = await open('grant')
 edit(g, 'grant.yaml', 'Exploratory study of a new approach to a hard problem', 'Thermal relaxation in small samples')
 edit(g, 'main.typ', '*Expected outcome:*', '*What we expect:*')
 edit(g, 'budget.yaml', 'salary: 120000', 'salary: 125000')
-await sleep(2500)
+await synced(g)
 check('the template a project was made from is recorded', (await json(ann, '/p/grant/template')).template === 'nih-r21')
 await as(ann, '/p/grant/members', { method: 'POST', body: JSON.stringify({ email: 'bob@example.com' }) })
 check('a member cannot switch it', (await as(bob, '/p/grant/template', { method: 'POST', body: JSON.stringify({ template: 'nih-r03' }) })).status === 403)
 const r1 = await json(ann, '/p/grant/template', { template: 'nih-r03' })
-await sleep(500)
+await until(async () => /code: R03/.test(text(g, 'grant.yaml')) && /cost: \[8000, 6000\]/.test(text(g, 'budget.yaml')))
 const gy = text(g, 'grant.yaml')
 check('R21 to R03: the mechanism is now an R03', /code: R03/.test(gy) && /cap: \{ year: 50000/.test(gy) && !/code: R21/.test(gy))
 check('and the title written for it stays', gy.includes('Thermal relaxation in small samples'))
@@ -36,10 +37,10 @@ check('it is recorded, and committed as a checkpoint', (await json(ann, '/p/gran
 await json(ann, '/projects/paper', {})
 const p = await open('paper')
 p.getMap('files').get('main.typ').insert(0, '// my own paper\n')
-await sleep(2500)
+await synced(p)
 rmSync('data/paper/.collab/template.json') // as from before templates were recorded
 const r2 = await json(ann, '/p/paper/template', { template: 'nih-r21', brand: 'ucf' })
-await sleep(800)
+await until(async () => text(p, 'main.nih-r21.typ'))
 check('a report to a grant: your main.typ stays, the grant\'s is set beside it', text(p, 'main.typ').startsWith('// my own paper') &&
   r2.beside.some(([a, b]) => a === 'main.typ' && b === 'main.nih-r21.typ') && text(p, 'main.nih-r21.typ')?.includes('#section("aims"'))
 check('the grant\'s files arrive', ['grant.yaml', 'package.yaml', 'lib/nih.typ', 'budget.yaml'].every(f => r2.added.includes(f)) && text(p, 'lib/brand.typ')?.includes('UCF'))
@@ -51,11 +52,12 @@ await json(ann, '/projects/aged', { template: 'nih-r21' })
 const a = await open('aged'), was = '// lib/nih.typ as the template once was\n'
 const t = a.getMap('files').get('lib/nih.typ'); t.delete(0, t.length); t.insert(0, was)
 writeFileSync('data/aged/.collab/base/lib/nih.typ', was)
-await sleep(2500)
+await synced(a)
 const r3 = await json(ann, '/p/aged/template', { template: 'nih-r03' })
-await sleep(500)
+const today = readFileSync(new URL('../templates/nih/lib/nih.typ', import.meta.url), 'utf8')
+await until(async () => text(a, 'lib/nih.typ') === today)
 check('a file from an older template, never changed, is updated to today\'s', r3.updated.includes('lib/nih.typ') &&
-  text(a, 'lib/nih.typ') === readFileSync(new URL('../templates/nih/lib/nih.typ', import.meta.url), 'utf8'))
+  text(a, 'lib/nih.typ') === today)
 check('and what the template gave is kept for the next switch', readFileSync('data/aged/.collab/base/grant.yaml', 'utf8').includes('code: R03'))
 
 done()

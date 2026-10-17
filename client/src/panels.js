@@ -213,7 +213,7 @@ function checklist() {
 }
 const NEEDED = { always: 'required', applicable: 'if applicable', jit: 'just-in-time',
   resubmission: 'resubmissions', revision: 'revisions', renewal: 'renewals' }
-const uploadPdf = file => el('input', { type: 'file', accept: '.pdf,application/pdf', onchange: async e => {
+const upload = file => el('input', { type: 'file', accept: /\.\w+$/.exec(file)?.[0] || '', onchange: async e => {
   const r = await fetch(rawUrl(file.replace('*', 'upload')), { method: 'PUT', body: e.target.files[0] })
   r.ok ? refreshDisk() : alert(`upload failed: ${(await r.json().catch(() => ({}))).error || r.status}`)
 } }).click()
@@ -222,7 +222,7 @@ const item = i => {
   const acts = ok ? [el('button', { textContent: 'open', onclick: () => open(i.have[0]) })]
     : !i.file || built ? [] : [/^https?:/.test(i.from || '')
       ? el('a', { href: i.from, target: '_blank', rel: 'noopener', textContent: 'get it' }) : '',
-    el('button', { textContent: 'upload', onclick: () => uploadPdf(i.file) })]
+    el('button', { textContent: 'upload', onclick: () => upload(i.file) })]
   return el('div', { className: 'check' + (ok ? ' ok' : need && i.file ? ' missing' : '') },
     el('span', { className: 'mark', textContent: !i.file ? 'form' : ok ? '✓' : need ? '✗' : '–' }),
     el('span', {}, el('b', { textContent: i.name + (i.limit ? ` (${i.limit})` : '') }),

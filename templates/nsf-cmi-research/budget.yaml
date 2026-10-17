@@ -14,7 +14,7 @@ personnel:        # base salary, calendar months of effort per year (senior: 2 a
   - { name: Graduate student (TBN), salary: 30000, months: [12, 12, 12], fringe: 0.05 }
 other:            # fa: false keeps one out of the F&A base
   - { item: Instrument control and acquisition hardware, cost: [25000, 0, 0], category: equipment, fa: false }
-  - { item: Standards, solvents and columns, cost: [9000, 9000, 7000], category: materials }
+  - { item: "Standards, solvents and columns", cost: [9000, 9000, 7000], category: materials }
   - { item: Conference travel, cost: [3000, 5000, 5000], category: travel }
   - { item: Publication costs, cost: [0, 2000, 3000], category: publication }
   - { item: Graduate tuition, cost: [12000, 12000, 12000], category: other, fa: false }

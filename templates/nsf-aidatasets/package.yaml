@@ -35,4 +35,4 @@ items:
     from: https://www.nsf.gov/bfa/dias/policy/coa.jsp
   - { id: dmsp, name: "Data Management and Sharing Plan (all data behind a publication shared when it is published)", from: "the DMSP tool in Research.gov" }
   - { id: mentoring, name: Mentoring Plan, file: out/mentoring.pdf, limit: 1 page, when: applicable }
-  - { id: letters, name: Letters of Collaboration (each dataset's holder, partners), file: out/letters.pdf, when: applicable }
+  - { id: letters, name: "Letters of Collaboration (each dataset's holder, partners)", file: out/letters.pdf, when: applicable }

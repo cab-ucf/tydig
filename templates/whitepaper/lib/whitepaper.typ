@@ -1,7 +1,7 @@
 // A white paper's format, as the program manager's call sets it (format: in
 // grant.yaml: font, size, page numbers), letter paper with 1 in margins; and
-// what every style shares: the title block, the cost (ROM) and the
-// milestones, each from grant.yaml and budget.yaml.
+// what every style shares: the title block, the cost (ROM), the milestones
+// and the references, each from grant.yaml, budget.yaml and refs.bib.
 #import "/lib/grant.typ": *
 #import "/lib/brand.typ": accent
 #import "/lib/budget.typ": budget, money, sum
@@ -41,3 +41,9 @@
 #let milestones() = table(columns: (auto, 1fr, 1fr), stroke: 0.4pt, inset: 4pt,
   [*Month*], [*Milestone*], [*How we will know*],
   ..G.milestones.map(m => ([#m.month], [#m.what], [#m.exam])).flatten())
+
+// References, outside the page limit: a page of them once anything is cited
+// (@key to no label in the document is a citation)
+#let references(style) = context if query(cite) != () or query(ref).any(r => query(r.target) == ()) {
+  section("references", "References", bibliography("/refs.bib", title: none, style: style))
+}

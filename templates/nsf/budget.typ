@@ -7,6 +7,8 @@
 #let lines = (equipment: [D. Equipment], travel: [E. Travel], participant: [F. Participant Support Costs],
   materials: [G.1 Materials and Supplies], publication: [G.2 Publication Costs], consultant: [G.3 Consultant Services],
   computing: [G.4 Computer Services], subaward: [G.5 Subawards], other: [G.6 Other])
+// a cost whose category: is none of these goes under G.6 Other, marked
+#let line-of(o) = if o.category in lines { o.category } else { "other" }
 
 #section("budget", "Budget Justification", limit: 5)[
   #warn
@@ -19,10 +21,12 @@
   = C. Fringe Benefits
   #todo[The institution's rates, and what they cover.]
   #for (k, l) in lines {
-    let os = budget.other.filter(o => o.at("category", default: "other") == k)
+    let os = budget.other.filter(o => line-of(o) == k)
     if os.len() > 0 [
       = #l
-      #for o in os [*#o.item* (#o.cost.map(money).join(" / ")). #todo[why it is needed] \ ]
+      #for o in os [*#o.item* (#o.cost.map(money).join(" / ")). #if line-of(o) != o.category {
+        box(fill: red, inset: 2pt, text(white)[category: #o.category is not a budget line]) }
+        #todo[why it is needed] \ ]
     ]
   }
   = H. Indirect Costs

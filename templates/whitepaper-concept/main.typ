@@ -28,6 +28,4 @@
   #for q in G.at("questions", default: ()) [- #q]
 ]
 
-#section("references", "References")[
-  #bibliography("/refs.bib", title: none, style: "american-psychological-association")
-]
+#references("american-psychological-association")

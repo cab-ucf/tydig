@@ -27,5 +27,5 @@ items:
   - { id: animals, name: Vertebrate Animals, file: docs/vertebrate-animals.pdf, when: applicable }
   - { id: letters, name: Letters from collaborators, file: out/letters.pdf, when: applicable }
   - { id: dmsp, name: Data Management and Sharing Plan, file: out/dmsp.pdf, limit: 2 pages }
-  - { id: sharing, name: Resource Sharing Plan (model organisms, research tools), file: docs/resource-sharing.pdf, when: applicable }
+  - { id: sharing, name: "Resource Sharing Plan (model organisms, research tools)", file: docs/resource-sharing.pdf, when: applicable }
   - { id: support, name: Other Support (shows the MIRA research effort), file: docs/other-support.pdf, when: jit }

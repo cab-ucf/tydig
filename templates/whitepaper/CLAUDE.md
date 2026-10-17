@@ -12,9 +12,9 @@ by people in tydig while you work, so keep each change small and focused.
 - `grant.yaml`: every fact stated more than once (title, people, the
   program manager, objectives, milestones, the format the call asks for).
   Change a fact here, never in the `.typ` files.
-- `main.typ`: the white paper, with its references. Its `body` section
-  carries the page limit (`limits.body`); a cover page and the references
-  are outside it, as calls usually count.
+- `main.typ`: the white paper, and its references once anything is cited.
+  Its `body` section carries the page limit (`limits.body`); a cover page and
+  the references are outside it, as calls usually count.
 - `#todo[...]` (grey) says what a passage must cover. Replace it with the
   text; never leave one in a finished section.
 - `note.typ`: the email that carries it, to paste. Short; it asks for a
@@ -23,7 +23,8 @@ by people in tydig while you work, so keep each change small and focused.
   `lib/budget.typ` computes the totals and `rom()` tabulates them. Never type
   a total into a `.typ` file.
 - `lib/whitepaper.typ`: the format (`format:` in `grant.yaml`: font, size,
-  page numbers), the title block, `rom()` and `milestones()`.
+  page numbers), the title block, `rom()`, `milestones()` and
+  `references()`.
 - `refs.bib`: references; cite them as `@key` in `main.typ`.
 - `package.yaml`: what is sent, for the Checklist panel and `make full`.
 
@@ -42,7 +43,8 @@ by people in tydig while you work, so keep each change small and focused.
 
 `make` builds `out/whitepaper.pdf` and `out/note.pdf`; `make full` puts what
 is sent together with a checklist page; `make budget` writes the budget into
-`out/budget.xlsx`. It needs `typst` 0.15 on PATH.
+`out/budget.xlsx`. They need `typst` 0.15 on PATH and python3 with pypdf,
+openpyxl and ruamel.yaml (the build sandbox has them).
 
 ## Git
 

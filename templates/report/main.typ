@@ -25,7 +25,8 @@ sample's temperature is deemed to have changed only if
 $abs(T_2 - T_1) > 3 sigma$, where $sigma$ is the residual noise of a linear
 fit. The report you are reading is therefore a pure function of the data:
 identical inputs (integrity-pinned by sha256 in `scripts/fetch_data.py`)
-reproduce it byte-for-byte.
+reproduce every number and word in it; only the time it was generated
+differs.
 
 = Methods
 A water sample was left in contact with ambient air and its temperature
@@ -38,7 +39,7 @@ $T(t) = T_"amb" + (T_1 - T_"amb") e^(-t\/tau)$ via a log-linear fit.
 = Results
 // The sentence the whole design exists for: its verb is computed.
 The water was found to be
-*#if R.T1 > R.T2 [cooling] else if R.T1 == R.T2 [constant] else [heating]*
+*#if dir == "constant" [thermally constant] else [#dir]*
 when in contact with ambient air
 (#f(R.T_ambient) #sym.degree\C): it moved from
 $T_1 = #f(R.T1)$ #sym.degree\C to $T_2 = #f(R.T2)$ #sym.degree\C
@@ -99,8 +100,9 @@ $T_1 = #f(R.T1)$ #sym.degree\C to $T_2 = #f(R.T2)$ #sym.degree\C
 ]
 
 = Reproducibility
-`just all` verifies the pinned data hash, reruns the analysis, and recompiles
-this PDF and the summary. Editing prose recompiles instantly in the live
-preview; editing `scripts/analysis.py` or `data/` regenerates every value on
-this page. The build history, comments, and signed checkpoints travel with
-the project's git repository.
+`make` verifies the pinned data hash, reruns the analysis, and recompiles
+this PDF and the summary, each only when what it depends on has changed.
+Editing prose recompiles instantly in the live preview; editing
+`scripts/analysis.py` or `data/` regenerates every value on this page. The
+build history, comments, and signed checkpoints travel with the project's git
+repository.

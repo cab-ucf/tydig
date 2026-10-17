@@ -38,9 +38,7 @@
   ]
 
   == Timeline
-  #table(columns: (auto,) + (1fr,) * (G.years * 2), align: center + horizon,
-    [*Aim*], ..range(G.years * 2).map(h => [Y#(calc.quo(h, 2) + 1)H#(calc.rem(h, 2) + 1)]),
-    ..G.aims.enumerate().map(((i, a)) => ([Aim #(i + 1)],) + range(G.years * 2).map(_ => [■])).flatten())
+  #timeline()
 ]
 
 #section("references", "References Cited")[

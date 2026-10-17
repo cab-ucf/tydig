@@ -19,7 +19,7 @@
     [*Other investigators*], [#G.investigators.slice(1).map(p => [#name(p), #p.title]).join("; ")],
     [*Period of performance*], [#G.years years],
     [*Cost (ROM)*], [#money(sum(budget.total)) in all: #budget.total.map(money).join(", ") a year],
-    [*Date*], [#G.date])
+    [*Date*], G.at("date", default: todo[date]))
 ]
 
 #section("body", none, limit: G.limits.body)[
@@ -53,6 +53,4 @@
   #rom()
 ]
 
-#section("references", "References")[
-  #bibliography("/refs.bib", title: none, style: "ieee")
-]
+#references("ieee")

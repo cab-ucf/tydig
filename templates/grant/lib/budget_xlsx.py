@@ -4,12 +4,11 @@
 # lib/budget.typ computes, its totals live formulas.
 #   python3 lib/budget_xlsx.py          export
 #   python3 lib/budget_xlsx.py import F read workbook F back into budget.yaml
-import json, os, subprocess, sys
+import json, os, re, subprocess, sys
 from openpyxl import Workbook, load_workbook
 from ruamel.yaml import YAML
 
-yaml = YAML()  # round-trip: budget.yaml keeps its comments and layout
-yaml.indent(mapping=2, sequence=4, offset=2)
+yaml = YAML()  # round-trip: it knows where each value stands in budget.yaml
 typst = os.environ.get('TYPST', 'typst')
 computed = lambda: json.loads(subprocess.run([typst, 'eval', 'import "/lib/budget.typ": budget; budget', '--in', 'main.typ'],
                                              capture_output=True, text=True, check=True).stdout)
@@ -24,15 +23,24 @@ def pick(v, k):
     return int(k) if k.isdigit() else next(i for i, e in enumerate(v) if k in (e.get('name'), e.get('item')))
 def get(v, path): p, k = walk(v, path); return p[k]
 def cell(wb, ref): sheet, c = ref.split('!'); return wb[sheet][c]
+# a value as written: quoted, or up to a comment, the line's end or (in a flow) , ] }
+SCALAR = r'"(?:[^"\\]|\\.)*"|\'(?:[^\']|\'\')*\'|.*?(?=\s*(?:%s\s#|$))'
 
 if sys.argv[1:2] == ['import']:
     src = sys.argv[2]
     wb = load_workbook(src, data_only=True)  # the values Excel last computed
-    b = yaml.load(open('budget.yaml'))
+    text = open('budget.yaml').read().split('\n'); b = yaml.load('\n'.join(text))
+    put = {}  # each changed input, by where it stands: the rest of budget.yaml stays as written
     for path, ref in (xl.get('inputs') or {}).items():
-        p, k = walk(b, path); v = cell(wb, ref).value
-        if v is not None: p[k] = v
-    yaml.dump(b, open('budget.yaml', 'w'))
+        try: p, k = walk(b, path); was = p[k]
+        except (KeyError, IndexError, StopIteration): sys.exit(f'{path}: not in budget.yaml')
+        v = cell(wb, ref).value
+        if v is not None and v != was:
+            put[(p.lc.item if isinstance(p, list) else p.lc.value)(k)] = p.fa.flow_style(), v
+    for (r, c), (flow, v) in sorted(put.items(), reverse=True):  # rightmost first: columns hold
+        n = re.match(SCALAR % ('[,\\]}]|' if flow else ''), text[r][c:]).end()
+        text[r] = text[r][:c] + json.dumps(v) + text[r][c + n:]
+    open('budget.yaml', 'w').write('\n'.join(text))
     c, off = computed(), []
     for path, ref in (xl.get('check') or {}).items():
         theirs = cell(wb, ref).value

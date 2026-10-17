@@ -46,7 +46,7 @@ program:
     - { who: Middle-school students (grades 6-8), per_year: 120 }
     - { who: Middle-school science teachers, per_year: 8 }
   partners:
-    - { name: Example County Public Schools, role: classrooms, teachers and recruitment }
+    - { name: Example County Public Schools, role: "classrooms, teachers and recruitment" }
     - { name: Example Science Center, role: summer program and public showcase }
   website: sepa.example.edu   # live within 6 months of award; credits NIH, NIGMS and SEPA
 

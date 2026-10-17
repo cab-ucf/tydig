@@ -6,7 +6,7 @@
 // [prompt] is what reviewers look for there.
 #import "/lib/nsf.typ": *
 #show: nsf
-#let P = G.program
+#let P = G.at("program", default: (:))
 
 #section("description", none, limit: G.limits.description)[
   = Overview and objectives

@@ -5,7 +5,7 @@
 // where References Cited starts. A grey [prompt] is what reviewers look for.
 #import "/lib/nsf.typ": *
 #show: nsf
-#let P = G.program
+#let P = G.at("program", default: (:))
 #let track = G.mechanism.prefix.split(":").at(1)
 
 #section("description", none, limit: G.limits.description)[
@@ -44,7 +44,7 @@
   #todo[Benefit to society: the people trained in AI use of scientific data, the communities served,
   partnerships; how each is done and assessed.]
 
-  #measures(P.measures)
+  #measures(P.at("measures", default: ()))
 
   #prior()
 ]

@@ -24,8 +24,8 @@ items:
   - { id: strategy, name: Research Strategy, file: out/strategy.pdf, limit: 6 pages }
   - { id: humans, name: PHS Human Subjects and Clinical Trials Information, from: ASSIST, when: applicable }
   - { id: animals, name: Vertebrate Animals, file: docs/vertebrate-animals.pdf, when: applicable }
-  - { id: letters, name: Letters of Support (the letter of institutional commitment, required), file: out/letters.pdf }
+  - { id: letters, name: "Letters of Support (the letter of institutional commitment, required)", file: out/letters.pdf }
   - { id: dmsp, name: Data Management and Sharing Plan, file: out/dmsp.pdf, limit: 2 pages }
-  - { id: sharing, name: Resource Sharing Plan (model organisms, research tools), file: docs/resource-sharing.pdf, when: applicable }
+  - { id: sharing, name: "Resource Sharing Plan (model organisms, research tools)", file: docs/resource-sharing.pdf, when: applicable }
   - { id: support, name: Other Support (shows the MIRA research effort), file: docs/other-support.pdf, when: jit }
   - { id: aor, name: "AOR letter: the 51% effort, other NIGMS research awards ended and applications withdrawn", file: docs/aor-letter.pdf, when: jit }

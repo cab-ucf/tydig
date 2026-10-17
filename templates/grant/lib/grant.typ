@@ -1,5 +1,6 @@
 // What every grant family shares (nih/, nsf/ format it): the facts in
-// grant.yaml, an attachment with its page limit, a letter, and a prompt.
+// grant.yaml, an attachment with its page limit, a letter, a prompt and a
+// timeline.
 //
 // Paths here start with "/": a relative path resolves from the file that
 // names it (this one, in lib/), not from the document being compiled.
@@ -10,6 +11,11 @@
 
 // What a section asks for, until it is written: grey, so it shows.
 #let todo(body) = box(fill: luma(90%), inset: (x: 2pt), outset: (y: 2pt), text(style: "italic")[[#body]])
+
+// What happens when: a row for each aim, a column for each half year.
+#let timeline() = table(columns: (auto,) + (1fr,) * (G.years * 2), align: center + horizon,
+  [*Aim*], ..range(G.years * 2).map(h => [Y#(calc.quo(h, 2) + 1)H#(calc.rem(h, 2) + 1)]),
+  ..G.aims.enumerate().map(((i, a)) => ([Aim #(i + 1)],) + range(G.years * 2).map(_ => [■])).flatten())
 
 // One attachment: starts a page, marks its first page for the Makefile
 // (which cuts main.typ into separate PDFs) and, over its page limit or with a
