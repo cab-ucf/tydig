@@ -5,6 +5,7 @@
 // makes the worker then). One ask at a time: they share one virtual filesystem.
 import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
 import { loadFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
+import fonts from 'virtual:fonts'
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url'
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
 
@@ -12,13 +13,10 @@ const get = u => fetch(u).then(r => r.ok ? r : Promise.reject(new Error(`${u}: $
 // all at once: the compiler and renderer compile as they download
 const compiler = WebAssembly.compileStreaming(get(compilerWasm))
 const renderer = WebAssembly.compileStreaming(get(rendererWasm))
-// fonts/ at the repo root, bundled: the build sandbox installs the same files,
-// so the preview needs no network and sets type like the built PDF
-const fonts = Promise.all(Object.values(import.meta.glob('../../fonts/*.{otf,ttf}',
-  { query: '?url', import: 'default', eager: true })).map(u => get(u).then(r => r.arrayBuffer()).then(b => new Uint8Array(b))))
-$typst.setCompilerInitOptions({ getModule: () => compiler, beforeBuild: [Object.assign(async (...a) =>
-  loadFonts(await fonts, { assets: false })(...a), // marked as a font loader, or typst.ts adds a CDN's
-{ _kind: 'fontLoader', _preloadRemoteFontOptions: { assets: false } })] })
+// fonts/ at the repo root, as the build sandbox has them, so the preview sets
+// type like the built PDF; each is fetched (from this hub) the first time a
+// document uses it (vite.config.js). assets: false, or typst.ts adds a CDN's.
+$typst.setCompilerInitOptions({ getModule: () => compiler, beforeBuild: [loadFonts(fonts, { assets: false })] })
 $typst.setRendererInitOptions({ getModule: () => renderer })
 
 const bins = new Map() // path -> bytes, as the page last sent them

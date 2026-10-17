@@ -9,7 +9,7 @@ COPY client/ client/
 COPY fonts/ fonts/
 COPY server/relay.mjs server/refs.mjs server/tags.mjs server/
 ARG TYDIG_BRAND=tydig
-RUN npm run build
+RUN npm run build && node client/brotli.mjs
 
 FROM docker.io/library/node:22-slim
 # podman-remote, for the sandbox service: static, pinned, checksummed

@@ -157,6 +157,14 @@ const dev = process.env.TYDIG_DEV === '1' && await (await import('vite')).create
   root: client, server: { middlewareMode: true }, appType: 'spa' })
 if (dev) app.use(dev.middlewares)
 else if (existsSync(`${client}dist/index.html`)) {
+  // an asset's brotli copy (client/brotli.mjs), to a browser that takes it
+  app.use('/assets', (req, res, next) => {
+    const f = req.path.slice(1) + '.br'
+    if (!/^[\w.-]+$/.test(f) || req.acceptsEncodings('br') !== 'br' || !existsSync(`${client}dist/assets/${f}`))
+      return next()
+    res.set({ 'Content-Encoding': 'br', Vary: 'Accept-Encoding' }).type(f.split('.').at(-2))
+      .sendFile(f, { root: `${client}dist/assets`, immutable: true, maxAge: '1y' })
+  })
   app.use('/assets', express.static(`${client}dist/assets`, { immutable: true, maxAge: '1y' }))
   app.use(express.static(`${client}dist`))
   app.get(/^\/(?!api\/)/, (req, res) => res.sendFile('index.html', { root: `${client}dist` }))
