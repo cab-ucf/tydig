@@ -217,13 +217,17 @@ check('it scores the prose, not the markup', seen.length && !/#(let|set)|@\w|\$/
   sc.words.every(w => !/^[#$@]/.test(w)))
 await (await page.$('.cm-content [style*="background"]')).hover(); await sleep(800)
 check('hovering a word says what its numbers mean', await page.evaluate(() =>
-  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness.*0\.4% of human sentences score this AI-like/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
+  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness 78%: 0\.4% of human sentences read this AI-like/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
 await page.mouse.move(0, 0); await page.click('#scope'); await sleep(800)
 check('one click tints by flatness instead, from the same scores', (await tinted()).length > 20 && (await tinted()).every(w => w.cool) &&
   await page.evaluate(() => document.getElementById('scope').textContent.startsWith('flatness')) && seen.length === 1)
 await page.click('#scope'); await sleep(800)
-check('another shows AI-likeness per sentence', await page.evaluate(() => document.querySelectorAll('.scope-ai').length > 0 &&
-  /AI: flagged/.test(document.getElementById('scope').textContent)))
+check('another shows AI-likeness per sentence, the most AI-like blocked out', await page.evaluate(() =>
+  document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent)))
+await page.evaluate(() => document.getElementById('bar-ai').click()); await sleep(300)
+await page.evaluate(() => document.querySelector('#side-body .go').click()); await sleep(3000)
+check('the AI check reads every file, and lists the most AI-like sentences, each a click away', await page.evaluate(() =>
+  /1 blocked out/.test(document.getElementById('side-body').innerText) && document.querySelectorAll('#side-body .ai-row').length > 0))
 answer = ''; await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(500); answer = null
 check('and it turns off', await page.evaluate(() => !document.querySelector('.scope-ai') && document.getElementById('scope').hidden))
 engine.close()

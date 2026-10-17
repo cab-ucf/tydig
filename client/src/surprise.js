@@ -88,7 +88,7 @@ export function prose(src, typst = true) {
 export const MODES = {
   bits: ['surprise', 'how unexpected each word was to the model'],
   ent: ['flatness', 'how unsure the model was before each word: flat means many words could have come next'],
-  ai: ['AI-likeness', 'how few human sentences read as AI-like as each one (MELD): violet from 1 in 3, solid from 1 in 10'],
+  ai: ['AI-likeness', 'how AI-like each sentence reads (MELD): tinted from 10%, blocked out from 70%'],
 }
 const ramp = R => x => {
   const t = Math.min(1, x), u = Math.min(1.999, t * 2), i = u | 0, f = u - i
@@ -100,16 +100,21 @@ const cold = ramp([[198, 219, 239], [107, 174, 214], [33, 113, 181]])
 const tint = { bits: b => hot(b / 16), ent: b => cold(b / 12) }
 // MELD's reading: a text's tail is the share of human texts that score at
 // least as AI-like; ai is undefined while it reads, null where it does not run
-const rare = t => Math.max(0, Math.min(1, Math.log10(0.1 / t) / 2)) // 0 at 1 in 10, 1 at 1 in 1,000
-// a sentence's mark: none above 1 in 3 human sentences; plainly violet from
-// there to 1 in 10; past that solid, white-lettered and underlined, deeper
-// to 1 in 1,000. Its colours are the theme's (.scope-ai in style.css).
-const aiMark = a => !a || a.tail > 0.3 ? null : a.tail > 0.1
-  ? { class: 'scope-ai', style: `--ai:${(0.35 + 0.2 * Math.log10(0.3 / a.tail) / Math.log10(3)).toFixed(2)}` }
-  : { class: 'scope-ai ai-top', style: `--ai:${(0.7 + 0.3 * rare(a.tail)).toFixed(2)}` }
-const share = (t, of) => `${t >= 0.3 ? 'typical: ' : ''}${(100 * t).toFixed(t < 0.01 ? 1 : 0)}% of human ${of} score this AI-like or more`
+// AI-likeness, 0 to 1: 0 where half of human sentences read as AI-like (a
+// typical one), 1 where 1 in 1,000 do; between, on the log of that share,
+// so 20% is about 1 in 7 and 70% about 1 in 150.
+export const aiPct = t => Math.max(0, Math.min(1, Math.log10(0.5 / t) / Math.log10(500)))
+// a sentence's mark: tinted from 8%, strengthening; from 40% white-lettered
+// and underlined; from 70% blocked out. Colours: the theme's (.scope-ai in style.css)
+const aiMark = a => {
+  const p = a ? aiPct(a.tail) : 0
+  return p < 0.08 ? null : { class: `scope-ai${p >= 0.7 ? ' ai-top' : p >= 0.4 ? ' ai-mid' : ''}`,
+    style: `--ai:${Math.min(1, 0.22 + 0.85 * p).toFixed(2)}` }
+}
+const share = (t, of) => `AI-likeness ${Math.round(100 * aiPct(t))}%: ${t >= 0.5 ? 'typical of human ' + of
+  : `${(100 * t).toFixed(t < 0.01 ? 1 : 0)}% of human ${of} read this AI-like or more`}`
 export const aiText = a => a === undefined ? 'AI …' : !a ? 'no AI detector'
-  : `AI: ${a.words < 100 ? 'too short' : a.tail <= 0.01 ? 'flagged' : a.tail < 0.1 ? 'unusual' : 'typical'}`
+  : a.words < 100 ? 'AI: too short' : `AI ${Math.round(100 * aiPct(a.tail))}%`
 export const aiAbout = a => a === undefined ? 'MELD is still reading it.' : !a ? 'This engine runs no AI detector.' :
   `MELD: ${a.words < 100 ? 'needs 100+ words to judge; ' : ''}${share(a.tail, 'documents')}` +
   `${a.tail < 0.1 ? `; closest to ${a.family}, ${a.task}` : ''}.`
@@ -234,4 +239,25 @@ export function surprise(opts) {
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }
   return { extension: [scopeField, plugin, hover], refresh }
+}
+
+// MELD's reading of a whole text, apart from the overlay (the AI check):
+// { tail, words, sents: [{ tail, s, e }] } (s, e: characters of the text), or
+// null where no detector runs. From the hub's engine, or one on this machine.
+export async function readAi({ hub, url }, text) {
+  if (hub) {
+    const r = await (await fetch(hub + '?ai&report', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: text })).json()
+    if (r.error) throw new Error(r.error)
+    return r.ai
+  }
+  return new Promise((ok, no) => {
+    const ws = new WebSocket(url.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws')
+    let at
+    ws.onopen = () => ws.send(JSON.stringify({ seq: 1, text, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 }))
+    ws.onerror = () => no(new Error(`no Perplexiscope engine at ${url}`))
+    ws.onmessage = e => { const m = JSON.parse(e.data)
+      if (m.type === 'error') no(new Error(m.message))
+      else if (m.type === 'heat') at = m.sents
+      else if (m.type === 'ai') { ws.close(); ok(m.sents ? { ...m, sents: m.sents.map((x, i) => ({ ...x, s: at?.[i]?.s, e: at?.[i]?.e })) } : null) } }
+  })
 }

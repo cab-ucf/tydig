@@ -109,7 +109,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 /* narrower: what the menus also hold goes from the bar first */
 @media (max-width: 1360px) { #bar-cmd span { display: none; } }
 @media (max-width: 1280px) { #peers, #me { display: none; } }
-@media (max-width: 1100px) { #bar-cite, #bar-check, #bar-comment, #bar-build { display: none !important; } }
+@media (max-width: 1100px) { #bar-cite, #bar-check, #bar-comment, #bar-build, #bar-ai { display: none !important; } }
 #status[data-state="connected"] { color: var(--teal); }
 #status[data-state="disconnected"] { color: var(--red); }
 #status[data-review="1"]::after { content: ' review'; font-size: .72rem; color: var(--teal); }
@@ -253,13 +253,15 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
 .cm-ghost { color: var(--fg-dim); opacity: .7; font-style: italic; }
 /* the surprise overlay: words tinted, sentences underlined (or tinted by AI-likeness) */
 .scope-sent { text-decoration: underline 2px; text-underline-offset: 3px; }
-/* AI-likeness: violet, as strong as --ai (0 to 1), from the theme; the
-   rarest (.ai-top) solid, white-lettered and underlined */
-:root { --ai-hi: #8b5cf6; --ai-ink: #fff; --ai-line: #c4b5fd; }
-:root[data-theme="light"] { --ai-hi: #7c3aed; --ai-line: #4c1d95; }
-.scope-ai { border-radius: 2px; background: color-mix(in srgb, var(--ai-hi) calc(var(--ai) * 100%), transparent); }
-.scope-ai.ai-top { color: var(--ai-ink) !important; box-shadow: inset 0 -2px var(--ai-line); }
-.scope-ai.ai-top * { color: inherit !important; }
+/* AI-likeness: violet as strong as --ai (0 to 1); from 40% (.ai-mid)
+   white-lettered and underlined; from 70% (.ai-top) blocked out in a hot
+   magenta that no theme's text or syntax colour is mistaken for */
+:root { --ai-hi: #8b5cf6; --ai-ink: #fff; --ai-line: #ddd6fe; --ai-top: #e11d8f; --ai-ring: #ff7ac6; }
+:root[data-theme="light"] { --ai-hi: #7c3aed; --ai-line: #3b0764; --ai-top: #c2187a; --ai-ring: #831252; }
+:is(.scope-ai, .ai-chip[style]) { border-radius: 2px; background: color-mix(in srgb, var(--ai-hi) calc(var(--ai) * 100%), transparent); }
+:is(.scope-ai, .ai-chip):is(.ai-mid, .ai-top) { color: var(--ai-ink) !important; box-shadow: inset 0 -2px var(--ai-line); }
+:is(.scope-ai, .ai-chip).ai-top { background: var(--ai-top); font-weight: 700; box-shadow: 0 0 0 1px var(--ai-ring); }
+.scope-ai:is(.ai-mid, .ai-top) * { color: inherit !important; }
 /* a reading awaited: the marks fade, a bar sweeps the header, the bar's button pulses */
 #editor .pane-head { position: relative; }
 #editor.scope-busy .pane-head::after {
@@ -426,6 +428,14 @@ dialog h3 { margin: 0 0 .9rem; font: 600 1rem var(--sans); color: var(--hi); }
   background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 4px;
 }
 /* the list of keys, two columns; the vim leader's, at the foot of the screen */
+/* the AI check: bands, then the most AI-like sentences, each a click away */
+.ai-chip { display: inline-block; min-width: 2.6rem; text-align: center; padding: 0 .3rem; border-radius: 4px;
+  font: 600 .72rem var(--sans); color: var(--fg); }
+.ai-bands { display: flex; flex-direction: column; gap: .25rem; margin: .5rem 0; font-size: .8rem; }
+.ai-row { display: flex; gap: .5rem; align-items: baseline; padding: .4rem .2rem; border-bottom: 1px solid var(--ink-3);
+  font-size: .8rem; cursor: pointer; }
+.ai-row:hover { background: var(--ink-2); }
+.ai-row small { display: block; color: var(--fg-dim); font-size: .7rem; }
 #keys { width: min(860px, 94vw); max-height: 88vh; }
 #keys-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 2rem; }
 #keys h4 { margin: .9rem 0 .4rem; font: 600 .7rem var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim); }

@@ -5,9 +5,9 @@ import * as Y from 'yjs'
 import { diffArrays } from 'diff'
 import { renderCite, citeAt, bibOf } from './cite.js'
 import { parseBib } from '../../server/refs.mjs'
-import { prose } from './surprise.js'
+import { prose, readAi, aiPct } from './surprise.js'
 import { renderSpelling } from './spell.js'
-import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon } from './util.js'
+import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist } from './util.js'
 import { files, provider, local, okPath, GEN, setText } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -18,7 +18,7 @@ export let mode = null
 let citeCtx = {}
 const panes = () => ({ comments: renderComments, chat: renderChat, cite: b => renderCite(b, citeCtx),
   history: renderHistory, build: renderBuild, checklist: renderChecklist, template: renderTemplate,
-  review: renderReview, spelling: b => renderSpelling(b, { files, open: reveal }) })
+  review: renderReview, spelling: b => renderSpelling(b, { files, open: reveal }), aicheck: renderAiCheck })
 export function openSidebar(m) {
   mode = m; settings.sideOpen = true
   if (phone()) settings.m = 'side'
@@ -28,10 +28,11 @@ export function openSidebar(m) {
 // the panes always at hand, each with what is new in it; any other, a tab while open
 const TABS = { comments: 'Comments', chat: 'Discussion', history: 'History', build: 'Build' }
 export function tabs() {
-  const n = unseen(), extra = mode && !TABS[mode] ? { [mode]: mode[0].toUpperCase() + mode.slice(1) } : {}
+  const n = unseen(), extra = mode && !TABS[mode] ? { [mode]: { aicheck: 'AI check' }[mode] ?? mode[0].toUpperCase() + mode.slice(1) } : {}
   $('side-tabs').replaceChildren(...Object.entries({ ...TABS, ...extra }).map(([m, t]) => el('button',
     { className: m === mode ? 'on' : '', onclick: () => openSidebar(m) }, t,
     n[m] ? el('b', { className: 'badge', textContent: n[m] }) : '')))
+  $('side-tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 // the pane again, if it is the one open
 export function redraw(m) { if (mode === m) panes()[m]($('side-body')) }
@@ -40,6 +41,53 @@ export function toggleSide() {
   settings.sideOpen = false; applyLayout()
 }
 $('side-close').onclick = () => { settings.sideOpen = false; mode = null; applyLayout() }
+
+// ---- AI check ----
+// Every file's prose, read by MELD: each file's AI-likeness, how many
+// sentences fall in each band, and the most AI-like, each a click away.
+// What a reviewer might flag, before they do.
+let aiReport = null
+const BANDS = [[0.7, 'blocked out (70% and up)'], [0.4, 'strong (40 to 70%)'], [0.08, 'tinted (8 to 40%)'], [0, 'typical']]
+const chip = p => el('span', { className: `ai-chip${p >= 0.7 ? ' ai-top' : p >= 0.4 ? ' ai-mid' : ''}`,
+  style: `--ai:${Math.min(1, 0.22 + 0.85 * p).toFixed(2)}`, textContent: `${Math.round(100 * p)}%` })
+async function renderAiCheck(body) {
+  const engine = settings.scope?.url ? { url: settings.scope.url } : (await assist).surprise ? { hub: `/api${P('/surprise')}` } : null
+  if (!engine) return body.replaceChildren(el('p', { className: 'empty', textContent: 'No AI detector here: ' +
+    'Settings › Surprise overlay, with a Perplexiscope engine on this machine, or a hub that runs one.' }))
+  const status = el('p', { className: 'hint' })
+  const go = el('button', { className: 'go', textContent: aiReport ? 'Check again' : 'Check every file', onclick: async () => {
+    go.disabled = true; const out = []
+    const typs = [...files].filter(([p]) => p.endsWith('.typ') && !/^lib\/|^(checklist|budget|budget-report)\.typ$/.test(p))
+    for (const [i, [file, t]] of typs.entries()) {
+      const src = t.toString(), pr = prose(src)
+      if ((pr.text.match(/\p{L}+/gu) || []).length < 40) continue
+      status.textContent = `reading ${i + 1} of ${typs.length}: ${file}…`
+      try {
+        const a = await readAi(engine, pr.text)
+        if (a) out.push({ file, a, sents: a.sents.filter(x => x.s != null).map(x => {
+          const from = pr.at[x.s], to = pr.at[x.e - 1] + 1
+          return { file, from, to, p: aiPct(x.tail), text: src.slice(from, to).replace(/\s+/g, ' ').trim() }
+        }) })
+      } catch (e) { out.push({ file, error: e.message }) }
+    }
+    aiReport = out; redraw('aicheck')
+  } })
+  const r = aiReport, all = (r || []).flatMap(f => f.sents || [])
+  body.replaceChildren(el('p', { className: 'hint', textContent: 'How AI-like each sentence reads to MELD, ' +
+    'measured against human writing: what a reviewer might flag. The overlay (Settings) shows it as you write.' }),
+  go, status, ...!r ? [] : [
+    el('div', { className: 'ai-bands' }, ...BANDS.map(([lo, name], i) => {
+      const n = all.filter(s => s.p >= lo && (i === 0 || s.p < BANDS[i - 1][0])).length
+      return el('div', {}, lo ? chip(lo + 0.01) : el('span', { className: 'ai-chip', textContent: '·' }), ` ${n} ${name}`)
+    })),
+    ...r.map(f => el('p', { className: 'cfile', textContent: f.error ? `${f.file}: ${f.error}`
+      : `${f.file}: ${f.a.words < 100 ? 'too short to judge as a whole' : `AI-likeness ${Math.round(100 * aiPct(f.a.tail))}% as a whole`}` })),
+    ...all.filter(s => s.p >= 0.08).sort((a, b) => b.p - a.p).slice(0, 30).map(s =>
+      el('div', { className: 'ai-row', onclick: () => reveal(s.file, s.from, s.to) }, chip(s.p),
+        el('span', {}, s.text.length > 180 ? s.text.slice(0, 180) + '…' : s.text, el('small', { textContent: s.file })))),
+    all.length && !all.some(s => s.p >= 0.08) ? el('p', { className: 'empty', textContent: 'Every sentence reads as typical of human writing.' }) : '',
+  ])
+}
 
 // Cite: papers for the selection, alone or steered by the file's topic; the
 // citation goes after it

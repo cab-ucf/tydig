@@ -35,7 +35,7 @@ export const actions = {
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   discuss, comments: pane('comments'), chat: pane('chat'), checklist: pane('checklist'), template: pane('template'),
-  history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'),
+  history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'), aicheck: pane('aicheck'),
   ghost: toggleGhost, scope: toggleScope, 'scope-next': () => scopeBy(),
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,
@@ -66,7 +66,7 @@ export function applyLayout() {
     h.firstElementChild.textContent = settings[h.dataset.sect] ? '▾' : '▸'
   })
   $('side').hidden = !settings.sideOpen // hidden in the markup, so it does not flash before this
-  $('scope').hidden = !settings.scope
+  $('scope').hidden = !settings.scope; $('bar-ai').hidden = !settings.scope
   document.documentElement.dataset.theme = t; on('dark-preview', t !== 'light'); restyle()
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
   $('zoom-pct').textContent = settings.zoom ? `${Math.round(100 * settings.zoom)}%` : 'Fit'

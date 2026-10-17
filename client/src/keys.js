@@ -15,7 +15,7 @@ const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'to
   c: 'comment', C: 'comments', d: 'chat', b: 'build', z: 'focus', p: 'toggle-preview', j: 'toggle-side',
   1: 'view-editor', 2: 'view-split', 3: 'view-preview', '?': 'shortcuts',
   f: { name: 'Find', f: 'quick-open', c: 'palette', k: 'shortcuts', p: 'projects', r: 'cite-bib', t: 'theme' },
-  r: { name: 'References', r: 'cite-bib', c: 'cite', a: 'cite-alone', s: 'spelling' },
+  r: { name: 'References', r: 'cite-bib', c: 'cite', a: 'cite-alone', s: 'spelling', i: 'aicheck' },
   g: { name: 'Git', c: 'history', s: 'checkpoint', r: 'gitremote', S: 'share' },
   u: { name: 'UI', r: 'reset-layout', f: 'fullscreen', t: 'theme', s: 'spell', g: 'ghost', l: 'lsp', o: 'scope', v: 'vim' } }
 const EDITING = { 'Mod-B, Mod-I': 'bold, italic', 'Mod-Z, Mod-Shift-Z': 'undo, redo', 'Mod-/': 'comment out the line',

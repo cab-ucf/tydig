@@ -43,6 +43,7 @@ check('surprise: the text goes to the engine, its scores come back, nothing else
   scored.at(-1).text === big && scored.at(-1).cursor === null)
 const a = await (await as(ann, '/p/paper/surprise?ai', big, 'text/plain')).json()
 check('and with ?ai, the detector\'s reading of it, per sentence and whole', a.ai.tail === 0.004 && a.ai.sents[0].tail === 0.004 &&
+  'e' in a.ai.sents[0] &&
   a.ai.family === 'gpt' && !('secret' in a.ai) && Object.keys(a).join() === 'ai')
 const long = await as(ann, '/p/paper/surprise', 'too long', 'text/plain')
 check('what the engine refuses, it says why', long.status === 422 && /100,000 characters/.test((await long.json()).error))

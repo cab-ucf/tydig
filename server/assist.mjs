@@ -36,18 +36,20 @@ router.post('/ghost', async (req, res) => {
   } catch (e) { fail(res, e, 'model') } finally { done() }
 })
 
-// the words' scores; ?ai: the detector's reading instead (slower), null without one
+// the words' scores; ?ai: the detector's reading instead (slower), null without
+// one, each sentence with where it is (s, e: characters of the text); ?report:
+// a whole-document check, asked apart from the overlay's, so neither replaces the other
 router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
   if (!SCOPE) return res.status(404).json({ error: 'this hub serves no surprise engine' })
   if (typeof req.body !== 'string') return res.status(400).json({ error: 'the text, as text/plain' })
-  const ai = 'ai' in req.query, [signal, done] = ask(req, 'surprise')
+  const ai = 'ai' in req.query, [signal, done] = ask(req, 'report' in req.query ? 'report' : 'surprise')
   const ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws')
   try {
     res.json(await new Promise((ok, no) => {
       const err = (m, status) => no(Object.assign(new Error(m), { status }))
       signal.onabort = () => err('replaced by a newer ask', 409)
       setTimeout(() => no(new Error(`no answer in ${ai ? 180 : 60} s`)), (ai ? 180 : 60) * 1000).unref()
-      let detector
+      let detector, at
       ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 })))
       ws.on('error', no).on('message', m => {
         const j = JSON.parse(m)
@@ -55,7 +57,9 @@ router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
         else if (j.type === 'error') err(j.message, 422)
         else if (j.type === 'heat' && !ai) ok(pick(j, ['words', 'sents', 'ppl', 'bpt', 'ntok']))
         else if (j.type === 'heat' && (!detector || !j.sents.length)) ok({ ai: null })
-        else if (j.type === 'ai') ok({ ai: j.sents ? pick(j, ['score', 'tail', 'words', 'calibrated', 'family', 'task', 'sents']) : null })
+        else if (j.type === 'heat') at = j.sents
+        else if (j.type === 'ai') ok({ ai: j.sents ? { ...pick(j, ['score', 'tail', 'words', 'calibrated', 'family', 'task']),
+          sents: j.sents.map((x, i) => ({ ...x, s: at?.[i]?.s, e: at?.[i]?.e })) } : null })
       })
     }))
   } catch (e) { fail(res, e, 'surprise engine') } finally { ws.terminate(); done() }
