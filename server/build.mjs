@@ -5,7 +5,6 @@ import express from 'express'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
 import { run, proj, inProj, building, editable, readIn } from './store.mjs'
 import { at } from './sandbox.mjs'
@@ -24,8 +23,9 @@ const ask = (n, cmd, secs, i) => {
 const inSandbox = (n, cmd, secs) => new Promise((ok, no) => {
   let out = ''
   ask(n, cmd, secs).on('data', d => out += d).on('error', no).on('end', () => {
-    const r = out.startsWith('{') ? JSON.parse(out)
-      : { code: -1, stdout: '', stderr: 'the build sandbox did not answer: it may still be making its image (minutes, once per version)' }
+    let r
+    try { r = JSON.parse(out) } catch { r = { code: -1, stdout: '', stderr: out ? 'the build sandbox broke off its answer'
+      : 'the build sandbox did not answer: it may still be making its image (minutes, once per version)' } }
     r.code === 0 ? ok(r) : no(Object.assign(new Error(r.stderr), r))
   })
 })

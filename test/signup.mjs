@@ -45,6 +45,11 @@ check('a member cannot remove the owner',
   (await as(bob, `/p/paper/members/${org.members.find(m => m.role === 'owner').id}`, { method: 'DELETE' })).status >= 400)
 check('the owner removes a member', (await as(ann, `/p/paper/members/${bobId}`, { method: 'DELETE' })).ok)
 check('who then loses access', (await as(bob, '/p/paper/files')).status === 403)
+await as(ann, '/p/paper/members', { method: 'POST', body: JSON.stringify({ email: 'bob@example.com' }) })
+const again = (await (await as(ann, '/auth/organization/get-full-organization?organizationSlug=paper')).json())
+  .members.find(m => m.user.email === 'bob@example.com')?.id
+check('a member may leave', again && (await as(bob, `/p/paper/members/${again}`, { method: 'DELETE' })).ok &&
+  (await as(bob, '/p/paper/files')).status === 403)
 
 // the rest of the review
 check('a name is required (it, not the address, is shown on comments)', (await fetch(`${B}/api/auth/sign-up/email`, {

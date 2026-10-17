@@ -9,7 +9,8 @@ import * as Y from 'yjs'
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { HUB, hubFile, isProj, live, editable, merge3, putText } from './store.mjs'
+import { HUB, hubFile, isProj, live, editable, mergeInto } from './store.mjs'
+import { admin } from './auth.mjs'
 import { FILE as TAGFILE, tagsOf } from './tags.mjs'
 import { SEARCH, byDoi, byPmid, parseBib, addTo, check } from './refs.mjs'
 
@@ -22,8 +23,6 @@ const save = (n, a) => {
 }
 const hash = t => createHash('sha256').update(String(t)).digest('hex')
 
-const admin = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
-  : res.status(403).json({ error: 'only the owner or an admin' })
 export const router = express.Router({ mergeParams: true })
 router.get('/agents', (req, res) =>
   res.json(agentsOf(req.params.proj).map(({ name, created }) => ({ name, created }))))
@@ -100,8 +99,7 @@ const TOOLS = {
       // a reference stays as it is, and only a person sets what is one
       if (p === TAGFILE || tagsOf(textAt(doc, TAGFILE), p)['read-only'])
         throw new Error(`${p} is read-only here: ask a person to make it editable`)
-      const now = textAt(doc, p), base = reads.get(key + p)
-      putText(doc.getMap('files'), p, now != null && base != null ? await merge3(base, now, text) : text)
+      await mergeInto(doc.getMap('files'), p, reads.get(key + p), text)
       reads.set(key + p, text)
       return 'written'
     },
@@ -152,8 +150,8 @@ const TOOLS = {
     run: async ({ doi, pmid }, { doc }) => {
       const p = doi ? await byDoi(doi.replace(/^https?:\/\/(dx\.)?doi\.org\//, '')) : pmid && await byPmid(pmid)
       if (!p) throw new Error('give a DOI or PMID that exists (from tydig_search)')
-      const bib = bibOf(doc), r = await addTo(textAt(doc, bib) || '', p)
-      if (r.added) putText(doc.getMap('files'), bib, r.bib)
+      const bib = bibOf(doc), was = textAt(doc, bib) || '', r = await addTo(was, p)
+      if (r.added) await mergeInto(doc.getMap('files'), bib, was, r.bib)
       return { key: r.key, added: !!r.added, title: p.title, bibliography: bib }
     },
   },
@@ -184,7 +182,7 @@ const LIST = Object.entries(TOOLS).map(([name, t]) => ({ name, description: t.ab
 
 // /api/agent/<project>/mcp, the token as a Bearer
 export const mcp = express.Router({ mergeParams: true })
-mcp.use(express.json(), (req, res, next) => {
+mcp.use(express.json({ limit: '4mb' }), (req, res, next) => { // a whole file, escaped
   const t = /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1], n = req.params.proj
   req.agent = t && isProj(n) && agentsOf(n).find(a => a.hash === hash(t))?.name
   req.agent ? next() : res.status(401).json({ error: 'not an agent token for this project' })

@@ -5,10 +5,10 @@ import express from 'express'
 import compression from 'compression'
 import { toNodeHandler } from 'better-auth/node'
 import { existsSync } from 'node:fs'
-import { rm, mkdir, writeFile, rename } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
-import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, hubFile } from './store.mjs'
-import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db }
+import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped } from './store.mjs'
+import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin }
   from './auth.mjs'
 import * as build from './build.mjs'
 import * as files from './files.mjs'
@@ -70,7 +70,7 @@ app.use('/api', async (req, res, next) => {
   const s = await session(req.headers.cookie)
   if (!s?.user) return res.status(401).json({ error: 'not signed in' })
   req.user = s.user; next()
-}, express.json())
+}, express.json({ type: r => r.is('json') && !/^\/p\/[^/]+\/(raw|import)\//.test(r.path) })) // a .json uploaded is a file
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
 app.get('/api/link', (req, res) => res.json({ link: link.LINK, online: link.online }))
 // a join code (auth.mjs) makes whoever is signed in a member of its project
@@ -98,11 +98,12 @@ app.post('/api/projects/:name', async (req, res) => {
   const org = await auth.api.createOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { name: n, slug: n } }).catch(e => ({ error: e?.message || 'name unavailable' }))
   if (!org || org.error) return res.status(409).json({ error: org?.error || 'name unavailable' })
+  dropped.delete(n); await remote.claim(n, req.user.id)
   await ensureRepo(n)
   if (gitUrl) {
     const key = remote.sshUrl(gitUrl) ? await remote.deployKey(n) : null // kept: add it, try again
     try { await remote.adopt(n, gitUrl, branch) } catch (e) {
-      await rm(proj(n), { recursive: true, force: true })
+      await rm(proj(n), { recursive: true, force: true }); await remote.unadopt(n)
       await auth.api.deleteOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
         body: { organizationId: org.id } }).catch(() => {})
       return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}`, key })
@@ -123,49 +124,30 @@ app.use('/api/p/:proj', (req, res, next) => {
 }, p)
 for (const m of [files, build, history, remote, templates, agents, assist]) p.use(m.router)
 
-// The last preview a member's browser compiled, and the key (a hash) of what
-// it shows: a page opens on it before its own compiler has even loaded.
-// Served as an image, sandboxed, so nothing in it can run.
-p.get('/preview', (req, res) => {
-  const f = hubFile(req.params.proj, 'preview.svg')
-  if (!existsSync(f)) return res.status(204).end()
-  res.set({ 'Content-Security-Policy': 'sandbox', 'Cache-Control': 'no-cache' })
-  res.sendFile(f, { dotfiles: 'allow', headers: { 'Content-Type': 'image/svg+xml' } })
-})
-p.put('/preview', express.text({ type: 'image/svg+xml', limit: '16mb' }), async (req, res) => {
-  const key = String(req.query.key || '')
-  if (!/^\w{1,32}$/.test(key) || !req.body?.startsWith('<svg')) return res.status(400).json({ error: 'not a preview' })
-  const f = hubFile(req.params.proj, 'preview.svg')
-  await mkdir(hubFile(req.params.proj, ''), { recursive: true })
-  await writeFile(f + '.new', `<!--${key}-->` + req.body); await rename(f + '.new', f) // whole, or not at all
-  res.json({ ok: true })
-})
-
 // sharing: an account joins at once; an address without one is invited
-const owner = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
-  : res.status(403).json({ error: 'only the owner can share this project' })
-p.post('/members', owner, async (req, res) => {
+p.post('/members', admin, async (req, res) => {
   const email = String(req.body?.email || '').trim(), u = userByEmail(email)
   if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
   const inv = !u && await auth.api.createInvitation({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { email, role: 'member', organizationId: req.org.id } })
   res.json({ ok: true, invited: !u, invite: inv?.id ?? null })
 })
-p.get('/join', owner, (req, res) => res.json(joins.list(req.org.id)))
-p.post('/join', owner, (req, res) => res.json({ code: joins.add(req.org.id) }))
-p.delete('/join/:code', owner, (req, res) => res.json({ ok: !!joins.drop(req.org.id, req.params.code) }))
+p.get('/join', admin, (req, res) => res.json(joins.list(req.org.id)))
+p.post('/join', admin, (req, res) => res.json({ code: joins.add(req.org.id) }))
+p.delete('/join/:code', admin, (req, res) => res.json({ ok: !!joins.drop(req.org.id, req.params.code) }))
 // everyone reconnects and is checked again: the removed one is refused
 const kick = n => { hocuspocus.closeConnections(n); build.lspOpen.get(n)?.forEach(ws => ws.close()) }
 // the owner removes anyone; a member, only themself (leaving)
-p.delete('/members/:id', (req, res, next) => db.prepare('SELECT 1 FROM member WHERE id = ? AND userId = ?')
-  .get(req.params.id, req.user.id) ? next() : owner(req, res, next), async (req, res) => {
-  await auth.api.removeMember({ headers: new Headers({ cookie: req.headers.cookie }),
-    body: { memberIdOrEmail: req.params.id, organizationId: req.org.id } })
+const self = req => db.prepare('SELECT 1 FROM member WHERE id = ? AND userId = ?').get(req.params.id, req.user.id)
+p.delete('/members/:id', (req, res, next) => self(req) ? next() : admin(req, res, next), async (req, res) => {
+  const headers = new Headers({ cookie: req.headers.cookie }), organizationId = req.org.id
+  await (self(req) ? auth.api.leaveOrganization({ headers, body: { organizationId } })
+    : auth.api.removeMember({ headers, body: { memberIdOrEmail: req.params.id, organizationId } }))
   kick(req.params.proj); res.json({ ok: true })
 })
 lifecycle.dropProject = async n => {
   if (!isProj(n)) return
-  kick(n)
+  dropped.add(n); kick(n)
   for (const d of [proj(n), `${HUB}/${n}`]) await rm(d, { recursive: true, force: true })
 }
 

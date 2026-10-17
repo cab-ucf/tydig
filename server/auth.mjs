@@ -102,6 +102,9 @@ const gate = createAuthMiddleware(async ctx => {
 // a deleted account's projects pass to an admin, else the oldest member;
 // one nobody else is in goes with it (index.mjs removes its files)
 export const lifecycle = { dropProject: async () => {} }
+// what only a project's owner or an admin may do
+export const admin = (req, res, next) => ['owner', 'admin'].includes(req.org?.role) ? next()
+  : res.status(403).json({ error: 'only the project\'s owner or an admin can do that' })
 async function handOver(u) {
   const q = s => db.prepare(s)
   for (const { organizationId: o } of q("SELECT organizationId FROM member WHERE userId = ? AND role = 'owner'").all(u.id)) {

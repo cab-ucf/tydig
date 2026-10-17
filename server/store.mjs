@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs/promises'
 import { existsSync, watch, mkdirSync, constants as FS } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { migrate } from './migrate.mjs'
@@ -26,6 +27,14 @@ export const proj = n => path.join(DATA, n)
 export const inProj = (n, p) => path.join(DATA, n, p)
 export const hubFile = (n, f) => path.join(HUB, n, f)
 export const isProj = n => okName(n) && existsSync(inProj(n, '.git'))
+// projects being removed: nothing writes them again (a save may be under way)
+export const dropped = new Set()
+// whole or not at all, and never two writers in one temporary file
+export async function writeAtomic(f, data, mode) {
+  const tmp = `${f}.${randomUUID()}`
+  try { await fs.writeFile(tmp, data, { mode }); await fs.rename(tmp, f) }
+  finally { await fs.rm(tmp, { force: true }) }
+}
 
 // text: UTF-8, no NUL, under 1 MB, whatever the name
 const utf8 = new TextDecoder('utf-8', { fatal: true })
@@ -35,7 +44,8 @@ export const textOf = b => {
 }
 
 // git, one call at a time per project; never prompts, never runs a build's
-// fsmonitor; ssh with the project's deploy key only
+// fsmonitor nor follows a redirect (to a host never checked); ssh with the
+// project's deploy key only
 const KNOWN = path.join(HUB, 'known_hosts')
 if (!existsSync(KNOWN)) await fs.writeFile(KNOWN, 'github.com ssh-ed25519 ' +
   'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n')
@@ -48,10 +58,11 @@ export const gitPin = new Map() // project -> { host, port, ip }
 const gitQ = new Map()
 export const git = (n, ...a) => {
   const p = gitPin.get(n), ip = p && (p.ip.includes(':') ? `[${p.ip}]` : p.ip)
+  const cfg = [['core.fsmonitor', 'false'], ['http.followRedirects', 'false'],
+    ...p ? [['http.curloptResolve', `${p.host}:${p.port}:${ip}`]] : []]
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0',
-    GIT_SSH_COMMAND: ssh(n) + (p ? ` -o HostName=${p.ip} -o HostKeyAlias=${p.host}` : ''),
-    GIT_CONFIG_COUNT: p ? '2' : '1', GIT_CONFIG_KEY_0: 'core.fsmonitor', GIT_CONFIG_VALUE_0: 'false',
-    ...p && { GIT_CONFIG_KEY_1: 'http.curloptResolve', GIT_CONFIG_VALUE_1: `${p.host}:${p.port}:${ip}` } }
+    GIT_SSH_COMMAND: ssh(n) + (p ? ` -o HostName=${p.ip} -o HostKeyAlias=${p.host}` : ''), GIT_CONFIG_COUNT: String(cfg.length),
+    ...Object.fromEntries(cfg.flatMap(([k, v], i) => [[`GIT_CONFIG_KEY_${i}`, k], [`GIT_CONFIG_VALUE_${i}`, v]])) }
   const r = (gitQ.get(n) || Promise.resolve()).then(() =>
     run('git', ['-C', proj(n), ...a], { maxBuffer: 1 << 28, timeout: 600_000, env }))
   gitQ.set(n, r.catch(() => {}))
@@ -67,7 +78,7 @@ export async function ensureRepo(n) {
 
 // Files inside the project only: no symlink, no swapped directory (the
 // kernel says where the open file is).
-const bad = () => Object.assign(new Error('bad path'), { status: 400 })
+export const bad = () => Object.assign(new Error('bad path'), { status: 400 })
 export async function safe(n, rel) {
   const f = inProj(n, rel), root = await fs.realpath(proj(n)) + path.sep
   const d = await fs.realpath(path.dirname(f)).catch(() => '')
@@ -131,6 +142,15 @@ export async function mergeFile(base, ours, theirs, ...flags) {
 export const merge3 = async (base, ours, theirs) =>
   theirs === base || theirs === ours ? ours : ours === base ? theirs
     : (await mergeFile(base, ours, theirs, '--ours')).text
+// theirs (an outside edit of base; null: deleted) into the live text at p,
+// merged again should someone type while it merges: no keystroke is lost
+export async function mergeInto(files, p, base, theirs) {
+  for (;;) {
+    const ours = files.get(p)?.toString()
+    const s = theirs == null || ours == null || base == null ? theirs : await merge3(base, ours, theirs)
+    if (files.get(p)?.toString() === ours) return s == null ? files.delete(p) : putText(files, p, s)
+  }
+}
 
 export const building = new Set() // projects with a build running
 const mirrored = new Map() // proj -> Map path -> text last written
@@ -138,9 +158,11 @@ const mirrored = new Map() // proj -> Map path -> text last written
 // The working tree as a rendering of the CRDT: write what changed, delete
 // what left (not mid-build: a build may have swapped a folder for a link).
 export async function mirror(n, doc) {
+  if (dropped.has(n)) return
   await ensureRepo(n)
   const last = mirrored.get(n) ?? mirrored.set(n, new Map()).get(n), now = new Set()
   for (const [rel, t] of doc.getMap('files')) {
+    if (dropped.has(n)) return
     if (!editable(rel)) continue
     now.add(rel)
     const s = t.toString()
@@ -162,12 +184,14 @@ function watchProject(n, doc) {
   const seen = new Set()
   let t
   watchers.set(n, watch(proj(n), { recursive: true }, (_, f) => {
-    if (!f || f.startsWith('.git')) return
-    seen.add(f.replaceAll('\\', '/'))
+    f = f?.replaceAll('\\', '/') // .git/ is git's; .gitattributes and .gitignore are the project's
+    if (!f || f === '.git' || f.startsWith('.git/')) return
+    seen.add(f)
     clearTimeout(t)
     t = setTimeout(async () => {
       const files = doc.getMap('files'), rels = [...seen], ops = []
       seen.clear()
+      let merged = 0
       for (const rel of rels) {
         if (!existsSync(inProj(n, rel))) {
           ops.push(...[...files.keys()].filter(k => k === rel || k.startsWith(rel + '/')).map(k => [k, null]))
@@ -178,14 +202,14 @@ function watchProject(n, doc) {
         const base = mirrored.get(n)?.get(rel)
         if (s == null) continue
         if (!files.has(rel)) ops.push([rel, s])
-        else if (base != null && s !== base) ops.push([rel, await merge3(base, files.get(rel).toString(), s)])
+        else if (base != null && s !== base) merged++, await mergeInto(files, rel, base, s)
       }
       doc.transact(() => {
         for (const [rel, s] of ops) s == null ? files.delete(rel) : putText(files, rel, s)
       })
-      if (ops.length || rels.some(rel => !files.has(rel))) doc.getMap('meta').set('diskRev', Date.now())
+      if (ops.length || merged || rels.some(rel => !files.has(rel))) doc.getMap('meta').set('diskRev', Date.now())
     }, 400)
-  }))
+  }).on('error', () => {})) // the folder went (the project was removed)
 }
 
 // .collab/ is the hub's: peer hubs' CRDT state, the template's record. It
@@ -225,10 +249,8 @@ async function load(n, doc) {
 // State first, then the tree: a crash between leaves the disk older,
 // which the next load ignores.
 export async function save(n, doc) {
-  if (!isProj(n)) return
-  const tmp = `${crdtFile(n)}.${process.pid}`
-  await fs.writeFile(tmp, Y.encodeStateAsUpdate(doc))
-  await fs.rename(tmp, crdtFile(n))
+  if (!isProj(n) || dropped.has(n)) return
+  await writeAtomic(crdtFile(n), Y.encodeStateAsUpdate(doc))
   await mirror(n, doc)
   await commit(n, 'autosave')
 }

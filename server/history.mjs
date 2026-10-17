@@ -4,8 +4,8 @@
 // in git notes (refs/notes/provenance), checkable offline from a clone.
 import express from 'express'
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js'
-import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { rm, writeFile } from 'node:fs/promises'
 import { git, commit, live, mirror, editable, textOf, walk, proj, inProj, putText,
   hocuspocus, readIn } from './store.mjs'
 import { db } from './auth.mjs'
@@ -51,7 +51,13 @@ async function digest(n) {
   }
   return out
 }
-const note = (n, ref, msg) => git(n, 'notes', `--ref=${ref}`, 'add', '-f', '-m', msg, 'HEAD').catch(() => {})
+// from a file: a long thread passes what one argument may hold (128 kB)
+async function note(n, ref, msg) {
+  const f = inProj(n, `.git/tydig-note-${randomUUID()}`)
+  await writeFile(f, msg)
+  await git(n, 'notes', `--ref=${ref}`, 'add', '-f', '-F', f, 'HEAD').catch(() => {})
+  await rm(f, { force: true })
+}
 
 export const router = express.Router({ mergeParams: true })
 router.post('/checkpoint', async (req, res) => {
@@ -68,7 +74,7 @@ router.post('/checkpoint', async (req, res) => {
     await note(n, 'provenance', JSON.stringify(prov))
   }
   const comments = doc && JSON.stringify(Object.fromEntries(doc.getMap('comments')))
-  if (comments && comments !== '{}') await note(n, 'comments', comments.slice(0, 200_000))
+  if (comments && comments !== '{}') await note(n, 'comments', comments)
   // with a git remote, saving pushes; a slow one carries on after 20 s
   const pushed = (await remote.status(n)).configured ? await Promise.race([
     remote.sync(n, 'save').catch(e => ({ ok: false, error: e.message })),

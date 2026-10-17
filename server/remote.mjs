@@ -7,11 +7,12 @@
 import express from 'express'
 import * as Y from 'yjs'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-import { DATA, HUB, git, run, commit, live, mirror, editable, inProj, hubFile,
-  isProj, merge3, putText, collab, gitPin } from './store.mjs'
+import { DATA, HUB, git, run, commit, live, mirror, editable, hubFile,
+  isProj, mergeInto, collab, gitPin } from './store.mjs'
+import { admin } from './auth.mjs'
 import { publicOnly } from './public.mjs'
 
 const idFile = path.join(DATA, 'hub-id')
@@ -35,13 +36,25 @@ async function check(url, branch, n) {
   if (!(LOCAL ? /^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)\S+$/ : /^(https?:\/\/|git@|ssh:\/\/)\S+$/).test(String(url || '')))
     throw new Error(`not a git URL${LOCAL ? '' : ' (local paths need TYDIG_GIT_LOCAL=1)'}`)
   if (!/^(?!-)(?!.*\.\.)[\w./-]{1,100}$/.test(String(branch))) throw new Error('bad branch name')
-  const host = (/^[\w.-]+@([^:/]+):/.exec(url) || /^\w+:\/\/(?:[^@/]*@)?(\[[^\]]+\]|[^:/]+)/.exec(url))?.[1]
-  if (!host || process.env.TYDIG_GIT_PRIVATE === '1') return n && gitPin.delete(n)
-  const h = host.replace(/^\[|\]$/g, ''), [{ address }] = await publicOnly(h)
+  // the host as URL reads it (as curl will); nothing a parser could read two ways
+  if (/[\\\x00-\x20\x7f]/.test(url)) throw new Error('not a git URL')
+  const u = /^\w+:\/\//.test(url) ? new URL(url) : { hostname: /^[\w.-]+@([^:/]+):/.exec(url)?.[1] }
+  const h = u.hostname?.replace(/^\[|\]$/g, '')
+  if (!h || process.env.TYDIG_GIT_PRIVATE === '1') return n && gitPin.delete(n)
+  const [{ address }] = await publicOnly(h)
     .catch(e => { throw new Error(`${e.message}; TYDIG_GIT_PRIVATE=1 allows it`) })
-  const port = /^https?:\/\/[^/]*:(\d+)/.exec(url)?.[1] ?? (/^http:/.test(url) ? 80 : 443)
-  if (n) gitPin.set(n, { host: h, port, ip: address })
+  if (n) gitPin.set(n, { host: h, port: u.port || (u.protocol === 'http:' ? 80 : 443), ip: address })
 }
+
+// What a failed adoption left (its deploy key: add it, then try again) is
+// for whoever tried; anyone else making a project of that name starts clean.
+export async function claim(n, uid) {
+  const d = path.join(HUB, n), f = path.join(d, 'for')
+  if (existsSync(d) && await readFile(f, 'utf8').catch(() => '') !== uid) await rm(d, { recursive: true, force: true })
+  await mkdir(d, { recursive: true }); await writeFile(f, uid)
+}
+// a failed adoption keeps the key, not the URL (it may hold a token)
+export const unadopt = n => rm(hubFile(n, 'remote.json'), { force: true })
 
 // the project's own SSH key, for a private repo's deploy key
 export async function deployKey(n) {
@@ -64,16 +77,14 @@ async function writeState(n, doc) {
   await writeFile(await collab(n, `crdt/${hubId}.bin`), Y.encodeStateAsUpdate(doc), { flag: 'w' })
 }
 async function outside(n, doc, head) {
-  const mb = (await git(n, 'merge-base', head, 'FETCH_HEAD')).trim(), files = doc.getMap('files'), out = []
+  const mb = (await git(n, 'merge-base', head, 'FETCH_HEAD')).trim(), files = doc.getMap('files')
   const show = (c, f) => git(n, 'show', `${c}:${f}`).catch(() => null)
   for (const p of (await git(n, 'diff', '--name-only', '-z', mb, 'FETCH_HEAD')).split('\0')) {
     if (!editable(p) || p.startsWith('.collab/')) continue
     const [base, theirs] = await Promise.all([show(mb, p), show('FETCH_HEAD', p)])
     if (theirs?.includes('\0')) continue
-    const t = files.get(p)
-    out.push([p, theirs == null ? null : t ? await merge3(base ?? '', t.toString(), theirs) : theirs])
+    await mergeInto(files, p, base ?? '', theirs)
   }
-  doc.transact(() => out.forEach(([p, s]) => s == null ? files.delete(p) : putText(files, p, s)))
 }
 
 const inFlight = new Map()
@@ -149,8 +160,6 @@ export async function syncAll(reason) {
 export const start = () => setInterval(() => syncAll('periodic'),
   Number(process.env.TYDIG_GIT_PUSH_MINUTES || 5) * 60_000).unref()
 
-const admin = (req, res, next) => ['owner', 'admin'].includes(req.org.role) ? next()
-  : res.status(403).json({ error: 'only the owner or an admin can change where the project syncs' })
 const withKey = async n => ({ ...await status(n), key: existsSync(hubFile(n, 'key')) ? await deployKey(n) : null })
 export const router = express.Router({ mergeParams: true })
 router.get('/gitremote', async (req, res) => res.json(await withKey(req.params.proj)))

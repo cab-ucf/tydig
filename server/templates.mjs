@@ -10,7 +10,7 @@ import path from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { proj, inProj, walk, live, mirror, commit, putFile, fileNow, textOf, mergeFile,
-  merge3, setText, collab } from './store.mjs'
+  mergeInto, collab } from './store.mjs'
 
 const DIR = path.resolve(process.env.TYDIG_TEMPLATES || new URL('../templates', import.meta.url).pathname)
 const LAYERS = readdirSync(DIR, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort()
@@ -63,7 +63,7 @@ async function swap(n, doc, template, brand) {
     const [b, y, t] = [base, cur, theirs].map(x => x && textOf(x))
     if (b != null && y != null && t != null && files.has(p) && kept(b, t) >= 0.5) {
       const { conflicts } = await mergeFile(b, y, t)
-      setText(files.get(p), await merge3(b, y, t)); r.merged.push(p)
+      await mergeInto(files, p, b, t); r.merged.push(p)
       if (conflicts) r.kept.push([p, conflicts])
       continue
     }

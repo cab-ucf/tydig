@@ -63,6 +63,12 @@ rmSync('data/demo/old', { recursive: true }); await sleep(1500)
 check('rm -r on disk removes the folder from the CRDT', had && ![...fB.keys()].some(p => p.startsWith('old/')))
 check('deleting a disk-only file from the editor works',
   (await api('/p/demo/raw/blob.bin', { method: 'DELETE' })).ok && !ex('data/demo/blob.bin'))
+const json = '{"a": [1, 2]}\n' // a browser types a .json upload as JSON
+check('an upload is stored as sent, whatever its type', (await me.res('/p/demo/raw/up.json', { method: 'PUT',
+  headers: { 'content-type': 'application/json' }, body: json })).ok && get('data/demo/up.json', 'utf8') === json)
+put('data/demo/.gitattributes', 'a.typ read-only\n'); await sleep(1500)
+check('.gitattributes edited on disk reaches the editors (only .git/ is git\'s)',
+  fA.get('.gitattributes')?.toString() === 'a.typ read-only\n')
 check('generated build/ excluded from CRDT (disk-only)', ![...fA.keys()].some(p => p.startsWith('build/')))
 
 // multi-file edit sync

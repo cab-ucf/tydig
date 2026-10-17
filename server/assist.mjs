@@ -43,16 +43,18 @@ router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
   if (!SCOPE) return res.status(404).json({ error: 'this hub serves no surprise engine' })
   if (typeof req.body !== 'string') return res.status(400).json({ error: 'the text, as text/plain' })
   const ai = 'ai' in req.query, [signal, done] = ask(req, 'report' in req.query ? 'report' : 'surprise')
-  const ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws')
+  const ws = new WebSocket(SCOPE.replace(/^http/, 'ws') + '/ws'), secs = ai ? 180 : 60
+  let timer
   try {
     res.json(await new Promise((ok, no) => {
       const err = (m, status) => no(Object.assign(new Error(m), { status }))
       signal.onabort = () => err('replaced by a newer ask', 409)
-      setTimeout(() => no(new Error(`no answer in ${ai ? 180 : 60} s`)), (ai ? 180 : 60) * 1000).unref()
+      timer = setTimeout(() => no(new Error(`no answer in ${secs} s`)), secs * 1000)
       let detector, at
       ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 })))
-      ws.on('error', no).on('message', m => {
-        const j = JSON.parse(m)
+      ws.on('error', no).on('close', () => no(new Error('it hung up'))).on('message', m => {
+        let j
+        try { j = JSON.parse(m) } catch { return no(new Error('it answered nonsense')) }
         if (j.type === 'hello') detector = j.detector
         else if (j.type === 'error') err(j.message, 422)
         else if (j.type === 'heat' && !ai) ok(pick(j, ['words', 'sents', 'ppl', 'bpt', 'ntok']))
@@ -62,5 +64,5 @@ router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
           sents: j.sents.map((x, i) => ({ ...x, s: at?.[i]?.s, e: at?.[i]?.e })) } : null })
       })
     }))
-  } catch (e) { fail(res, e, 'surprise engine') } finally { ws.terminate(); done() }
+  } catch (e) { fail(res, e, 'surprise engine') } finally { clearTimeout(timer); ws.terminate(); done() }
 })
