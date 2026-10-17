@@ -1,0 +1,6 @@
+# What is sent: the note that carries it and the concept paper. The editor's
+# Checklist panel, the checklist page and `make full` read this.
+#   before: sent ahead, not part of what is assembled
+items:
+  - { id: note, name: Email to the program officer (paste it; attach the concept paper), file: out/note.pdf, before: true }
+  - { id: whitepaper, name: Concept paper, file: out/whitepaper.pdf, limit: 2 pages and references }

@@ -88,7 +88,7 @@ export function prose(src, typst = true) {
 export const MODES = {
   bits: ['surprise', 'how unexpected each word was to the model'],
   ent: ['flatness', 'how unsure the model was before each word: flat means many words could have come next'],
-  ai: ['AI-likeness', 'how rarely human sentences read as AI-like as each one (MELD): the more violet, the rarer'],
+  ai: ['AI-likeness', 'how few human sentences read as AI-like as each one (MELD): violet from 1 in 3, solid from 1 in 10'],
 }
 const ramp = R => x => {
   const t = Math.min(1, x), u = Math.min(1.999, t * 2), i = u | 0, f = u - i
@@ -101,9 +101,13 @@ const tint = { bits: b => hot(b / 16), ent: b => cold(b / 12) }
 // MELD's reading: a text's tail is the share of human texts that score at
 // least as AI-like; ai is undefined while it reads, null where it does not run
 const rare = t => Math.max(0, Math.min(1, Math.log10(0.1 / t) / 2)) // 0 at 1 in 10, 1 at 1 in 1,000
-const aiTint = a => rare(a.tail) ? `rgba(123,79,214,${(0.6 * rare(a.tail)).toFixed(2)})` : ''
-const share = (t, of) => t >= 0.1 ? `typical of human ${of}`
-  : `at most ${(100 * t).toFixed(t < 0.01 ? 1 : 0)}% of human ${of} score this AI-like`
+// a sentence's mark: none above 1 in 3 human sentences; plainly violet from
+// there to 1 in 10; past that solid, white-lettered and underlined, deeper
+// to 1 in 1,000. Its colours are the theme's (.scope-ai in style.css).
+const aiMark = a => !a || a.tail > 0.3 ? null : a.tail > 0.1
+  ? { class: 'scope-ai', style: `--ai:${(0.35 + 0.2 * Math.log10(0.3 / a.tail) / Math.log10(3)).toFixed(2)}` }
+  : { class: 'scope-ai ai-top', style: `--ai:${(0.7 + 0.3 * rare(a.tail)).toFixed(2)}` }
+const share = (t, of) => `${t >= 0.3 ? 'typical: ' : ''}${(100 * t).toFixed(t < 0.01 ? 1 : 0)}% of human ${of} score this AI-like or more`
 export const aiText = a => a === undefined ? 'AI …' : !a ? 'no AI detector'
   : `AI: ${a.words < 100 ? 'too short' : a.tail <= 0.01 ? 'flagged' : a.tail < 0.1 ? 'unusual' : 'typical'}`
 export const aiAbout = a => a === undefined ? 'MELD is still reading it.' : !a ? 'This engine runs no AI detector.' :
@@ -125,27 +129,31 @@ const scopeField = StateField.define({
 
 // opts: url () an engine's address on this machine, or null; hub () the hub's
 // route, or null; by () 'bits' | 'ent' | 'ai'; typst () is this a .typ;
-// report ({ ppl, ai } | { error }); after, a promise to wait for first
+// report ({ ppl, ai } | { error }); after, a promise to wait for first;
+// busy (true | false): whether a reading of the text as it is now is awaited
 export function surprise(opts) {
-  let ws, seq = 0, sent = null, view, last = null
+  let ws, seq = 0, sent = null, view, last = null, pending = false
+  const state = (p = pending) => { pending = p; opts.busy?.(pending || opts.by() === 'ai' && !!last && last.ai === undefined) }
+  const report = r => { r.error && state(false); opts.report(r) }
   const ask = async () => {
     await opts.after
     const url = opts.url(), hub = opts.hub()
-    if (!(url || hub) || !view) return
+    if (!(url || hub) || !view) return state(false)
+    state(true)
     const p = prose(view.state.doc.toString(), opts.typst())
     if (hub) { // the hub's own engine: the newest ask wins there too
       const n = ++seq; sent = p
       return fetch(hub, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: p.text }).then(r => r.json())
-        .then(h => n === seq && (h.error ? opts.report({ error: h.error }) : heat(h, hub, n)),
-          e => opts.report({ error: e.message }))
+        .then(h => n === seq && (h.error ? report({ error: h.error }) : heat(h, hub, n)),
+          e => report({ error: e.message }))
     }
     if (ws?.readyState !== 1) {
       if (ws?.readyState === 0) return
       ws = new WebSocket(url.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws')
       ws.onopen = ask
-      ws.onerror = () => opts.report({ error: `no Perplexiscope engine at ${url}: start it there (just, in its folder)` })
+      ws.onerror = () => report({ error: `no Perplexiscope engine at ${url}: start it there (just, in its folder)` })
       ws.onmessage = e => { const m = JSON.parse(e.data)
-        if (m.type === 'error') opts.report({ error: m.message })
+        if (m.type === 'error') report({ error: m.message })
         else if (m.seq !== seq) return
         else if (m.type === 'heat') heat(m)
         else if (m.type === 'ai') addAi(m.sents ? m : null) }
@@ -161,17 +169,18 @@ export function surprise(opts) {
     let i = 0
     for (const z of h.sents) { // a sentence is its z.w words, in order
       z.ent = h.words.slice(i, i += z.w).reduce((t, w) => t + w.ent, 0) / z.w
-      const [a, b] = src(z.s, z.e), c = ai ? z.ai && aiTint(z.ai) : tint[by](by === 'ent' ? z.ent : z.bits / z.w)
-      const style = c ? { style: ai ? `background:${c}` : `text-decoration-color:${c}` } : {}
-      if (a < b) marks.push(Decoration.mark({ class: ai ? 'scope-ai' : 'scope-sent', attributes: style, sent: z }).range(a, b))
+      const [a, b] = src(z.s, z.e), m = ai ? aiMark(z.ai) : null, c = !ai && tint[by](by === 'ent' ? z.ent : z.bits / z.w)
+      const spec = ai ? m && { class: m.class, attributes: { style: m.style } }
+        : { class: 'scope-sent', attributes: c ? { style: `text-decoration-color:${c}` } : {} }
+      if (a < b && spec) marks.push(Decoration.mark({ ...spec, sent: z }).range(a, b))
     }
     if (!ai) for (const w of h.words) {
       const [a, b] = src(w.s, w.e), c = tint[by](w[by])
-      marks.push(Decoration.mark({ attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
+      marks.push(Decoration.mark({ class: 'scope-w', attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
     }
     last = h
     view.dispatch({ effects: setScope.of(Decoration.set(marks, true)) })
-    opts.report({ ppl: h.ppl, bpt: h.bpt, ai: h.ai })
+    opts.report({ ppl: h.ppl, bpt: h.bpt, ai: h.ai }); state(false)
   }
   // MELD's reading of the text just shown, laid onto its sentences
   const addAi = a => {
@@ -184,11 +193,12 @@ export function surprise(opts) {
     h.ai = undefined; show(h)
     if (hub && last === h) fetch(hub + '?ai', { method: 'POST', headers: { 'content-type': 'text/plain' },
       body: sent.text }).then(r => r.json())
-      .then(r => n === seq && last === h && (r.error ? opts.report({ error: r.error }) : addAi(r.ai)), () => {})
+      .then(r => n === seq && last === h && (r.error ? opts.report({ error: r.error }) : addAi(r.ai)),
+        () => n === seq && last === h && addAi(null))
   }
   let t
   const plugin = ViewPlugin.define(v => (view = v, setTimeout(ask), {
-    update: u => { if (u.docChanged) { clearTimeout(t); t = setTimeout(ask, 700) } },
+    update: u => { if (u.docChanged && (opts.url() || opts.hub())) { state(true); clearTimeout(t); t = setTimeout(ask, 700) } },
   }))
   const hover = hoverTooltip((v, pos) => {
     let w, z
@@ -219,8 +229,8 @@ export function surprise(opts) {
   })
   // off: clear; a new mode: the same scores, highlighted again
   const refresh = () => {
-    if (opts.url() || opts.hub()) return last ? show(last) : ask()
-    last = null
+    if (opts.url() || opts.hub()) return last ? (show(last), state()) : ask()
+    last = null; state(false)
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }
   return { extension: [scopeField, plugin, hover], refresh }

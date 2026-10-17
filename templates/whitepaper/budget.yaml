@@ -1,0 +1,16 @@
+# The inputs of the white paper's cost estimate (rough order of magnitude);
+# lib/budget.typ computes the totals, rom() tabulates them, `make budget`
+# gives them as Excel. One entry per year where a list is given.
+rates:
+  fringe: 0.30    # of salary, unless a person sets their own
+  fa: 0.50        # the institution's negotiated rate, on modified total direct costs
+  raise: 0.03
+personnel:        # base salary, calendar months of effort per year
+  - { name: Ada Lovelace, salary: 120000, months: [1, 1, 1] }
+  - { name: Postdoctoral researcher (TBN), salary: 62000, months: [12, 12, 12], fringe: 0.25 }
+  - { name: Graduate student (TBN), salary: 32000, months: [12, 12, 12], fringe: 0.05 }
+other:            # fa: false keeps one out of the F&A base
+  - { item: Hardware for the prototype, cost: [30000, 10000, 0], category: equipment, fa: false }
+  - { item: Materials and supplies, cost: [10000, 10000, 8000], category: materials }
+  - { item: Travel to program reviews, cost: [5000, 5000, 5000], category: travel }
+  - { item: Graduate tuition, cost: [12000, 12000, 12000], category: other, fa: false }

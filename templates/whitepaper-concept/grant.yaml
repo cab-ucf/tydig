@@ -1,0 +1,44 @@
+# Everything the white paper says more than once lives here: edit it once,
+# and the paper, the note and the cost all follow.
+# A concept paper for a program officer (NSF, NIH, DOE, a foundation): two
+# pages that ask whether an idea fits, and how to make it fit, before a full
+# proposal. Ends with the questions you want answered.
+title: Teaching chemistry with instruments students build themselves
+date: November 3, 2026
+years: 3
+pages: two-page
+
+mechanism:
+  code: Concept paper
+  name: Concept paper for a program officer
+  modular: false
+
+format: { font: [Arial, Liberation Sans], size: 11, numbers: false }
+limits: { body: 2 }   # pages, references outside them
+
+institution:
+  name: University of Central Florida
+  department: Department of Chemistry
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+investigators:
+  - { name: Ada Lovelace, degrees: PhD, title: Associate Professor, email: ada.lovelace@example.edu }
+
+program:
+  agency: National Science Foundation
+  name: Improving Undergraduate STEM Education (IUSE)
+  manager: Dr. Example Officer
+  email: example.officer@nsf.gov
+
+aims:
+  - title: Build
+    summary: Students assemble a spectrometer from parts that cost less than a textbook.
+  - title: Measure
+    summary: They use it on questions from their own lives.
+  - title: Show it works
+    summary: Learning gains measured against the course as taught now.
+
+questions:
+  - Does this fit the program, or one of its tracks better than another?
+  - Is the scale right for a first proposal?
+  - What would make reviewers most confident in the evaluation?

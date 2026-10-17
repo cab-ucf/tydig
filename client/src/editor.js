@@ -167,6 +167,8 @@ const nextMode = () => modes[(modes.indexOf(settings.scope?.by) + 1) % modes.len
 const scope = surprise({
   url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api${P('/surprise')}`,
   by: () => settings.scope?.by, typst: () => !!path?.endsWith('.typ'), after: later,
+  // while a reading is awaited, the marks fade and a bar sweeps the editor's header
+  busy: on => { $('editor').classList.toggle('scope-busy', on); $('scope').classList.toggle('busy', on) },
   report: r => {
     const b = $('scope')
     b.hidden = !settings.scope

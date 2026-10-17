@@ -1,0 +1,50 @@
+# Everything the white paper says more than once lives here: edit it once,
+# and the paper, the note and the cost all follow.
+# The Heilmeier Catechism: the eight questions DARPA's program managers ask
+# (and ARPA-H's, IARPA's and ARPA-E's), each a heading. The call decides the
+# page limit and format; five pages is common.
+title: A sensor skin that tells a bridge where it hurts
+date: November 3, 2026
+years: 3
+pages: five-page
+
+mechanism:
+  code: White paper
+  name: White paper (Heilmeier Catechism)
+  modular: false
+
+format: { font: [Arial, Liberation Sans], size: 11, numbers: true }
+limits: { body: 5 }   # pages, references outside them
+
+institution:
+  name: University of Central Florida
+  department: Department of Civil, Environmental and Construction Engineering
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI.
+investigators:
+  - { name: Ada Lovelace, degrees: PhD, title: Associate Professor, email: ada.lovelace@example.edu }
+  - { name: Charles Babbage, degrees: PhD, title: Professor, email: charles.babbage@example.edu }
+
+# Who it goes to, and under what call (an office-wide BAA, a program's, or none)
+program:
+  agency: DARPA
+  name: Defense Sciences Office
+  manager: Dr. Example Manager
+  email: example.manager@darpa.mil
+  call: HR001126S0001       # the BAA or call it answers, if any
+
+# What we are trying to do: one line each
+aims:
+  - title: Print strain and crack sensing into a coating
+    summary: A paint-on layer that reports where strain concentrates and cracks begin.
+  - title: Read it without wires
+    summary: Passive tags a drone reads from ten metres.
+  - title: Prove it on a real bridge
+    summary: A year on a span the state already monitors, against its own sensors.
+
+# When, what, and the test that says it worked: the mid-term and final exams
+milestones:
+  - { month: 6, what: Coating senses strain on coupons, exam: "within 5% of foil gauges, 10^6 cycles" }
+  - { month: 18, what: Wireless readout from a drone, exam: "every tag read at 10 m in under 1 s" }
+  - { month: 36, what: A year on a bridge, exam: "finds every crack the inspectors find, and earlier" }

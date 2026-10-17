@@ -15,8 +15,9 @@ const mk = () => me.doc('demo')
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
 const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established',
-  'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research']) made.push(await nih(t))
-const [r21, r03, sepa, goali, esi, mira, eager, aid, cmmi, cmi] = made
+  'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept'])
+  made.push(await nih(t))
+const [r21, r03, sepa, goali, esi, mira, eager, aid, cmmi, cmi, heil, dod, concept] = made
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
@@ -43,6 +44,11 @@ check('NSF EAGER, AI Datasets, CMMI and CMI: each its solicitation\'s rules on t
   /award: 400000/.test(yml('nsf-eager')) && /1\. Vision and community benefit for dataset enhancement/.test(get('data/nsf-aidatasets/main.typ', 'utf8')) &&
   /Keywords:/.test(get('data/nsf-aidatasets/summary.typ', 'utf8')) && cmmi.includes('onepager.typ') && /NSF 26-515/.test(yml('nsf-cmmi')) &&
   /prefix: "Instrument Development:"/.test(yml('nsf-cmi-research')) && !cmi.includes('goali-letter.typ'))
+check('white papers, three styles on one layer: Heilmeier, a DoD BAA\'s (cover page, Times), a concept paper',
+  [heil, dod, concept].every(f => ['lib/whitepaper.typ', 'note.typ', 'main.typ', 'budget.yaml'].every(x => f.includes(x))) &&
+  /What are the risks\?/.test(get('data/whitepaper-heilmeier/main.typ', 'utf8')) &&
+  /section\("cover"/.test(get('data/whitepaper-dod/main.typ', 'utf8')) && /Liberation Serif/.test(yml('whitepaper-dod')) &&
+  /questions:/.test(yml('whitepaper-concept')) && !(await api('/templates')).templates.includes('whitepaper'))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -150,7 +156,8 @@ else {
   const out = (await api('/p/nih-r21/files')).map(f => f.path)
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
-  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established', 'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research']) {
+  for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established', 'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research',
+    'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept']) {
     const r = await api(`/p/${t}/build/full`, { method: 'POST' })
     check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
   }

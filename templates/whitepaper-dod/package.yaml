@@ -1,0 +1,13 @@
+# What is sent: the note that carries it, the white paper (its cover page
+# within), each investigator's resume where the call asks, and anything else
+# it names (ONR has its own cover page forms for some calls). The editor's
+# Checklist panel, the checklist page and `make full` read this.
+#   before: sent ahead, not part of what is assembled
+items:
+  - { id: note, name: Email to the program manager (paste it; attach the white paper), file: out/note.pdf, before: true }
+  - { id: whitepaper, name: "White paper (cover page, body, references)", file: out/whitepaper.pdf, limit: 5 pages besides the cover and references }
+  - id: resume
+    name: Resume
+    each: investigators
+    file: "docs/resume-{key}.pdf"
+    when: applicable

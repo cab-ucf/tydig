@@ -1,0 +1,58 @@
+# Everything the white paper says more than once lives here: edit it once,
+# and the paper, the note and the cost all follow.
+# A white paper to a DoD service's broad agency announcement (ONR, AFOSR,
+# ARO, AFRL alike): a cover page, then about five pages (ONR's recent calls:
+# five single-sided, 12-point Times New Roman, 1 in margins, the cover page,
+# references and the PI's resume not counted), the service's relevance, and
+# a rough order of magnitude (ROM) cost. The call decides over all of it.
+title: Learned turbulence closures for ship air-wake prediction
+date: November 3, 2026
+years: 3
+pages: five-page
+
+mechanism:
+  code: White paper
+  name: White paper (DoD broad agency announcement)
+  modular: false
+
+format: { font: [Times New Roman, Liberation Serif], size: 12, numbers: true }
+limits: { body: 5 }   # pages; the cover page, references and resumes outside them
+
+institution:
+  name: University of Central Florida
+  department: Department of Mechanical and Aerospace Engineering
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+  admin: { name: Example Contracts Officer, email: contracts@example.edu, phone: "407-555-0100" }
+
+# The first is the PI, the technical point of contact.
+investigators:
+  - { name: Ada Lovelace, degrees: PhD, title: Associate Professor, email: ada.lovelace@example.edu, phone: "407-555-0101" }
+  - { name: Charles Babbage, degrees: PhD, title: Professor, email: charles.babbage@example.edu }
+
+program:
+  agency: Office of Naval Research
+  name: Code 35, Aviation Force Projection and Integrated Defense
+  manager: Dr. Example Manager
+  email: example.manager@navy.mil
+  call: N00014-25-S-B001     # the BAA (ONR's Long Range BAA), and its research topic below
+  topic: Ship air-wake and aircraft–ship interaction
+  research: Applied research (6.2)   # basic (6.1) leads with relevance to the future force; applied with the ROM
+  relevance: Naval relevance          # Air Force or Army relevance, for the other services
+
+aims:
+  - title: Learn closures from the flow they model
+    summary: Turbulence closures trained on resolved air-wake simulations and wind-tunnel data.
+  - title: Keep them physical
+    summary: Constraints that hold the learned terms to the conservation laws.
+  - title: Show it on a ship class
+    summary: Air-wake predictions checked against full-scale measurements.
+
+milestones:
+  - { month: 9, what: Closures trained on resolved simulations, exam: "error under half of today's model's" }
+  - { month: 21, what: Constrained closures in a ship code, exam: "stable on three hull forms" }
+  - { month: 36, what: Validated against full-scale data, exam: "within the measurements' uncertainty" }
+
+deliverables:
+  - Annual technical reports, and a final report
+  - The trained closures and the code that applies them, to the government
+  - Air-wake predictions for the ship class studied

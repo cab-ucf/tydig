@@ -1,0 +1,6 @@
+# What is sent: the note that carries it, the white paper, and anything the
+# call adds. The editor's Checklist panel, the checklist page and `make full`
+# read this.  before: sent ahead, not part of what is assembled
+items:
+  - { id: note, name: Email to the program manager (paste it; attach the white paper), file: out/note.pdf, before: true }
+  - { id: whitepaper, name: White paper, file: out/whitepaper.pdf, limit: 5 pages and references }
