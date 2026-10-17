@@ -168,6 +168,12 @@ body.no-tree #tree-pane { display: none; }
 .tnode.active { background: var(--ink-3); color: var(--hi); }
 .tnode.picked { background: var(--ink-3); box-shadow: inset 2px 0 var(--teal); }
 .tnode.dropping { outline: 1px dashed var(--teal); outline-offset: -1px; }
+/* tags: AI-generated, read-only (server/tags.mjs) */
+.ftag { flex: none; margin-left: .35rem; padding: 0 .3rem; border-radius: 3px; font: 600 .62rem/1.5 var(--sans);
+  color: var(--fg-dim); border: 1px solid var(--ink-3); }
+.ftag.ai-generated { color: #fff; background: var(--ai-hi); border-color: transparent; }
+#filetags { display: flex; gap: .25rem; }
+#filetags .ftag { font-size: .68rem; }
 .tnode .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .tnode.bin .fname { color: var(--fg-dim); font-style: italic; }
 .tnode.dir .fname { color: var(--fg); }

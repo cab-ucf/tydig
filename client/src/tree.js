@@ -3,7 +3,7 @@
 import * as Y from 'yjs'
 import { $, el, dot, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose }
   from './util.js'
-import { ydoc, files, comments, meta, provider, okPath, GEN, setText } from './doc.js'
+import { ydoc, files, comments, meta, provider, okPath, GEN, setText, tags, tag, TAGS } from './doc.js'
 import { path, open, openFile } from './editor.js'
 import { fileComments, rel } from './comments.js'
 import { scheduleCompile } from './preview.js'
@@ -30,11 +30,14 @@ const picked = new Set() // Ctrl/Cmd-click picks several; x then deletes them al
 const openDirs = new Set(JSON.parse(localStorage['dirs:' + projName] || '[]'))
 const saveDirs = () => localStorage['dirs:' + projName] = JSON.stringify([...openDirs])
 const btn = (cls, title, text) => `<button class="${cls}" title="${title}">${text}</button>`
-const OPS = { file: btn('get', 'download', '&darr;') + btn('rn', 'rename', '~'),
+const OPS = { file: btn('get', 'download', '&darr;') + btn('rn', 'rename', '~') + btn('tg', 'tags: AI-generated, read-only', '#'),
   dir: btn('addf', 'new file here', '+') + btn('upd', 'upload here', 'up') }
+const badge = p => Object.keys(tags(p)).map(k => `<span class="ftag ${k}" title="${TAGS[k]}">${k === 'read-only'
+  ? '&#128274;' : 'AI'}</span>`).join('')
 const row = (cls, p, depth, twisty, dots = '') => `<div class="tnode ${cls}" title="${esc(p)}" ` +
   `style="padding-left:${0.5 + depth * 0.85}rem">${twisty}<span class="fname">${esc(p.split('/').pop())}` +
-  `</span>${dots}<span class="ops">${OPS[cls === 'dir' ? 'dir' : 'file']}${btn('del', 'delete', 'x')}</span></div>`
+  `</span>${cls === 'dir' ? '' : badge(p)}${dots}<span class="ops">${OPS[cls === 'dir' ? 'dir' : 'file']}` +
+  `${btn('del', 'delete', 'x')}</span></div>`
 
 export function renderTree() {
   const here = {}, root = { dirs: new Map(), files: [] }, html = []
@@ -74,6 +77,7 @@ tree.onclick = e => {
   }
   if (b === 'get') return download(rawUrl(p), p)
   if (b === 'rn') return rename(p)
+  if (b === 'tg') return tagMenu(p)
   if (b === 'del') return remove(picked.has(p) ? [...picked] : [p])
   if (e.ctrlKey || e.metaKey) { picked.has(p) ? picked.delete(p) : picked.add(p); return renderTree() }
   picked.clear(); open(p)
@@ -91,7 +95,16 @@ const hover = e => {
 tree.ondragover = tree.ondragleave = hover
 tree.ondrop = e => { hover(e); upload(e.dataTransfer.files, e.target.closest('.dir')?.title ?? '') }
 
+// a file's tags, each to set or unset
+export const tagMenu = p => choose(Object.entries(TAGS).map(([k, name]) => {
+  const on = !!tags(p)[k]
+  return { label: k === 'read-only' ? on ? 'Make editable' : 'Make read-only (a reference)'
+    : on ? 'Not AI-generated' : 'Mark as AI-generated', hint: on ? `${name}: yes` : '', run: () => tag(p, k, !on) }
+}), `tags of ${p}`)
+const locked = ps => ps.filter(p => tags(p)['read-only'])
+
 async function remove(ps) {
+  if (locked(ps).length) return alert(`Read-only, so kept: ${locked(ps).join(', ')}. Make it editable first (tag).`)
   if (!ps.length || !confirm(ps.length > 1 ? `Delete these ${ps.length} files?\n${ps.join('\n')}`
     : `Delete ${ps[0]}?`)) return
   const gone = ps.filter(p => !files.has(p))
@@ -142,6 +155,7 @@ export function newFile(prefix = '') {
   openFile(p)
 }
 function rename(p) {
+  if (locked([p]).length) return alert(`${p} is read-only. Make it editable first (tag).`)
   const yt = files.get(p)
   if (!yt) return alert('Disk-only files: move via shell or a recipe.')
   const np = prompt('New path:', p)?.replace(/^\/+/, '')

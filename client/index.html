@@ -38,6 +38,7 @@
         <button data-act="cite-alone">Find papers for the selection alone</button>
         <button data-act="spelling">Check spelling, every file</button>
         <button data-act="aicheck">Check AI-likeness, every file</button>
+        <button data-act="tags">Tags of this file: AI-generated, read-only</button>
       </div></div>
       <div class="menu"><button>View</button><div class="dropdown">
         <button data-act="comments">Comments</button>
@@ -132,7 +133,7 @@
       <input id="upload-input" type="file" hidden multiple />
     </nav>
     <section id="editor">
-      <div class="pane-head"><span id="filepath"></span><span id="wordcount" title="words in this file"></span></div>
+      <div class="pane-head"><span id="filepath"></span><span id="filetags"></span><span id="wordcount" title="words in this file"></span></div>
       <div id="cm"></div>
     </section>
     <div id="split" title="drag to resize; double-click to even out"></div>

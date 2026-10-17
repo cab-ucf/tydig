@@ -9,7 +9,8 @@ import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleSco
 import { toggleGhost } from './ghost.js'
 import { addComment, discuss } from './comments.js'
 import { exportPdf, exportDocx, fitText, zoom, scheduleCompile } from './preview.js'
-import { newFile, uploadTo, quickOpen } from './tree.js'
+import { newFile, uploadTo, quickOpen, tagMenu } from './tree.js'
+import { tags } from './doc.js'
 import { mode, openSidebar, toggleSide, checkpoint, cite, citeFromBib } from './panels.js'
 import { toggleComment } from '@codemirror/commands'
 import { openPicker, showShare, showGitRemote } from './dialogs.js'
@@ -22,7 +23,7 @@ export const actions = {
   save: () => checkpoint('save'), checkpoint: () => checkpoint(), 'export-pdf': exportPdf, 'export-docx': exportDocx,
   'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
-  undo: () => undo.get(path)?.undo(), redo: () => undo.get(path)?.redo(), comment: () => addComment(), cite: () => cite(),
+  undo: () => tags(path)['read-only'] || undo.get(path)?.undo(), redo: () => tags(path)['read-only'] || undo.get(path)?.redo(), comment: () => addComment(), cite: () => cite(),
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
   'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
   'toggle-preview': () => show(settings.view === 'split' ? 'editor' : 'split')(),
@@ -35,7 +36,7 @@ export const actions = {
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   discuss, comments: pane('comments'), chat: pane('chat'), checklist: pane('checklist'), template: pane('template'),
-  history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'), aicheck: pane('aicheck'),
+  tags: () => path && tagMenu(path), history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'), aicheck: pane('aicheck'),
   ghost: toggleGhost, scope: toggleScope, 'scope-next': () => scopeBy(),
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,

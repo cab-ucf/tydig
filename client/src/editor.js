@@ -2,8 +2,8 @@
 // tinymist (LSP), spelling, comments, ghost text and the surprise overlay. A file that
 // is not shared text opens read-only, as an image, or is downloaded.
 import { basicSetup } from 'codemirror'
-import { EditorView, keymap } from '@codemirror/view'
-import { EditorState, EditorSelection, Compartment, Prec } from '@codemirror/state'
+import { EditorView, ViewPlugin, keymap } from '@codemirror/view'
+import { EditorState, EditorSelection, Compartment, Prec, Annotation } from '@codemirror/state'
 import { HighlightStyle, syntaxHighlighting, LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { indentWithTab } from '@codemirror/commands'
@@ -14,7 +14,7 @@ import { typst } from 'codemirror-lang-typst'
 import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { spellcheck } from './spell.js'
 import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asText } from './util.js'
-import { files, provider, token, ws, isImg, okPath, GEN } from './doc.js'
+import { files, provider, token, ws, isImg, okPath, GEN, tags, onTags, TAGS } from './doc.js'
 import { ghost } from './ghost.js'
 import { commentExt } from './comments.js'
 import { scheduleCompile } from './preview.js'
@@ -103,8 +103,34 @@ const show = (state, ...dom) => {
   view?.destroy()
   $('cm').replaceChildren(...dom); $('filepath').textContent = path || ''
   view = state && new EditorView({ state, parent: $('cm') })
-  countWords(); renderTree()
+  countWords(); renderTree(); fileTags()
 }
+// the open file's tags, over the editor
+const fileTags = () => $('filetags').replaceChildren(...Object.keys(path ? tags(path) : {}).map(k =>
+  el('span', { className: 'ftag ' + k, textContent: TAGS[k], title: k === 'read-only'
+    ? 'A reference: not edited here. The tree (tag) or the Edit menu makes it editable.' : 'Written by AI' })))
+// a file made read-only, or editable, opens again as it now is
+let wasRo = false
+onTags(() => { fileTags(); renderTree()
+  if (path && files.has(path) && !!tags(path)['read-only'] !== wasRo) openFile(path) })
+
+// A read-only file: shown, not bound for editing. The shared text's changes
+// come in; nothing from here (typing, ghost text, a fix, a citation) goes out.
+const synced = Annotation.define()
+const follow = yt => [EditorState.readOnly.of(true), EditorState.changeFilter.of(tr => !!tr.annotation(synced)),
+  ViewPlugin.define(v => {
+    const f = e => { // Yjs's delta, as CodeMirror's changes to the text before it
+      const changes = []; let at = 0
+      for (const d of e.delta) {
+        if (d.retain) at += d.retain
+        else if (d.insert) changes.push({ from: at, insert: d.insert })
+        else if (d.delete) changes.push({ from: at, to: at += d.delete })
+      }
+      v.dispatch({ changes, annotations: synced.of(true) })
+    }
+    yt.observe(f)
+    return { destroy: () => yt.unobserve(f) }
+  })]
 
 // Mod-B, Mod-I: *bold*, _italic_ around the selection (or at the cursor)
 const wrap = m => v => (v.dispatch(v.state.changeByRange(r => ({ range: EditorSelection.range(r.from + 1, r.to + 1),
@@ -117,12 +143,12 @@ export async function openFile(p) {
   if (!yt) return
   const my = ++opening, [lang, vimKeys] = await Promise.all([langFor(p), settings.vim ? vimExt() : []])
   if (my !== opening) return // another file was opened meanwhile
-  path = p
+  path = p; wasRo = !!tags(p)['read-only']
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
     vimC.of(vimKeys), basicSetup, themeC.of(themeExt()), lang, lspC.of([]), spellC.of(spellExt(p)),
-    keymap.of([indentWithTab, ...yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
-    yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
+    keymap.of([indentWithTab, ...wasRo ? [] : yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
+    wasRo ? follow(yt) : yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,
     EditorView.updateListener.of(u => u.docChanged && (scheduleCompile(), countWords())),
   ] }))

@@ -1,0 +1,6 @@
+# Tags tydig reads (git ignores names it does not know): ai-generated labels
+# a file as written by AI; read-only keeps it as a reference, unedited. Set or
+# unset them per file in the editor's tree (#), or here.
+lib/** ai-generated read-only
+lib/brand.typ -read-only
+CLAUDE.md ai-generated

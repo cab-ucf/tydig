@@ -47,6 +47,10 @@ await tool('tydig_write', { path: 'main.typ', text: text.replace('= Pre-registra
 await sleep(500)
 check('its edit reaches the editor live, and ann\'s typing is kept', main.toString().includes('(plainly)') && main.toString().startsWith('// ann typing meanwhile'))
 check('it cannot write build outputs', (await tool('tydig_write', { path: 'out/x.pdf', text: 'x' })).error)
+doc.getMap('files').set('.gitattributes', new Y.Text('summary.typ read-only\n')); await sleep(500)
+check('nor a file tagged read-only, nor the tags themselves', /read-only/.test((await tool('tydig_write', { path: 'summary.typ', text: 'x' })).error) &&
+  /read-only/.test((await tool('tydig_write', { path: '.gitattributes', text: '' })).error))
+doc.getMap('files').delete('.gitattributes')
 await tool('tydig_reply', { answers: 'c1', text: 'Done: plainer heading.' })
 await sleep(500)
 const reply = doc.getArray('chat').toArray().find(m => m.answers === 'c1')

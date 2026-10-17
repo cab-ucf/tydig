@@ -10,6 +10,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { HUB, hubFile, isProj, live, editable, merge3, putText } from './store.mjs'
+import { FILE as TAGFILE, tagsOf } from './tags.mjs'
 import { SEARCH, byDoi, byPmid, parseBib, addTo, check } from './refs.mjs'
 
 // tokens: the hub keeps their hashes (DATA/.hub/<project>/agents.json)
@@ -96,6 +97,9 @@ const TOOLS = {
     args: { path: str('the file'), text: str('its whole new content') },
     run: async ({ path: p, text }, { key, doc }) => {
       if (!editable(p) || typeof text !== 'string' || text.length > 1e6) throw new Error('bad path or text')
+      // a reference stays as it is, and only a person sets what is one
+      if (p === TAGFILE || tagsOf(textAt(doc, TAGFILE), p)['read-only'])
+        throw new Error(`${p} is read-only here: ask a person to make it editable`)
       const now = textAt(doc, p), base = reads.get(key + p)
       putText(doc.getMap('files'), p, now != null && base != null ? await merge3(base, now, text) : text)
       reads.set(key + p, text)

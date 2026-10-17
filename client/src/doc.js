@@ -5,6 +5,7 @@ import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
 import { $, link, me, projName } from './util.js'
 import { openPicker } from './dialogs.js'
+import { FILE as TAGFILE, TAGS, tagsOf, setTag } from '../../server/tags.mjs'
 
 if (!projName) { openPicker(); throw new Error('awaiting project choice') }
 
@@ -38,3 +39,15 @@ export const isImg = p => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(p)
 export const okPath = p => /^[\w./@ -]+$/.test(p) &&
   p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
 export const setText = (t, s) => ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) })
+
+// A file's tags, from the project's .gitattributes (server/tags.mjs):
+// ai-generated, read-only. Setting one edits that file, so it syncs and is kept.
+export { TAGFILE, TAGS }
+export const tags = p => tagsOf(files.get(TAGFILE)?.toString(), p)
+export const tag = (p, name, on) => {
+  const t = files.get(TAGFILE), s = setTag(t?.toString(), p, name, on)
+  t ? setText(t, s) : files.set(TAGFILE, new Y.Text(s))
+}
+// told whenever the tags may have changed
+export const onTags = f => files.observeDeep(evs => evs.some(e => e.target === files.get(TAGFILE) ||
+  e.keysChanged?.has(TAGFILE)) && f())

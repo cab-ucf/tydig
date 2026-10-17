@@ -267,6 +267,24 @@ await key('Escape'); await page.evaluate(() => { document.querySelector('#menuba
 check('Mod-\\ hides the preview; in vim Space 3 shows it alone, :only the editor; ? lists the keys',
   hid === 'editor' && leader === 'preview' && ex === 'editor' && help)
 
+// tags: a file made read-only from the tree takes no typing, is labelled, and is made editable again
+const tagIt = async label => { await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')]
+  .find(n => n.title === 'summary.typ').querySelector('.tg').click()); await sleep(200)
+  await page.evaluate(l => [...document.querySelectorAll('#qo-list div')].find(d => d.textContent.startsWith(l)).click(), label); await sleep(600) }
+await tagIt('Make read-only'); await tagIt('Mark as AI-generated')
+await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')].find(n => n.title === 'summary.typ').click()); await sleep(800)
+const before = await page.evaluate(() => document.querySelector('.cm-content').textContent)
+await page.click('.cm-content'); await page.keyboard.type('zzz'); await sleep(300)
+const ro = { same: await page.evaluate(b => document.querySelector('.cm-content').textContent === b, before),
+  chips: await page.evaluate(() => document.getElementById('filetags').textContent),
+  badges: await page.evaluate(() => [...document.querySelectorAll('#tree .tnode')].find(n => n.title === 'summary.typ').querySelectorAll('.ftag').length),
+  attrs: await page.evaluate(async () => (await (await fetch('/api/p/demo/files')).json()).length) }
+await tagIt('Make editable'); await page.click('.cm-content'); await page.keyboard.type('Q'); await sleep(300)
+check('a file tagged read-only and AI-generated takes no typing, says so, and is editable again when untagged',
+  ro.same && /AI-generated/.test(ro.chips) && /read-only/.test(ro.chips) && ro.badges === 2 &&
+  await page.evaluate(() => document.querySelector('.cm-content').textContent.includes('Q')))
+await page.keyboard.press('Backspace'); await tagIt('Not AI-generated')
+
 // a page opens on the preview the hub keeps, before its own compiler has loaded; then compiles its own
 await sleep(6500); const wasm = [], onWasm = r => /typst_ts_web_compiler/.test(r.url()) && wasm.push(r.url())
 page.on('request', onWasm); await page.reload({ waitUntil: 'domcontentloaded' })
