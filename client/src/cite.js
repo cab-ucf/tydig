@@ -48,9 +48,10 @@ export function renderCite(body, ctx) {
         t.insert(t.length, (t.length && !t.toString().endsWith('\n\n') ? '\n' : '') + entry + '\n')
       })
     }
-    const v = ctx.view()
-    if (v && ctx.current()?.endsWith('.typ')) citeAt(v, key, at)
-    btn.textContent = `cited @${key}`
+    const v = ctx.view(), here = ctx.current() === ctx.file || at == null
+    if (v && here && ctx.current()?.endsWith('.typ') && (typeof at !== 'number' || at <= v.state.doc.length)) {
+      citeAt(v, key, at); btn.textContent = `cited @${key}`
+    } else btn.textContent = `@${key} is in the bibliography: cite it where it goes`
   }
   const byline = p => [p.authors.slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : ''), p.year,
     p.venue, p.cites != null ? `cited ${p.cites}x` : ''].filter(Boolean).join(' · ')

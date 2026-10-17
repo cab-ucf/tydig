@@ -35,12 +35,13 @@ export function tabs() {
   $('side-tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 // the pane again, if it is the one open
-export function redraw(m) { if (mode === m) panes()[m]($('side-body')) }
+// the pane again, if it is the one open; a slow one checks body.dataset.pane before it fills in
+export function redraw(m) { if (mode === m) { $('side-body').dataset.pane = m; panes()[m]($('side-body')) } }
 export function toggleSide() {
   if (!settings.sideOpen) return openSidebar(mode || 'comments')
   settings.sideOpen = false; applyLayout()
 }
-$('side-close').onclick = () => { settings.sideOpen = false; mode = null; applyLayout() }
+$('side-close').onclick = () => { settings.sideOpen = false; mode = null; if (settings.m === 'side') settings.m = 'edit'; applyLayout() }
 
 // ---- AI check ----
 // Every file's prose, read by MELD: each file's AI-likeness, how many
@@ -94,13 +95,14 @@ async function renderAiCheck(body) {
 export function cite(alone) {
   const s = view?.state.selection.main, sel = s && !s.empty && view.state.sliceDoc(s.from, s.to)
   const typ = path?.endsWith('.typ'), text = t => typ ? prose(t).text : t
-  citeCtx = { files, view: () => view, current: () => path, at: sel ? s.to : undefined,
+  citeCtx = { files, view: () => view, current: () => path, file: path, at: sel ? s.to : undefined,
     query: sel ? text(sel) : '', context: sel && !alone ? text(view.state.doc.toString()) : '' }
   openSidebar('cite')
 }
 // a reference already in the bibliography, found by any of its words
 export function citeFromBib() {
-  const s = view?.state.selection.main, entries = parseBib(files.get(bibOf(files))?.toString() || '')
+  if (!view || !path?.endsWith('.typ')) return toast('open the .typ file to cite in, and select where')
+  const s = view.state.selection.main, entries = parseBib(files.get(bibOf(files))?.toString() || '')
   if (!entries.length) return toast(`no references in ${bibOf(files)} yet: find papers instead`)
   choose(entries.map(e => ({ label: `${e.fields.title || e.key} · ${(e.fields.author || '').split(/,| and /)[0]} ${
     e.fields.year || ''}`, hint: `@${e.key}`, run: () => { citeAt(view, e.key, s?.to); view.focus() } })),
@@ -306,7 +308,9 @@ const lines = (a, b) => {
 function renderReview(body) {
   if (!review?.length) return body.innerHTML = '<p class="empty">No changes to review. This appears after ' +
     'reconnecting if others edited while you were offline.</p>'
-  const done = p => { review = review.filter(r => r.path !== p); renderReview(body) }
+  const done = p => { review = review.filter(r => r.path !== p)
+    if (!review.length) $('status').dataset.review = ''
+    renderReview(body) }
   body.replaceChildren(el('p', { className: 'review-head', textContent: 'While you were away, ' +
     `${review.length} file(s) changed. Keep what others did, or revert to your offline version.` }),
   ...review.map(({ path: p, before, after }) => {

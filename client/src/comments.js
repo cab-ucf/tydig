@@ -52,7 +52,9 @@ const hover = hoverTooltip((v, pos) => {
 // a button on any selection: comment on it
 const ask = StateField.define({
   create: () => null,
-  update: (t, tr) => tr.docChanged || tr.selection ? at(tr.state.selection.main) : t,
+  update: (t, tr) => !tr.docChanged && !tr.selection ? t
+    : t && !tr.selection && t.pos === tr.state.selection.main.to && !tr.state.selection.main.empty ? t
+    : at(tr.state.selection.main),
   provide: f => showTooltip.from(f),
 })
 const at = r => r.empty ? null : { pos: r.to, arrow: false, create: () => {

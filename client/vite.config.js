@@ -8,4 +8,5 @@ export default defineConfig({
   resolve: { alias: { '@brand': `${import.meta.dirname}/brands/${process.env.TYDIG_BRAND || 'tydig'}` } },
   base: './',
   build: { target: 'esnext' },
+  worker: { format: 'es', plugins: () => [wasm()] }, // typst.worker.js
 })

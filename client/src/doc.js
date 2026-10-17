@@ -24,7 +24,7 @@ export const ws = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location
 // connected by main.js, once every module listens
 export const provider = new HocuspocusProvider({
   url: `${ws}/sync`, name: projName, document: ydoc, token, connect: false,
-  onAuthenticationFailed: () => { alert('Lost access to this project.'); location.search = '' },
+  onAuthenticationFailed: () => { alert(`No access to ${projName}: ask a member to share it.`); location.search = '' },
 })
 provider.setAwarenessField('user', { ...user, colorLight: user.color })
 provider.on('status', ({ status }) => {

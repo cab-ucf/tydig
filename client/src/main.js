@@ -35,7 +35,7 @@ applyLayout()
 if (settings.sideOpen) openSidebar('comments')
 renderProjects()
 provider.on('synced', () => {
-  refreshDisk().then(start); renderMains()
+  refreshDisk().finally(start); renderMains()
   const last = localStorage['last:' + projName]
   const first = files.has(last) ? last : files.has('main.typ') ? 'main.typ'
     : [...files.keys()].sort().find(p => p.endsWith('.typ'))

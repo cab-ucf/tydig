@@ -1,20 +1,21 @@
-// The live preview: typst compiled in the browser on every edit, with comment
-// pins; which file is missing when one is; PDF and Word export; zoom and fit.
+// The live preview: typst compiled in the browser as you type (in a worker,
+// typst.worker.js, so typing never waits), with comment pins; which file is
+// missing when one is; PDF and Word export; zoom and fit.
 import { typst } from 'codemirror-lang-typst'
-import { $, esc, post, toast, download, settings, phone, P, rawUrl, saveAs } from './util.js'
+import { $, esc, post, toast, download, settings, phone, P, rawUrl, saveAs, link } from './util.js'
 import { files, comments } from './doc.js'
 import { numbered } from './comments.js'
 import { disk } from './tree.js'
 import { applyLayout } from './menu.js'
-import { typst as compilerOf, previewed } from './warm.js'
+import { previewed } from './warm.js'
 
 // The preview a member last saw, kept by the hub (early.js asks before the
 // app loads; a link visitor's page asks now), and the key of what it shows:
 // the sources, the pins and the files the document reads. While it is
 // what this browser would compile, nothing is compiled or downloaded.
-const cached = self.tydigPreview ?? (location.hash ? fetch(`/api${P('/preview')}`)
+const cached = link ? fetch(`/api${P('/preview')}`)
   .then(r => r.status === 200 ? r.text() : null).then(svg => svg && (show(svg), { key: /^<!--(\w+)-->/.exec(svg)?.[1] }))
-  .catch(() => null) : Promise.resolve(null))
+  .catch(() => null) : self.tydigPreview ?? Promise.resolve(null)
 function show(svg) {
   const img = new Image(); img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
   if (!$('page').querySelector('svg')) $('page').replaceChildren(img)
@@ -26,14 +27,18 @@ const hash = s => { // cyrb53: equality, not secrecy (crypto.subtle needs https)
   b = Math.imul(b ^ b >>> 16, 2246822507) ^ Math.imul(a ^ a >>> 13, 3266489909)
   return (b >>> 0).toString(36) + (a >>> 0).toString(36)
 }
+// the files on disk a compile reads: not build output, not the shared text
+// the hub mirrors to disk, nothing too big to send
+const read = () => disk.filter(f => !files.has(f.path) && !f.path.startsWith('out/') && f.size < 8e6)
 const keyOf = main => hash(JSON.stringify([main, [...files].map(([p, t]) => [p, t.toString()]).sort(),
-  disk.map(f => [f.path, f.size, f.mtime]).sort(), numbered().map(c => [c.file, c.from, c.n])]))
-// what this browser compiled, back to the hub once it has been still a while
+  read().map(f => [f.path, f.size, f.mtime]).sort(), numbered().map(c => [c.file, c.from, c.n])]))
+// what this browser compiled, back to the hub once it has been still a while,
+// under the key of what was compiled (a failed compile cancels it)
 let sent = null, upload
-const keep = (main, svg) => { clearTimeout(upload); upload = setTimeout(() => {
-  const key = keyOf(main)
-  if (key !== sent) fetch(`/api${P('/preview')}?key=${key}`, { method: 'PUT', body: svg,
-    headers: { 'content-type': 'image/svg+xml' } }).then(r => r.ok && (sent = key), () => {})
+const keep = key => { clearTimeout(upload); upload = key !== sent && setTimeout(async () => {
+  const { svg } = await ask('last')
+  svg && fetch(`/api${P('/preview')}?key=${key}`, { method: 'PUT', body: svg, headers: { 'content-type': 'image/svg+xml' } })
+    .then(r => r.ok && (sent = key), () => {})
 }, 5000) }
 // once the page is idle, the compiler loads anyway, so an edit has it at hand
 // (and the preview's text can be selected); not if data is to be saved
@@ -72,28 +77,42 @@ const pin = n => '#box(width: 0pt, height: 0pt, place(dx: 1pt, dy: -10pt, circle
 const pinned = (file, src, cs) => cs.filter(c => c.file === file && pinSafe(file, c.from))
   .sort((a, b) => b.from - a.from).reduce((s, c) => s.slice(0, c.from) + pin(c.n) + s.slice(c.from), src)
 
-const bins = new Map() // path -> its bytes, while its size and mtime stay
-async function fetchBin(f) {
-  const k = `${f.size}:${f.mtime}`, c = bins.get(f.path)
-  if (c?.k === k) return c.bytes
-  const r = await fetch(rawUrl(f.path))
-  if (!r.ok) throw new Error(`${f.path}: ${r.status}`)
-  const bytes = new Uint8Array(await r.arrayBuffer())
-  bins.set(f.path, { k, bytes })
-  return bytes
+// The worker, made on the first ask (an edit, or an idle page); each ask
+// answered in turn. The sources go with every ask; a binary (an image, data)
+// only when it is new or changed: the worker keeps the rest, and drops what
+// the disk no longer has. Fetched here, where a link visitor's fetch reaches the hub.
+let worker, asks = 0
+const waits = new Map(), sentBins = new Map() // path -> size:mtime the worker has
+const answer = data => { waits.get(data.id)?.(data); waits.delete(data.id) }
+const ask = (op, msg) => new Promise(ok => {
+  worker ??= Object.assign(new Worker(new URL('./typst.worker.js', import.meta.url), { type: 'module' }), {
+    onmessage: ({ data }) => answer(data),
+    onerror: () => { // it did not load (a hub updated under a long-open page): say so, and try again next time
+      worker = null; sentBins.clear(); whole = false
+      for (const id of [...waits.keys()]) answer({ id, error: 'the compiler did not load: reload the page' })
+    } })
+  waits.set(++asks, ok); worker.postMessage({ id: asks, op, ...msg })
+})
+// the sources, plain and with comment pins (only files a pin goes in differ)
+const sources = () => {
+  const cs = numbered(), plain = [...files].map(([p, t]) => [p, t.toString()])
+  const pinnedIn = new Set(cs.filter(c => pinSafe(c.file, c.from)).map(c => c.file))
+  return { plain, pins: pinnedIn.size ? plain.map(([p, s]) => [p, pinnedIn.has(p) ? pinned(p, s, cs) : s]) : null }
 }
-async function loadVfs(pins) {
-  const cs = pins ? numbered() : [], $typst = await compilerOf()
-  await $typst.resetShadow()
-  for (const [p, t] of files)
-    await $typst.addSource('/' + p, pins && p.endsWith('.typ') ? pinned(p, t.toString(), cs) : t.toString())
-  const bin = disk.filter(f => !files.has(f.path) && !f.path.startsWith('out/') && f.size < 8e6)
-  for (const [f, bytes] of await Promise.all(bin.map(async f => [f, await fetchBin(f)])))
-    await $typst.mapShadow('/' + f.path, bytes)
+// the binaries the worker lacks; done() once it has them
+async function binaries() {
+  const bin = read(), fresh = bin.filter(f => sentBins.get(f.path) !== `${f.size}:${f.mtime}`)
+  const binaries = await Promise.all(fresh.map(async f => {
+    const r = await fetch(rawUrl(f.path))
+    if (!r.ok) throw new Error(`${f.path}: ${r.status}`)
+    return [f.path, new Uint8Array(await r.arrayBuffer())]
+  }))
+  const keep = bin.map(f => f.path)
+  return { binaries, keep, done: () => {
+    for (const f of fresh) sentBins.set(f.path, `${f.size}:${f.mtime}`)
+    for (const p of sentBins.keys()) if (!keep.includes(p)) sentBins.delete(p)
+  } }
 }
-// one virtual filesystem: a compile and a PDF export take turns
-let vfs = Promise.resolve()
-const serial = f => vfs = vfs.then(f, f)
 
 // The compiler calls a file absent from its filesystem "access denied ...
 // outside of project root". Say which file, and that a relative path starts
@@ -129,34 +148,97 @@ function explain(e, at) {
     'a path starting with / starts at the project root.'
 }
 
-// the same failure as file:line:col, not a span number
-const where = main => serial(async () => (await (await (await compilerOf()).getCompiler())
-  .compile({ mainFilePath: '/' + main, diagnostics: 'unix' })).diagnostics?.map(d => d.replace(/^\//, '')).join('\n'))
+// The new preview into the page, in the parts the worker sends (a head, then
+// pages; null for one the page has). A page goes in a box of its own, so one
+// off screen is neither styled, laid out nor painted. Only what changed is
+// parsed (its links made safe) and matched to what is there: an edit mostly
+// changes a line, so only that line costs.
+const web = v => { try { return /^https?:$/.test(new URL(v, 'https://x/').protocol) } catch { return false } }
+const parse = s => { // (an inert template: typst's SVG is HTML-parsed, as innerHTML would)
+  const t = document.createElement('template'); t.innerHTML = s
+  for (const a of t.content.querySelectorAll('a')) for (const h of ['href', 'xlink:href']) {
+    const v = a.getAttribute(h)?.trim() // to the web or within the document, nowhere else
+    if (v && v[0] !== '#' && !web(v)) a.removeAttribute(h)
+  }
+  return t.content.firstElementChild
+}
+const page = p => {
+  const [, w, h] = /data-page-width="([\d.]+)" data-page-height="([\d.]+)"/.exec(p) || [, 1, 1]
+  return parse(`<div class="pg" style="aspect-ratio: ${w} / ${h}"><svg class="typst-doc" ` +
+    `viewBox="0 0 ${w} ${h}">${p.replace(/ transform="[^"]*"/, '')}</svg></div>`)
+}
+// a part of a page made to show what a new one does: a part with the same
+// key (typst's hash of what it draws, data-tid, and where) stays; else its
+// parts are matched in turn, so a typed letter swaps in a line, not a page.
+// A glyph that only moved is moved, not made again.
+const key = e => e.getAttribute('data-tid') && e.getAttribute('data-tid') + e.getAttribute('transform')
+function sync(o, n) {
+  if (key(n) ? key(o) === key(n) : o.isEqualNode(n)) return
+  if (o.tagName !== n.tagName || !key(o) !== !key(n) || !key(n) && (o.childElementCount || n.childElementCount))
+    return o.replaceWith(n)
+  for (const a of [...o.attributes]) n.hasAttribute(a.name) || o.removeAttribute(a.name)
+  for (const a of n.attributes) o.getAttribute(a.name) !== a.value && o.setAttribute(a.name, a.value)
+  const ns = [...n.children], want = new Set(ns.map(key).filter(Boolean))
+  const old = new Map([...o.children].map(c => [key(c), c]))
+  ns.forEach((c, i) => {
+    const k = key(c) && old.get(key(c)), at = o.children[i]
+    if (k) { old.delete(key(c)); k === at || o.insertBefore(k, at ?? null) }
+    else if (at && !want.has(key(at))) sync(at, c)
+    else o.insertBefore(c, at ?? null)
+  })
+  for (const c of [...o.children].slice(ns.length)) c.remove()
+}
+let whole = false // whether the page has all the worker last sent
+function patch([head, ...pages]) {
+  const pg = $('page'), cur = pg.firstElementChild
+  if (head != null) {
+    const next = parse(head + '</svg>'), n = [...next.children]
+    if (!(cur instanceof SVGSVGElement)) pg.replaceChildren(next)
+    else n.forEach((x, i) => { // a new glyph joins the rest: what shows them is left be
+      const c = cur.children[i]
+      if (c?.isEqualNode(x)) return
+      if (c?.matches('defs.glyph') && x.matches('defs.glyph'))
+        return c.append(...[...x.children].filter(g => !document.getElementById(g.id)))
+      c ? c.replaceWith(x) : cur.append(x)
+    })
+    if (cur instanceof SVGSVGElement) for (const c of [...cur.children].slice(n.length)) c.remove()
+  }
+  const gs = [...pg.children].slice(1)
+  pages.forEach((p, i) => {
+    if (p == null) return
+    const b = page(p), at = gs[i]
+    if (!at) pg.append(b)
+    else if (at.getAttribute('style') !== b.getAttribute('style')) at.replaceWith(b)
+    else sync(at.querySelector('.typst-page'), b.querySelector('.typst-page'))
+  })
+  for (const g of gs.slice(pages.length)) g.remove()
+}
 
-// nothing until the document has synced and the disk's files are known (start)
+// Nothing until the document has synced and the disk's files are known
+// (start). Then a compile follows an edit within a beat, and keeps following
+// while one types (one at a time; the next waits for the last).
 let timer, busy = false, again = false, first = true, synced = false, live = false
-export function scheduleCompile() { if (synced) clearTimeout(timer), timer = setTimeout(compile, first ? 0 : 300) }
+export function scheduleCompile() { if (synced && !timer) timer = setTimeout(compile, first ? 0 : 120) }
 export function start() { synced = true; scheduleCompile() }
 async function compile() {
-  const main = $('main-sel').value, svg = async () => (await compilerOf()).svg({ mainFilePath: '/' + main })
+  timer = null
+  const main = $('main-sel').value
   if (!main) return
   if (busy) return again = true
   busy = true
   if (first && (await cached)?.key === keyOf(main)) { // the hub's is this: shown, and enough for now
     first = false; sent = keyOf(main); busy = false; return idle()
   }
+  const key = keyOf(main)
   try { // with pins, or (should a pin break it) without
-    $('page').innerHTML = await serial(async () => {
-      try { await loadVfs(true); return await svg() } catch { await loadVfs(false); return await svg() }
-    })
-    // a link in the document leads to the web or within it, nowhere else
-    for (const a of $('page').querySelectorAll('a')) for (const h of ['href', 'xlink:href']) {
-      const v = a.getAttribute(h)?.trim(), web = () => /^https?:$/.test(new URL(v, 'https://x/').protocol)
-      if (v && v[0] !== '#' && !(() => { try { return web() } catch { return false } })()) a.removeAttribute(h)
-    }
+    const { plain, pins } = sources(), { done, ...bins } = await binaries()
+    const r = await ask('svg', { main, sources: pins ?? plain, plain: pins && plain, ...bins, all: !whole })
+    if (!r.error || r.diag != null) done()
+    if (!r.parts) throw Object.assign(new Error(r.error), { diag: r.diag })
+    whole = false; patch(r.parts); whole = true
     $('diag').hidden = true
-    fitText(); keep(main, $('page').innerHTML)
-  } catch (e) { $('diag').textContent = explain(e, await where(main).catch(() => '')); $('diag').hidden = false }
+    fitText(); keep(key)
+  } catch (e) { clearTimeout(upload); $('diag').textContent = explain(e, e.diag); $('diag').hidden = false }
   first = false; live || previewed(); live = true // the optional waits for this
   busy = false
   if (again) { again = false; scheduleCompile() }
@@ -165,8 +247,9 @@ async function compile() {
 export async function exportPdf() { // never with pins
   const main = $('main-sel').value
   if (!main) return
-  const pdf = await serial(async () => { await loadVfs(false); return (await compilerOf()).pdf({ mainFilePath: '/' + main }) })
-  saveAs(pdf, main.replace(/\.typ$/, '.pdf'), 'application/pdf', false)
+  const { done, ...bins } = await binaries(), r = await ask('pdf', { main, sources: sources().plain, ...bins })
+  r.error || done()
+  r.pdf ? saveAs(r.pdf, main.replace(/\.typ$/, '.pdf'), 'application/pdf', false) : toast(esc(r.error), false)
 }
 
 // Word, made by the hub (pandoc), its citations live fields for EndNote
@@ -183,11 +266,11 @@ export async function exportDocx() {
 // On a phone, fit means fit the text, not the paper: the side margins are cut
 // away, so the words are as large as the screen allows.
 export function fitText() {
-  const pg = $('page'), svg = pg.querySelector('svg')
+  const pg = $('page')
   pg.style.marginLeft = ''
-  if (!svg || !phone() || settings.zoom || settings.m !== 'preview') return
+  if (!pg.querySelector('.pg') || !phone() || settings.zoom || settings.m !== 'preview') return
   pg.style.width = '100%'
-  const r = svg.getBoundingClientRect(), xs = [...svg.querySelectorAll('.typst-text, .typst-shape, image')]
+  const r = pg.getBoundingClientRect(), xs = [...pg.querySelectorAll('.typst-text, .typst-shape, image')]
     .map(e => e.getBoundingClientRect()).filter(b => b.width && b.width < r.width * 0.97)
   if (!xs.length) return
   const left = Math.min(...xs.map(b => b.left)) - r.left - 6

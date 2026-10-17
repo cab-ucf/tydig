@@ -198,7 +198,7 @@ export function surprise(opts) {
     h.ai = undefined; show(h)
     if (hub && last === h) fetch(hub + '?ai', { method: 'POST', headers: { 'content-type': 'text/plain' },
       body: sent.text }).then(r => r.json())
-      .then(r => n === seq && last === h && (r.error ? opts.report({ error: r.error }) : addAi(r.ai)),
+      .then(r => n === seq && last === h && (r.error ? (addAi(null), opts.report({ error: r.error })) : addAi(r.ai)),
         () => n === seq && last === h && addAi(null))
   }
   let t
@@ -235,7 +235,7 @@ export function surprise(opts) {
   // off: clear; a new mode: the same scores, highlighted again
   const refresh = () => {
     if (opts.url() || opts.hub()) return last ? (show(last), state()) : ask()
-    last = null; state(false)
+    last = null; seq++; ws?.close(); ws = null; state(false) // what is in flight is no longer wanted
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }
   return { extension: [scopeField, plugin, hover], refresh }

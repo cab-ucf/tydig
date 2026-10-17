@@ -76,11 +76,12 @@ const langFor = async p => p.endsWith('.typ') ? typst() : await LanguageDescript
 let tinymist = null, lspDead = false
 async function lspExt(p) {
   if (!settings.lsp || lspDead || !p.endsWith('.typ')) return []
-  const gone = () => { lspDead = true; tinymist = null }
+  let mine // this client, so an older one's closing never marks it dead
+  const gone = () => { if (tinymist === mine) { lspDead = true; tinymist = null } }
   const { LanguageServerClient, WebSocketTransport, languageServerWithTransport: lspExtension } =
     await import('codemirror-languageserver')
   class Socket extends WebSocketTransport { send(m) { this.connection.readyState === 1 && super.send(m) } }
-  tinymist ??= api(P('/info')).then(({ root }) => ({ root, client: new LanguageServerClient({
+  mine = tinymist ??= api(P('/info')).then(({ root }) => ({ root, client: new LanguageServerClient({
     transport: new Socket(`${ws}/lsp?proj=${projName}&t=${encodeURIComponent(token())}`),
     rootUri: `file://${root}`, workspaceFolders: [{ name: projName, uri: `file://${root}` }],
     autoClose: false, onError: gone, onClose: gone,
@@ -91,7 +92,9 @@ async function lspExt(p) {
   } catch { gone(); return [] }
 }
 export function toggleLsp() {
-  settings.lsp = !settings.lsp; lspDead = false; tinymist = null; applyLayout()
+  const old = tinymist; tinymist = null
+  old?.then(({ client }) => client.close(), () => {}) // the hub allows a person two sockets
+  settings.lsp = !settings.lsp; lspDead = false; applyLayout()
   if (path) openFile(path)
 }
 
@@ -183,7 +186,8 @@ export function open(p) { return files.has(p) ? openFile(p) : openDisk(p) }
 // a file, with from..to selected
 export async function reveal(p, from, to) {
   if (path !== p) await openFile(p)
-  view?.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); view?.focus()
+  if (path !== p || !view || to > view.state.doc.length) return // gone, renamed, or overtaken
+  view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); view?.focus()
 }
 
 // The surprise overlay (surprise.js): words tinted by how much they surprise

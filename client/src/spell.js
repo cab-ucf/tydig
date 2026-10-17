@@ -132,7 +132,9 @@ export async function renderSpelling(body, { files, open }) {
   const out = []
   for (const p of [...files.keys()].filter(p => p.endsWith('.typ')).sort()) {
     const text = files.get(p).toString()
-    for (const f of await check(text, files)) out.push(el('div', { className: 'ref', onclick: () => open(p, f.from, f.to) },
+    const found = await check(text, files)
+    if (!body.isConnected || body.dataset.pane !== 'spelling') return // another pane was opened meanwhile
+    for (const f of found) out.push(el('div', { className: 'ref', onclick: () => open(p, f.from, f.to) },
       el('b', { textContent: f.word }), ` ${f.fixes[0]?.insert ? '→ ' + f.fixes[0].insert : ''}`,
       el('small', { textContent: `${p}:${text.slice(0, f.from).split('\n').length} · ${f.message}` })))
   }

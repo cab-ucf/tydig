@@ -36,6 +36,7 @@ export const settings = {
 // what an older tydig left, or a bad drag: never a layout without a way back
 if ('max' in settings) { settings.view = settings.max || 'split'; delete settings.max }
 if (!['editor', 'split', 'preview'].includes(settings.view)) settings.view = 'split'
+if (settings.m === 'side' && !settings.sideOpen) settings.m = 'edit' // a phone's panel closed, then reloaded
 settings.split = Math.min(0.8, Math.max(0.2, +settings.split || 0.5))
 export const saveSettings = () => localStorage.settings = JSON.stringify(settings)
 // dark, cyber or light; the system's until Alt-D picks one

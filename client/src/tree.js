@@ -12,7 +12,11 @@ import { ARCHIVE, unpackInto } from './dialogs.js'
 import { applyLayout } from './menu.js'
 
 export let disk = [] // [{ path, size, mtime }]: files on the hub's disk
-export async function refreshDisk() { disk = await api(P('/files')); renderTree(); scheduleCompile() }
+export async function refreshDisk() { // a failed listing keeps the last good one
+  const d = await api(P('/files')).catch(() => null)
+  if (Array.isArray(d)) disk = d
+  renderTree(); scheduleCompile()
+}
 // the hub bumps meta.diskRev whenever the disk changes (builds, a shell, git)
 let metaT
 meta.observe(() => { clearTimeout(metaT); metaT = setTimeout(refreshDisk, 200) })

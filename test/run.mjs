@@ -54,7 +54,7 @@ for (const s of suites) {
   } else if (!HUBLESS.includes(s)) env.HUB = await hub(dir, 3000, env)
   const code = await new Promise(ok => spawn(process.execPath, [path.join(root, `test/${s}.mjs`)],
     { cwd: HUBLESS.includes(s) ? root : dir, stdio: 'inherit', env: { ...process.env, ...env } }).on('close', ok))
-  await Promise.all(bg.splice(0).map(p => new Promise(ok => p.exitCode ?? p.signalCode ? ok() : (p.on('exit', ok), p.kill()))))
+  await Promise.all(bg.splice(0).map(p => new Promise(ok => p.exitCode !== null || p.signalCode !== null ? ok() : (p.on('exit', ok), p.kill()))))
   if (code) { failed++; console.log(`FAILED: ${s} (hub log in ${dir})`) } else rmSync(dir, { recursive: true, force: true })
 }
 console.log(failed ? `\n${failed} suite(s) failed` : '\nall suites passed')
