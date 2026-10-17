@@ -6,12 +6,8 @@
 import * as Y from 'yjs'
 // searching and checking: shared with agent members (server/agent-mcp.mjs)
 import { SEARCH, parseBib, keyFor, bibtex, check, lookFor, terms } from '../../server/refs.mjs'
+import { el } from './util.js'
 
-const el = (tag, props = {}, ...kids) => {
-  const e = Object.assign(document.createElement(tag), props)
-  e.append(...kids)
-  return e
-}
 export const bibOf = files => files.has('refs.bib') ? 'refs.bib'
   : [...files.keys()].find(p => p.endsWith('.bib')) || 'refs.bib'
 const MARK = { ok: '✓', differs: '!', missing: '✗', error: '?', web: '~' }

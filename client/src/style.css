@@ -75,14 +75,14 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 #main-label { display: flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--fg-dim); }
 #main-sel {
   background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 6px;
-  font: .75rem var(--mono); height: 24px; padding: 0 .3rem; max-width: 14rem;
+  font: .75rem var(--mono); height: 24px; padding: 0 .3rem; max-width: 14rem; min-width: 0;
 }
 #wordcount { font: .72rem var(--sans); color: var(--fg-dim); white-space: nowrap; }
 .badge {
   margin-left: .35rem; padding: 0 .38rem; border-radius: 999px; font: 700 .68rem/1.35 var(--sans);
   background: var(--teal); color: var(--on-teal);
 }
-.cm-tooltip.cm-tooltip-below:has(.cm-ask), .cm-tooltip:has(> .cm-ask) { background: none; border: 0; }
+.cm-tooltip:has(> .cm-ask) { background: none; border: 0; }
 /* on a selection: Comment | Cite, one pill; Cite opens into a card of how */
 .cm-ask { display: flex; margin-top: .4rem; border-radius: 8px; overflow: hidden; background: var(--ink-2);
   border: 1px solid var(--ink-3); box-shadow: 0 4px 16px #0006; font: 500 .78rem var(--sans); }
@@ -205,7 +205,6 @@ body[data-view="editor"] :is(#preview, #split), body[data-view="preview"] :is(#e
 body:not([data-view="split"]) :is(#editor, #preview) { flex: 1 1 0 !important; }
 
 #preview { position: relative; background: var(--paper-bg); container-type: inline-size; }
-#main-sel { min-width: 0; }
 @container (max-width: 380px) { #main-label { font-size: 0; gap: 0; } #zoomctl { padding-left: .4rem; } }
 #pv { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 1.5rem; }
 #page { background: var(--paper); box-shadow: 0 2px 14px #0003; margin: 0 auto; min-height: 90%; }
@@ -422,7 +421,7 @@ dialog h3 { margin: 0 0 .9rem; font: 600 1rem var(--sans); color: var(--hi); }
 #proj-list a:hover { border-color: var(--teal); }
 #proj-list a.current { border-color: var(--teal); color: var(--teal); }
 #share { width: min(560px, 94vw); }
-#share h3 + * h3, #share-body h3 { font-size: .9rem; margin-top: 1.2rem; }
+#share-body h3 { font-size: .9rem; margin-top: 1.2rem; }
 .share-list { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .7rem; }
 .share-row { display: flex; gap: .5rem; align-items: center; font: .8rem var(--sans); padding: .3rem .5rem; background: var(--ink-2); border-radius: 5px; }
 .share-row span { flex: 1; }

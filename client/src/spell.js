@@ -6,16 +6,12 @@
 import * as Y from 'yjs'
 import MEDICAL from './dict/medical.txt?url'
 import { later } from './warm.js'
+import { el } from './util.js'
 import { prose } from './surprise.js'
 import { Decoration, EditorView, ViewPlugin, showTooltip } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 
 export const DICT = '.harper-dictionary.txt'
-const el = (tag, props = {}, ...kids) => {
-  const e = Object.assign(document.createElement(tag), props)
-  e.append(...kids)
-  return e
-}
 let harper, words, terms
 // sound English (or a house style), prose cut around code, or what Typst
 // typesets itself (-- is an en dash) or means (..spread), that these misread
