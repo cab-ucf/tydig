@@ -34,6 +34,7 @@ def align(a, b):  # for each character of a, where in b it came from (MELD strip
 
 
 def tail(x, pts):  # share of human texts scoring at least x, log-interpolated in [score, share]
+    if x <= pts[0][0]: return max(pts[0][1], .5)  # below every threshold: typical
     for (a, p), (b, q) in zip(pts, pts[1:]):
         if x < b: return p if x <= a else p * (q / p) ** ((x - a) / (b - a))
     return pts[-1][1]
@@ -44,8 +45,10 @@ class Detector:
         path = path or snapshot_download(REPO, revision=REV)
         s.M = meld(path); s.sc = s.M.Scorer(path, device)
         cut = s.sc.cfg["score_offsets"]["overall"]
-        s.doc_pts = [[cut[f"fpr_{f}"], f] for f in (.1, .05, .01)]
-        s.sent_pts = json.loads(CAL.read_text())["points"] if CAL.exists() else None
+        cal = json.loads(CAL.read_text()) if CAL.exists() else {}
+        s.doc_pts = [[cut[f"fpr_{f}"], f] for f in (.1, .05, .01)]  # below MELD's: our human documents'
+        s.doc_pts = [p for p in cal.get("doc", []) if p[0] < s.doc_pts[0][0]] + s.doc_pts
+        s.sent_pts = cal.get("points")
         s.last = None
 
     def tq(s, v): return s.M.top_quantile_mean(v, s.sc.rho)
