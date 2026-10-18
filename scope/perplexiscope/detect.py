@@ -36,8 +36,8 @@ def align(a, b):  # for each character of a, where in b it came from (MELD strip
 def tail(x, pts):  # share of human texts scoring at least x, log-interpolated in [score, share]
     if x <= pts[0][0]: return max(pts[0][1], .5)  # below every threshold: typical
     for (a, p), (b, q) in zip(pts, pts[1:]):
-        if x < b: return p if x <= a else p * (q / p) ** ((x - a) / (b - a))
-    return pts[-1][1]
+        if x < b: break
+    return max(1e-3, p * (q / p) ** ((x - a) / (b - a)))  # past the last: its slope, to 1 in 1,000
 
 
 class Detector:

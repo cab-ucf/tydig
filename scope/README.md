@@ -20,7 +20,8 @@ before it, each sentence's perplexity, and how AI-like each sentence and the who
     `task`, `sents` (`{score, tail}` or `null`); bare where no detector runs
   - `error`: `message`
 - `just calib human/*.txt` sets MELD's thresholds for sentences from human writing (into
-  `perplexiscope/calib/`; in the container, mount it at `/app/perplexiscope/calib/`).
+  `perplexiscope/calib/`; in the container, mount it at `/app/perplexiscope/calib/`). The one
+  shipped is from 300 abstracts written before 2019 (200 NIH grants from RePORTER, 100 arXiv).
 - `pip install .` gives the `perplexiscope` command and `perplexiscope.Engine`, `.Detector`.
 
 By Chase Brown, GPL-3.0-or-later (LICENSE). MELD is MIT.
