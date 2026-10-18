@@ -23,7 +23,7 @@
 // red warning on its first page, so the preview says so before the funder does.
 #let section(key, title, limit: none, body) = {
   pagebreak(weak: true)
-  context [#metadata(here().page())#label(key)]
+  [#metadata(key)<cut>]
   if limit != none {
     context {
       let n = query(label(key + "-end")).first().location().page() - here().page() + 1
