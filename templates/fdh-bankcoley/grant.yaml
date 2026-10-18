@@ -1,0 +1,65 @@
+# Every fact the application states more than once. Edit here, not in the .typ
+# files. The PeerNet text boxes read prose from the .typ files; the structured
+# attachments (work plan, figures, biosketch, budget) read from here.
+title: A descriptive, general-audience project title
+program: Bankhead-Coley Cancer Research Program
+category: Emerging Therapeutics and Technologies
+focus: Prevention and Treatment
+priority: Reduction of mortality and morbidity
+cancer: Breast cancer
+funding: 500000           # total requested, dollars
+years: 4                  # fiscal years in budget.yaml
+keywords: [keyword one, keyword two, keyword three]
+
+institution:
+  name: University of Central Florida
+  department: Department of Example Sciences
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+mechanism: { code: Bankhead-Coley, modular: false }
+limits: { aims: 1, strategy: 12 }
+
+# The first investigator is the PI.
+investigators:
+  - name: Jane Doe
+    degrees: PhD
+    title: Assistant Professor
+    role: Principal Investigator
+    email: jane.doe@example.edu
+    duties: builds and calibrates the model.
+    bio: |
+      == A. Personal Statement
+      #todo[one paragraph]
+      == B. Positions and Honors
+      #todo[list]
+      == C. Contributions to Science
+      #todo[list]
+  - name: John Roe
+    degrees: PhD
+    title: Associate Professor
+    role: Co-Investigator
+    duties: leads the experimental work.
+
+aims:
+  - title: First aim
+    summary: What the first aim establishes.
+  - title: Second aim
+    summary: What the second aim establishes.
+
+workplan:
+  period: 36 months
+  summary: Two or three sentences on what the project does and who benefits.
+  goal: The overarching goal this proposal achieves.
+  objectives:
+    - First measurable objective by the end of Year 2.
+    - Second measurable objective by the end of Year 2.
+  years:
+    - year: 1
+      strategies:
+        - title: First strategy
+          activities:
+            - { label: "Activity 1.1: do the thing",
+                measure: "Target 2 of 2", party: "J. Doe (PI)", date: "30 Jun 2027" }
+
+figures:
+  - { file: assets/fig1-todo.svg, legend: "Figure caption." }

@@ -1,0 +1,17 @@
+# Every component a Bankhead-Coley application needs, in the order PeerNet
+# assembles it. file: built here (out/) or uploaded (docs/); none = an online
+# text box or form. The Checklist panel and `make full` read this.
+items:
+  - { id: summary, name: "General Audience Abstract (Sec 9)", file: out/summary.pdf }
+  - { id: relevance, name: "Cancer Relatedness (Sec 13)", file: out/relevance.pdf }
+  - { id: abstract, name: "Scientific Abstract (Sec 13)", file: out/abstract.pdf }
+  - { id: impact, name: "Health Impact (Sec 13)", file: out/impact.pdf }
+  - { id: aims, name: "Specific Aims (Sec 14)", file: out/aims.pdf, limit: 1 page }
+  - { id: strategy, name: "Research/Project Plan (Sec 14)", file: out/strategy.pdf }
+  - { id: workplan, name: "Work and Evaluation Plan (Sec 14)", file: out/workplan.pdf }
+  - { id: figures, name: "Images, Tables, Graphs (Sec 15)", file: out/figures.pdf }
+  - { id: references, name: "Bibliography and References Cited (Sec 16)", file: out/references.pdf }
+  - { id: resources, name: "Facilities and Other Resources (Sec 17)", file: out/resources.pdf }
+  - { id: budget, name: "Budget Summary and Narrative (Sec 26)", from: "make budget; out/budget-report.pdf" }
+  - { id: coi, name: "Reportable Financial Interests (Sec 26)", file: out/coi.pdf }
+  - { id: biosketch, name: "Biographical Sketch, key personnel (Sec 26)", file: out/biosketch.pdf, limit: 5 pages }
