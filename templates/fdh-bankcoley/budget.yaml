@@ -1,0 +1,16 @@
+# Budget inputs; lib/budget.typ computes every total (and the 15% indirect cap
+# on modified total direct costs). One list entry per fiscal year (years: in
+# grant.yaml). FDH fiscal years run Jul 1 - Jun 30; a first/last short year is
+# expressed in effort months, not a separate rate.
+rates:
+  fringe: 0.34    # faculty default; staff set their own below
+  fa: 0.15        # indirect, capped at 15% of modified total direct costs
+  raise: 0        # base salaries held flat across years here
+personnel:        # base salary, then calendar months of effort per fiscal year
+  - { name: Jane Doe, salary: 150000, months: [0.25, 1.0, 1.0, 0.75], fringe: 0.34 }
+  - { name: John Roe, salary: 150000, months: [0.25, 1.0, 1.0, 0.75], fringe: 0.34 }
+  - { name: Postdoctoral associate (TBN), salary: 63480, months: [3, 12, 6, 4.5], fringe: 0.23 }
+  - { name: Graduate research assistant (TBN), salary: 30000, months: [3, 12, 12, 9], fringe: 0.02 }
+other:
+  - { item: Supplies, cost: [5000, 40000, 40000, 15000] }
+  - { item: Travel, cost: [500, 2000, 2000, 1500] }
