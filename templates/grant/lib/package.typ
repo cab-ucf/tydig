@@ -2,7 +2,9 @@
 // item made one per person. checklist.typ lists them; lib/assemble.py puts
 // them together. (The editor's Checklist panel expands them the same way.)
 #let G = yaml("/grant.yaml")
-#let key(p) = lower(p.name.split(" ").last())
+// a short, unique key per person: initials of the given names + surname, so
+// two investigators who share a surname (two Browns) do not collide
+#let key(p) = { let w = p.name.split(" "); lower(w.slice(0, -1).map(x => x.first()).join() + w.last()) }
 #let items = yaml("/package.yaml").items.map(i => if i.at("each", default: none) == "investigators" {
   G.investigators.map(p => i + (id: i.id + "-" + key(p), name: i.name + ": " + p.name, file: i.file.replace("{key}", key(p))))
 } else { (i,) }).flatten()
