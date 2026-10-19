@@ -1,0 +1,11 @@
+# What is sent: the solution summary first (before: not assembled with the
+# rest), then the full proposal's four volumes. Volumes III and IV are
+# ARPA-H's own templates, filled in and uploaded to docs/. The Checklist
+# panel, the checklist page and `make full` read this.
+items:
+  - { id: summary, name: Solution Summary (feedback before the full proposal), file: out/summary.pdf, before: true, limit: 4 pages besides cover and attachments }
+  - { id: volume1, name: "Volume I, Technical and Management Proposal", file: out/volume1.pdf, limit: 20 pages for sections A-F }
+  - { id: volume2, name: "Volume II, Cost Proposal", file: out/volume2.pdf }
+  - { id: costs, name: "Volume II cost spreadsheet (ARPA-H's; make budget for the numbers)", file: docs/cost-proposal.xlsx }
+  - { id: volume3, name: "Volume III, Administrative and Policy Requirements (with biosketches)", file: docs/volume3.pdf }
+  - { id: volume4, name: "Volume IV, Draft OT Response", file: docs/volume4.pdf }

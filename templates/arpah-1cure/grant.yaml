@@ -1,0 +1,122 @@
+# Every fact the proposal states more than once: edit it here, and the
+# solution summary, Volume I, the cost volume and the schedule all follow.
+# ARPA-H 1-CURE (ARPA-H-SOL-26-147): FLASH radiotherapy with immunogenic
+# smart radiotherapy biomaterials (TA1) and an abscopal treatment planning
+# system (TA2), one integrated proposal for both, 60 months in three phases.
+title: Abscopal radiotherapy in one day, for everyone
+short: One-day abscopal RT     # in each page's header
+date: May 22, 2026
+years: 5                       # budget.yaml's years; the phases split them
+
+mechanism:
+  code: 1-CURE
+  name: Innovative Solutions Opening (Other Transaction)
+  modular: false
+
+program:
+  agency: ARPA-H
+  name: 1-CURE
+  manager: Dr. Example Manager
+  email: 1-CURE@arpa-h.gov
+  call: ARPA-H-SOL-26-147
+  areas: Both TAs (TAs 1-2)
+
+limits: { summary: 4, volume1: 20, tpp: 1, dmsp: 2 }   # pages
+
+phases:                        # months each, in order; 60 in all
+  - { name: Phase I, months: 18, aim: Research prototypes, validated }
+  - { name: Phase II, months: 18, aim: Optimal prototypes in animal models; GMP; IND }
+  - { name: Phase III, months: 24, aim: Phase I/II multi-center clinical trials }
+
+institution:
+  name: University of Central Florida
+  department: College of Medicine
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+  uei: ABCDEF123456
+  type: Other Educational
+  url: https://www.ucf.edu
+  admin: { name: Example Contracts Officer, email: contracts@example.edu,
+    phone: "407-555-0100" }
+places: [Orlando, FL]
+
+# The first is the PI, the technical point of contact. Someone at another
+# organization is a team member (subawardee) on the cover pages.
+investigators:
+  - { name: Ada Lovelace, degrees: PhD, title: Professor, role: PI; TA1 lead,
+      email: ada.lovelace@example.edu, phone: "407-555-0101",
+      city: Orlando, state: FL, country: USA }
+  - { name: Charles Babbage, degrees: PhD, title: Associate Professor,
+      role: TA2 lead, email: charles.babbage@example.edu,
+      city: Orlando, state: FL, country: USA }
+  - { name: Mary Somerville, degrees: MBA, title: Program Director,
+      role: Project Manager/Integrator, organization: Example Pharma Inc.,
+      orgtype: Other Small Business, city: Boston, state: MA, country: USA }
+
+aims:
+  - title: "TA1: Immunogenic nanoparticle SRBs"
+    summary: Nanoparticles that guide FLASH-RT and release immunoadjuvants for weeks.
+  - title: "TA2: Abscopal treatment planning system"
+    summary: A planner that predicts and maximizes the abscopal response.
+
+# Today's best against what each phase will show (the call's own metrics
+# set the floor; add your own where they are not meaningful)
+metrics:
+  - { metric: Abscopal complete response, today: "<5% of patients",
+      goals: ["> 90% of animals", "> 90%, 3 cancers", Phase I/II trial] }
+  - { metric: Abscopal prediction accuracy, today: none,
+      goals: ["≥ 70%", "> 90% response rate planned", Clinical validation] }
+  - { metric: SRB price per dose, today: n/a, goals: ["—", "< $1,000", "< $1,000"] }
+  - { metric: Treatment time, today: 5–8 weeks, goals: ["—", "—", One day] }
+
+# The work: Volume I's milestones, the Task Description Document and the
+# schedule all read this. Months from the start; phase: 1, 2 or 3.
+tasks:
+  - { id: "1.1", ta: TA1, phase: 1, title: Select immunoadjuvants, org: UCF,
+      start: 1, end: 12, milestone: Optimal immunoadjuvants chosen,
+      deliverable: Selection report }
+  - { id: "1.2", ta: TA1, phase: 1, title: SRBs in bilateral tumor models,
+      org: UCF, start: 4, end: 18,
+      milestone: "> 90% complete regression; p < 0.05 survival",
+      deliverable: Efficacy data; draft TPP }
+  - { id: "2.1", ta: TA2, phase: 1, title: Abscopal model from existing data,
+      org: UCF, start: 1, end: 12, milestone: "AUC-ROC > 0.8, F1 > 0.7",
+      deliverable: Model; data sources }
+  - { id: "2.2", ta: TA2, phase: 1, title: ATPS prototype, org: UCF,
+      start: 10, end: 18, milestone: "≥ 70% response prediction",
+      deliverable: Prototype; FDA Q-submission }
+  - { id: "1.3", ta: TA1, phase: 2, title: GMP SRBs and IND, org: Example Pharma Inc.,
+      start: 19, end: 36, milestone: "IND submitted; < $1k per dose",
+      deliverable: IND; manufacturing protocol }
+  - { id: "2.3", ta: TA2, phase: 2, title: ATPS-planned studies in 3 cancers,
+      org: UCF, start: 19, end: 36, milestone: "> 90% abscopal response",
+      deliverable: Validated ATPS }
+  - { id: "3.1", ta: TA1–2, phase: 3, title: Phase I/II multi-center trial,
+      org: UCF, start: 37, end: 60, milestone: "Safety (< grade 3) and efficacy",
+      deliverable: Exit report }
+
+# A target product profile a TA, one page each: rows as written, a blank
+# one a prompt to fill
+tpp:
+  - Product name: Immunogenic smart radiotherapy biomaterial (SRB)
+    Product description:
+    Critical quality attributes:
+    Lead indications and target population: Pancreatic cancer, then prostate and lung
+    Storage and handling:
+    Key features (performance; comparator):
+    Clinical benefits:
+    Affordability and access: "< $1,000 a dose; any clinic with a FLASH-capable linac"
+    Regulatory strategy:
+  - Product name: Abscopal treatment planning system (ATPS)
+    Product description:
+    Critical quality attributes:
+    Lead indications and target population: All patients treated with radiotherapy
+    Storage and handling: Software, cloud or on site, to U.S. regulatory standards
+    Key features (performance; comparator):
+    Clinical benefits:
+    Affordability and access: "< $500,000, like today's planning systems"
+    Regulatory strategy:
+
+# Intellectual property, background and intended (Commercialization Plan)
+ip:
+  - { category: Patent, number: "US 12,345,678", title: Example nanoparticle,
+      use: SRB vehicle, rights: Government purpose, owner: UCF, funding: Federal }
