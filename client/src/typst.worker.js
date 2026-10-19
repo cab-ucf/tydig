@@ -1,5 +1,5 @@
 // The compiler, off the page's thread, so typing never waits on it. The page
-// sends the sources and each binary once; it asks for the preview (svg, with
+// sends what changed of its files since it last asked; it asks for the preview (svg, with
 // comment pins, or without them should a pin break it; what changed of it),
 // the diagnostics, or a PDF. The compiler, renderer and fonts load on the first ask (preview.js
 // makes the worker then). One ask at a time: they share one virtual filesystem.
@@ -19,13 +19,12 @@ const renderer = WebAssembly.compileStreaming(get(rendererWasm))
 $typst.setCompilerInitOptions({ getModule: () => compiler, beforeBuild: [loadFonts(fonts, { assets: false })] })
 $typst.setRendererInitOptions({ getModule: () => renderer })
 
-const bins = new Map() // path -> bytes, as the page last sent them
-async function load(sources, binaries = [], keep) {
-  for (const [p, b] of binaries) bins.set(p, b)
-  if (keep) for (const p of bins.keys()) if (!keep.includes(p)) bins.delete(p)
-  await $typst.resetShadow()
-  for (const [p, s] of sources) await $typst.addSource('/' + p, s)
-  for (const [p, b] of bins) await $typst.mapShadow('/' + p, b)
+// the page's files, as it changed them since the last ask (reset: from none)
+async function load({ reset, put = [], binaries = [], drop = [] }) {
+  if (reset) await $typst.resetShadow()
+  for (const p of drop) await $typst.unmapShadow('/' + p)
+  for (const [p, s] of put) await $typst.addSource('/' + p, s)
+  for (const [p, b] of binaries) await $typst.mapShadow('/' + p, b)
 }
 // the failure as file:line:col, not a span number
 const diagnose = async main => (await (await $typst.getCompiler()).compile({ mainFilePath: '/' + main,
@@ -43,17 +42,18 @@ const parts = (svg, all) => {
   return { parts: out }
 }
 const ops = {
-  async svg({ main, sources, plain, binaries, keep, all }) {
-    await load(sources, binaries, keep)
-    try { return parts(await $typst.svg({ mainFilePath: '/' + main }), all) } catch (e) {
-      if (plain) { await load(plain); try { return parts(await $typst.svg({ mainFilePath: '/' + main }), all) } catch {} }
-      return { error: String(e?.message || e), diag: await diagnose(main).catch(() => '') }
+  async svg(m) { // plain: the pinned files without pins, should a pin break the compile
+    await load(m)
+    const go = async () => parts(await $typst.svg({ mainFilePath: '/' + m.main }), m.all)
+    try { return await go() } catch (e) {
+      if (m.plain) { await load({ put: m.plain }); try { return { ...await go(), plain: true } } catch {} }
+      return { error: String(e?.message || e), diag: await diagnose(m.main).catch(() => ''), plain: !!m.plain }
     }
   },
   last: () => ({ svg: whole }), // the whole, for the hub to keep
-  async pdf({ main, sources, binaries, keep }) {
-    await load(sources, binaries, keep)
-    return { pdf: await $typst.pdf({ mainFilePath: '/' + main }) }
+  async pdf(m) {
+    await load(m)
+    return { pdf: await $typst.pdf({ mainFilePath: '/' + m.main }) }
   },
 }
 let queue = Promise.resolve()

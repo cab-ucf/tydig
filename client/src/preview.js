@@ -30,8 +30,8 @@ const hash = s => { // cyrb53: equality, not secrecy (crypto.subtle needs https)
 // the files on disk a compile reads: not build output, not the shared text
 // the hub mirrors to disk, nothing too big to send
 const read = () => disk.filter(f => !files.has(f.path) && !f.path.startsWith('out/') && f.size < 8e6)
-const keyOf = main => hash(JSON.stringify([main, [...files].map(([p, t]) => [p, t.toString()]).sort(),
-  read().map(f => [f.path, f.size, f.mtime]).sort(), numbered().map(c => [c.file, c.from, c.n])]))
+const keyOf = (main, { plain, cs }) => hash(JSON.stringify([main, [...plain].sort(),
+  read().map(f => [f.path, f.size, f.mtime]).sort(), cs.map(c => [c.file, c.from, c.n])]))
 // what this browser compiled, back to the hub once it has been still a while,
 // under the key of what was compiled (a failed compile cancels it)
 let sent = null, upload
@@ -78,17 +78,17 @@ const pinned = (file, src, cs) => cs.filter(c => c.file === file && pinSafe(file
   .sort((a, b) => b.from - a.from).reduce((s, c) => s.slice(0, c.from) + pin(c.n) + s.slice(c.from), src)
 
 // The worker, made on the first ask (an edit, or an idle page); each ask
-// answered in turn. The sources go with every ask; a binary (an image, data)
-// only when it is new or changed: the worker keeps the rest, and drops what
-// the disk no longer has. Fetched here, where a link visitor's fetch reaches the hub.
-let worker, asks = 0
-const waits = new Map(), sentBins = new Map() // path -> size:mtime the worker has
+// answered in turn. It keeps what it was sent, so an ask carries only what
+// changed: a text edited, a binary (an image, data) new on disk, a path gone.
+// Fetched here, where a link visitor's fetch reaches the hub.
+let worker, asks = 0, stale = true // stale: the worker's files are unknown, so it starts from none
+const waits = new Map(), held = new Map() // path -> what the worker has: the text, or a binary's size:mtime
 const answer = data => { waits.get(data.id)?.(data); waits.delete(data.id) }
 const ask = (op, msg) => new Promise(ok => {
   worker ??= Object.assign(new Worker(new URL('./typst.worker.js', import.meta.url), { type: 'module' }), {
     onmessage: ({ data }) => answer(data),
     onerror: () => { // it did not load (a hub updated under a long-open page): say so, and try again next time
-      worker = null; sentBins.clear(); whole = false
+      worker = null; stale = true; whole = false
       for (const id of [...waits.keys()]) answer({ id, error: 'the compiler did not load: reload the page' })
     } })
   waits.set(++asks, ok); worker.postMessage({ id: asks, op, ...msg })
@@ -97,36 +97,50 @@ const ask = (op, msg) => new Promise(ok => {
 const sources = () => {
   const cs = numbered(), plain = [...files].map(([p, t]) => [p, t.toString()])
   const pinnedIn = new Set(cs.filter(c => pinSafe(c.file, c.from)).map(c => c.file))
-  return { plain, pins: pinnedIn.size ? plain.map(([p, s]) => [p, pinnedIn.has(p) ? pinned(p, s, cs) : s]) : null }
+  return { cs, plain, pins: pinnedIn.size ? plain.map(([p, s]) => [p, pinnedIn.has(p) ? pinned(p, s, cs) : s]) : null }
 }
-// the binaries the worker lacks; done() once it has them
-async function binaries() {
-  const bin = read(), fresh = bin.filter(f => sentBins.get(f.path) !== `${f.size}:${f.mtime}`)
+// what the worker lacks of texts (path -> text) and the disk's binaries, and
+// what it has that went; done(texts it fell back to) once it has them all
+async function delta(texts) {
+  if (stale) held.clear()
+  const bin = read(), sig = f => `${f.size}:${f.mtime}`, fresh = bin.filter(f => held.get(f.path) !== sig(f))
   const binaries = await Promise.all(fresh.map(async f => {
     const r = await fetch(rawUrl(f.path))
     if (!r.ok) throw new Error(`${f.path}: ${r.status}`)
     return [f.path, new Uint8Array(await r.arrayBuffer())]
   }))
-  const keep = bin.map(f => f.path)
-  return { binaries, keep, done: () => {
-    for (const f of fresh) sentBins.set(f.path, `${f.size}:${f.mtime}`)
-    for (const p of sentBins.keys()) if (!keep.includes(p)) sentBins.delete(p)
+  const want = new Set([...texts.map(([p]) => p), ...bin.map(f => f.path)])
+  const put = texts.filter(([p, s]) => held.get(p) !== s), drop = [...held.keys()].filter(p => !want.has(p))
+  return { reset: stale, put, binaries, drop, done: (also = []) => {
+    stale = false
+    for (const p of drop) held.delete(p)
+    for (const [p, s] of [...put, ...also]) held.set(p, s)
+    for (const f of fresh) held.set(f.path, sig(f))
   } }
 }
+// an ask with what the worker lacks for it, one at a time (each reckons from
+// what the last left); plain: what to fall back to, should a pin break it
+let lane = Promise.resolve()
+const send = (op, texts, msg) => lane = lane.catch(() => {}).then(async () => {
+  const { done, ...d } = await delta(texts), r = await ask(op, { ...msg, ...d })
+  if (!r.error || r.diag != null) done(r.plain ? msg.plain : []); else stale = true
+  return r
+})
 
 // The compiler calls a file absent from its filesystem "access denied ...
 // outside of project root". Say which file, and that a relative path starts
 // from the file naming it: image("fig/a.svg") in lib/x.typ reads lib/fig/a.svg.
 const normPath = p => p.split('/')
   .reduce((a, s) => s === '..' ? a.slice(0, -1) : s && s !== '.' ? [...a, s] : a, []).join('/')
-const READS = /\b(?:image|json|csv|yaml|toml|xml|read|include|import)\(\s*"([^"@][^"]*)"\s*[,)]/g
+const READS = /\b(?:(?:image|json|csv|yaml|toml|xml|read)\(\s*"([^"@][^"]*)"\s*[,)]|(?:include|import)\s+"([^"@][^"]*)")/g
 function missing() {
   const here = new Set([...files.keys(), ...disk.map(f => f.path)]), out = new Map()
   for (const [p, t] of files) {
     if (!p.endsWith('.typ')) continue
     const dir = p.slice(0, p.lastIndexOf('/') + 1)
     // a whole literal path only: "/" + name is built at run time
-    for (const [, ref] of t.toString().matchAll(READS)) {
+    for (const [, a, b] of t.toString().matchAll(READS)) {
+      const ref = a ?? b
       const abs = normPath(ref.startsWith('/') ? ref : dir + ref), r = normPath(ref)
       if (here.has(abs) || out.has(abs)) continue
       const fix = !ref.startsWith('/') && (here.has(r) ? r : [...here].find(q => q.endsWith('/' + r)))
@@ -226,14 +240,13 @@ async function compile() {
   if (!main) return
   if (busy) return again = true
   busy = true
-  if (first && (await cached)?.key === keyOf(main)) { // the hub's is this: shown, and enough for now
-    first = false; sent = keyOf(main); busy = false; return idle()
+  const src = sources(), key = keyOf(main, src)
+  if (first && (await cached)?.key === key) { // the hub's is this: shown, and enough for now
+    first = false; sent = key; busy = false; return idle()
   }
-  const key = keyOf(main)
-  try { // with pins, or (should a pin break it) without
-    const { plain, pins } = sources(), { done, ...bins } = await binaries()
-    const r = await ask('svg', { main, sources: pins ?? plain, plain: pins && plain, ...bins, all: !whole })
-    if (!r.error || r.diag != null) done()
+  try { // with pins, or (should a pin break it) without: the worker gets only what differs
+    const { plain, pins } = src, back = pins && plain.filter(([p, s], i) => s !== pins[i][1])
+    const r = await send('svg', pins ?? plain, { main, plain: back, all: !whole })
     if (!r.parts) throw Object.assign(new Error(r.error), { diag: r.diag })
     whole = false; patch(r.parts); whole = true
     $('diag').hidden = true
@@ -247,8 +260,7 @@ async function compile() {
 export async function exportPdf() { // never with pins
   const main = $('main-sel').value
   if (!main) return
-  const { done, ...bins } = await binaries(), r = await ask('pdf', { main, sources: sources().plain, ...bins })
-  r.error || done()
+  const r = await send('pdf', sources().plain, { main })
   r.pdf ? saveAs(r.pdf, main.replace(/\.typ$/, '.pdf'), 'application/pdf', false) : toast(esc(r.error), false)
 }
 
