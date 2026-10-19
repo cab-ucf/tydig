@@ -86,4 +86,22 @@ const mainA = () => docA.getMap('files').get('main.typ').toString()
 check('an edit on the hub\'s disk reaches the live editor', await until(async () => mainA().includes('DISK EDIT')))
 check('without losing what was there', mainA().includes(MA))
 
+// A remote made with a README of its own (a history the project's never
+// shared): joined, its README in the project, the project's files as they were
+const own = `${REMOTE}-own`, w = `${REMOTE}-own-work`
+await run('git', ['init', '-q', '--bare', '-b', 'main', own])
+await run('git', ['clone', '-q', own, w])
+const gw = (...x) => run('git', ['-C', w, '-c', 'user.name=x', '-c', 'user.email=x@x', ...x])
+await gw('commit', '-q', '--allow-empty', '-m', 'Initial commit')
+await (await import('node:fs/promises')).writeFile(`${w}/README.md`, '# made on GitHub\n')
+await gw('add', '.'); await gw('commit', '-qm', 'README'); await gw('push', '-q', 'origin', 'main')
+await a.post('/projects/joined')
+await a.post('/p/joined/gitremote', { url: own, branch: 'main' })
+const joined = await a.post('/p/joined/gitremote/sync')
+const dj = await openDoc(a, 'joined')
+check('a remote with a history of its own: joined, and pushed', joined.ok === true)
+check('its README comes into the project, the project\'s files stay', await until(async () => dj.files.get('README.md')?.toString() === '# made on GitHub\n') && dj.files.has('main.typ'))
+const ownLog = (await run('git', ['-C', own, 'log', '--format=%s', 'main'])).stdout
+check('the remote keeps both histories', ownLog.includes('README') && ownLog.includes('checkpoint: project created'))
+
 done()
