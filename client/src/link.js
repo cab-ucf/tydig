@@ -26,9 +26,8 @@ const say = (html, fail) => {
   el.querySelector('button')?.addEventListener('click', () => location.reload())
 }
 // Why a link fails, found by asking each relay directly: an HTTPS ping, then
-// the WebSocket iroh needs (2 = both work). n0's relays refuse Firefox's when
-// its TLS hello carries ECH GREASE, so a ping that works with a socket that
-// does not is usually that.
+// the WebSocket iroh needs (2 = both work). Relays refuse Firefox's TLS hello
+// when it carries ECH GREASE, the ping too, so in Firefox that comes first.
 const NativeWS = WebSocket
 const probe = async r => {
   r = r.replace(/\/?$/, '/')
@@ -42,12 +41,14 @@ async function why() {
   const best = Math.max(...await Promise.all(link.relays.map(probe)))
   const host = link.relays.map(r => new URL(r).host).join('</code> or <code>')
   const ping = best > 0, ws = best > 1
+  if (!ws && /Firefox\//.test(navigator.userAgent)) return `The relay (<code>${host}</code>) may be
+    refusing Firefox's connection. In <code>about:config</code> set
+    <code>security.tls.ech.grease_probability</code> to 0, or open this link in Chrome, Edge or Safari.
+    If those fail too, this network blocks the relay: try another network or a phone hotspot.`
   if (!ping) return `This network does not reach the relay (<code>${host}</code>): a firewall or
     filter is blocking it. Try another network, a phone hotspot or a VPN.`
-  if (!ws) return /Firefox\//.test(navigator.userAgent) ? `The relay refuses Firefox's connection. Open
-    this link in Chrome, Edge or Safari, or in <code>about:config</code> set
-    <code>security.tls.ech.grease_probability</code> to 0.` : `The relay answers, but this network or
-    browser blocks its WebSocket (a proxy, filter or extension). Try another network or browser.`
+  if (!ws) return `The relay answers, but this network or browser blocks its WebSocket (a proxy,
+    filter or extension). Try another network or browser.`
   if (plain) return 'The hub is off or restarting: try again in a minute.'
   return `The relay works from here, so the hub is not on it: is it running, and does its log say
     <code>link: online</code>? Is this its current link (<code>just link</code> prints it)?`
