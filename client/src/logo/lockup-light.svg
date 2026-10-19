@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 120">
+<style>text{font:700 64px "JetBrains Mono",ui-monospace,Menlo,monospace;fill:#1e1e2e}
+</style>
+<rect width="120" height="120" rx="26" fill="#1e1e2e"/>
+<rect fill="#2ec4b6" x="24" y="24" width="44" height="72"/>
+<rect fill="#2ec4b6" x="24" y="12" width="14" height="10"/>
+<text x="46" y="82" text-anchor="middle" style="fill:#1e1e2e">t</text>
+<path class="b" fill="#9b5de5" d="M76 14h22v12H84v70h-8z"/>
+<text x="140" y="82" letter-spacing="-2">tydig</text>
+</svg>
