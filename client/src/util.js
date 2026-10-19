@@ -39,9 +39,8 @@ if (!['editor', 'split', 'preview'].includes(settings.view)) settings.view = 'sp
 if (settings.m === 'side' && !settings.sideOpen) settings.m = 'edit' // a phone's panel closed, then reloaded
 settings.split = Math.min(0.8, Math.max(0.2, +settings.split || 0.5))
 export const saveSettings = () => localStorage.settings = JSON.stringify(settings)
-// dark, cyber or light; the system's until Alt-D picks one
-export const system = matchMedia('(prefers-color-scheme: light)')
-export const theme = () => settings.theme ?? (system.matches ? 'light' : 'dark')
+// dark (black), cyber or light; dark until one is picked (Settings › Theme, Space u t)
+export const theme = () => settings.theme ?? 'dark'
 document.documentElement.dataset.theme = theme()
 // phones (narrow, or on their side) show one pane at a time
 export const phoneQ = matchMedia('(max-width: 800px), (max-height: 500px) and (pointer: coarse)')
