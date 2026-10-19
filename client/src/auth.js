@@ -16,7 +16,7 @@ export const authClient = createAuthClient({
 export async function requireUser() {
   let early = self.tydigSession // asked by early.js, while the app downloaded
   for (;;) {
-    const data = early ? await early : (await authClient.getSession()).data
+    const data = await early ?? (await authClient.getSession()).data
     early = null
     if (data?.user) return join ? joined(data.user) : data.user
     await loginScreen()

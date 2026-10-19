@@ -17,7 +17,8 @@
       export XDG_RUNTIME_DIR=/run/user/$(id -u)
       [ -d src/.git ] || { mv src/.env .env.old; rm -rf src  # an older tydig's copy
         git clone -q https://github.com/cab-ucf/tydig src; mv .env.old src/.env; } 2>/dev/null
-      cd src && git pull -q --ff-only
+      cd src && git remote set-url origin https://github.com/cab-ucf/tydig  # no key needed
+      git pull -q --ff-only
       [ "$(git rev-parse HEAD)" = "$(cat .git/deployed 2>/dev/null)" ] ||
         { just && git rev-parse HEAD > .git/deployed; }
     '';

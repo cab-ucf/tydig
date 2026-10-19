@@ -233,7 +233,7 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
   height: 34px; padding: 0 .4rem; border-bottom: 1px solid var(--ink-3);
 }
 #side-tabs { display: flex; gap: .15rem; flex: 1; min-width: 0; overflow-x: auto; }
-#side-tabs button { height: 26px; padding: 0 .55rem; border-radius: 6px; font: 500 .78rem var(--sans); }
+#side-tabs button { flex: none; white-space: nowrap; height: 26px; padding: 0 .55rem; border-radius: 6px; font: 500 .78rem var(--sans); }
 #side-tabs button:hover { color: var(--fg); }
 #side-tabs button.on { color: var(--hi); background: var(--ink-3); }
 #side-head #side-close { font-size: 1.1rem; }
