@@ -9,6 +9,7 @@ and entropy views follow GLTR [gehrmann2019gltr]. A sentence [sadvilkar2020pysbd
 words, so its bits are its words' bits and the boundaries inside it cancel [pimentel2024word]."""
 import math, pysbd, torch
 from bisect import bisect
+from itertools import accumulate
 from transformers import AutoModelForCausalLM, AutoTokenizer, DynamicCache
 
 NEG, LN2 = float("-inf"), math.log(2)
@@ -39,8 +40,9 @@ class Engine:
         s.C = min(getattr(c, "n_positions", 0) or c.max_position_embeddings, ctx); s.S = s.C // 2
         s.bos, V, n = s.tk.eos_token_id, s.m.get_output_embeddings().weight.shape[0], len(s.tk)
         s.B = torch.zeros(V, dtype=torch.bool, device=s.dev)  # tokens that open a word or end text
-        s.B[:n] = torch.tensor([s.tk.decode([i])[:1].isspace() for i in range(n)])
+        s.B[:n] = torch.tensor([t[:1].isspace() for t in s.tk.batch_decode([[i] for i in range(n)])])
         s.B[s.bos] = True
+        s.Bf = s.B.float()
         s.win, s.doc, s.last, s.seg = {}, None, None, pysbd.Segmenter(char_span=True)
 
     @torch.no_grad()
@@ -48,7 +50,8 @@ class Engine:
         t = lambda x: torch.tensor([x], device=s.dev)
         o = s.m(t(ids), past_key_values=cache, use_cache=True, attention_mask=mask,
                 position_ids=None if pos is None else t(pos))
-        return (o.logits[0].float() / s.T).log_softmax(-1), o.past_key_values
+        x = o.logits[0].float()
+        return (x if s.T == 1 else x / s.T).log_softmax(-1), o.past_key_values
 
     def lB(s, lp): return lp.masked_fill(~s.B, NEG).logsumexp(-1)  # log P(a word boundary next)
 
@@ -59,10 +62,10 @@ class Engine:
         if old and l == len(ids) == len(old[0]): return old
         l = max(l, 1)
         lp, cache = s.fwd(ids[l - 1:], sub(old[1], l - 1) if old else None)
-        g = lp[:-1].gather(1, torch.tensor(ids[l:], dtype=torch.long, device=s.dev)[:, None])[:, 0]
-        z = g.new_zeros(1)
-        new = [torch.cat([g, z]), torch.cat([(lp[:-1] > g[:, None]).sum(1) + 1., z]),
-               ent(lp), s.lB(lp)]
+        g = lp[:-1].gather(1, torch.tensor(ids[l:], dtype=torch.long, device=s.dev)[:, None])
+        p, z = lp.exp(), g.new_zeros(1)  # entropy and P(boundary) as products: no masked copies
+        new = [torch.cat([g[:, 0], z]), torch.cat([(lp[:-1] > g).sum(1) + 1., z]),
+               -(p[:, None] @ lp[:, :, None])[:, 0, 0] / LN2, (p @ s.Bf).clamp_min(1e-45).log()]
         rows = [torch.cat([o[:l - 1], x]) for o, x in zip(old[2], new)] if old else new
         s.win[st] = w = (ids, cache, rows)
         return w
@@ -121,9 +124,11 @@ class Engine:
             k0 = len(par)
             for p, t in items: par.append(p); pos.append(pos[p] + 1 if p >= 0 else base)
             m = torch.full((len(items), base + len(par)), NEG, device=s.dev); m[:, :base] = 0
+            rows, cols = [], []  # each item sees its ancestors: gathered here, written at once
             for q in range(len(items)):
                 a = k0 + q
-                while a >= 0: m[q, base + a] = 0; a = par[a]
+                while a >= 0: rows.append(q); cols.append(base + a); a = par[a]
+            m[rows, cols] = 0
             lp, cache = s.fwd([t for _, t in items], cache, pos[k0:], m[None, None].to(s.m.dtype))
             out.extend(lp)
             return range(k0, len(par))
@@ -132,18 +137,19 @@ class Engine:
                     slot=-1, D=D0[0])
         nodes, level, floor = [root], [root], math.log(min_cum)
         while level:
-            forced, cand = [], []
-            for nd in level:
-                if nd["depth"] >= depth: continue
-                first = nd["id"] == 0 and j == 1  # the document's first word has no boundary before
-                norm = 0. if first else s.lB(nd["D"]).item()
-                D = nd["D"] if first else nd["D"].masked_fill(~s.B, NEG)
+            forced, cand, level = [], [], [nd for nd in level if nd["depth"] < depth]
+            if not level: break
+            # the level at once: the document's first word has no boundary before it
+            first = [nd["id"] == 0 and j == 1 for nd in level]
+            Ds = torch.stack([nd["D"] for nd in level])
+            Ds = torch.where(torch.tensor(first, device=s.dev)[:, None] | s.B, Ds, NEG)
+            norm = [0. if f else v for f, v in zip(first, Ds.logsumexp(-1).tolist())]
+            tv, ti = (x.tolist() for x in Ds.topk(k + 1))
+            for nd, D, nm, vs, ts in zip(level, Ds, norm, tv, ti):
                 a = act[nd["depth"]] if nd["actual"] and nd["depth"] < len(act) else None
-                if a: forced.append((nd, ids[a["t0"]:a["t1"]], D[ids[a["t0"]]].item() - norm, True))
-                top = D.topk(k + 1)
-                cand += [(nd, [t], v - norm, False)
-                         for v, t in zip(top.values.tolist(), top.indices.tolist())
-                         if not (a and t == ids[a["t0"]]) and nd["rel"] + v - norm > floor][:k]
+                if a: forced.append((nd, ids[a["t0"]:a["t1"]], D[ids[a["t0"]]].item() - nm, True))
+                cand += [(nd, [t], v - nm, False) for v, t in zip(vs, ts)
+                         if not (a and t == ids[a["t0"]]) and nd["rel"] + v - nm > floor][:k]
             cand.sort(key=lambda c: -(c[0]["rel"] + c[2]))  # best first, from where it leaves the page
             active = [dict(id=0, parent=p, toks=t, lp=v, depth=p["depth"] + 1, actual=f, slot=None,
                            pend=t, pre=[p["D"]])
@@ -157,22 +163,24 @@ class Engine:
                     for t in nd["pend"]: items.append((prev, t)); prev = len(par) + len(items) - 1
                     span.append(len(nd["pend"]))
                 slots, nxt = list(feed(items)), []
-                for nd, L in zip(active, span):
+                last = torch.stack([out[slots[c - 1]] for c in accumulate(span)])
+                go = last.masked_fill(s.B, NEG).max(-1)  # each one's best way on, and its end
+                ends, gv, gt = s.lB(last).tolist(), go.values.tolist(), go.indices.tolist()
+                for nd, L, end, cv, ct in zip(active, span, ends, gv, gt):
                     ss, slots = slots[:L], slots[L:]
                     if nd["slot"] is None:
                         nd["lp"] += sum(out[ss[q - 1]][nd["toks"][q]].item() for q in range(1, L))
                         nd["pre"] += [out[x] for x in ss[:-1]]
                     nd["slot"], D = ss[-1], out[ss[-1]]
-                    end, (cv, ct) = s.lB(D).item(), D.masked_fill(s.B, NEG).max(0)
                     if (nd["actual"] or len(nd["toks"]) >= 4
-                            or end >= cv.item() and s.tk.decode(nd["toks"]).strip()):
+                            or end >= cv and s.tk.decode(nd["toks"]).strip()):
                         nd.update(lp=nd["lp"] + end, D=D)
                         nd.update(cum=nd["parent"]["cum"] + nd["lp"],
                                   rel=0. if nd["actual"] else nd["parent"]["rel"] + nd["lp"])
                         level.append(nd)
                     else:
-                        nd["lp"] += cv.item(); nd["toks"] = nd["toks"] + [ct.item()]
-                        nd["pend"] = [ct.item()]; nd["pre"].append(D); nxt.append(nd)
+                        nd["lp"] += cv; nd["toks"] = nd["toks"] + [ct]
+                        nd["pend"] = [ct]; nd["pre"].append(D); nxt.append(nd)
                 active = nxt
         dec = s.tk.decode
         view = dict(at=act[0]["s"] if act else len(d["text"]), actual=[[a["s"], a["e"]] for a in act],
@@ -184,35 +192,41 @@ class Engine:
         s.last = dict(key=key, view=view, nodes=nodes, open0=j == 1, cache=rc, base=base, D0=D0[0])
         return view
 
-    def keep(s, lp, m, a):  # one decoding step: which tokens survive, renormalized (log q)
-        p, ok = lp.exp(), torch.zeros_like(s.B)
-        if m == "topk": ok = lp >= lp.topk(max(1, int(a))).values[-1]  # [fan2018hierarchical]
+    def keep(s, lp, m, a):  # one decoding step, each row: which tokens survive, renormalized (log q)
+        p, top = lp.exp(), lambda x: x.amax(-1, keepdim=True)
+        if m == "topk": ok = lp >= lp.topk(max(1, int(a)), -1).values[..., -1:]  # [fan2018hierarchical]
         elif m in ("topp", "typical"):  # nucleus [holtzman2020curious]; typical [meister2023typical]
-            i = (-lp if m == "topp" else (lp + ent(lp) * LN2).abs()).argsort()
-            ok[i[:int((p[i].cumsum(0) < a).sum()) + 1]] = True
-        elif m == "minp": ok = p >= a * p.max()  # [nguyen2025minp]
+            i = (-lp if m == "topp" else (lp + ent(lp)[..., None] * LN2).abs()).argsort(-1)
+            n = (p.gather(-1, i).cumsum(-1) < a).sum(-1, keepdim=True)  # the first n + 1 stay
+            ok = torch.empty_like(lp, dtype=torch.bool).scatter_(-1, i, torch.arange(
+                lp.shape[-1], device=s.dev) <= n)
+        elif m == "minp": ok = p >= a * top(p)  # [nguyen2025minp]
         elif m == "eta":  # [hewitt2022truncation]
-            ok = p > min(a, math.sqrt(a) * math.exp(-ent(lp).item() * LN2))
-        elif m == "nsigma": ok = lp >= lp.max() - a * lp.clamp_min(-1e4).std()  # [tang2025topnsigma]
+            ok = p > (math.sqrt(a) * (-ent(lp) * LN2).exp()).clamp(max=a)[..., None]
+        elif m == "nsigma":  # [tang2025topnsigma]
+            ok = lp >= top(lp) - a * lp.clamp_min(-1e4).std(-1, keepdim=True)
         elif m == "mirostat": ok = -lp / LN2 <= a  # surprise ceiling mu [basu2021mirostat]
-        else: ok = ~ok
-        if not ok.any(): ok[lp.argmax()] = True  # only typical may rightly drop the top token
+        else: ok = torch.ones_like(lp, dtype=torch.bool)
+        b = lp.argmax(-1, keepdim=True)  # only typical may rightly drop the top token
+        ok.scatter_(-1, b, ok.gather(-1, b) | ~ok.any(-1, keepdim=True))
         return lp.masked_fill(~ok, NEG).log_softmax(-1)
 
     def overlay(s, m, a, T):  # each tree word's chance under the sampler; word starts it keeps
-        L, Q, chance, kept = s.last, {}, {}, {}
-
-        def q(D):
-            if id(D) not in Q:
-                Q[id(D)] = s.keep((D / T).log_softmax(-1), m, 2 * a if m == "mirostat" else a)
-            return Q[id(D)]
-        for n in L["nodes"][1:]:
-            first, qs = n["parent"]["id"] == 0 and L["open0"], [q(D) for D in n["pre"] + [n["D"]]]
-            v = sum(x[t].item() for x, t in zip(qs, n["toks"])) - (0. if first else s.lB(qs[0]).item())
-            v += s.lB(qs[-1]).item()
+        L, row, chance, kept = s.last, {}, {}, {}
+        for n in L["nodes"][1:]:  # every distribution the tree holds, once, as a row
+            for D in n["pre"] + [n["D"]]: row.setdefault(id(D), (len(row), D))
+        Q = s.keep((torch.stack([D for _, D in row.values()]) / T).log_softmax(-1), m,
+                   2 * a if m == "mirostat" else a)
+        alive = Q > NEG
+        lb, starts, all_ = s.lB(Q).tolist(), (alive & s.B).sum(-1).tolist(), alive.sum(-1).tolist()
+        steps = [[row[id(D)][0] for D in n["pre"] + [n["D"]]] for n in L["nodes"][1:]]
+        lq = iter(Q[[r for rs, n in zip(steps, L["nodes"][1:]) for r in rs[:len(n["toks"])]],
+                    [t for n in L["nodes"][1:] for t in n["toks"]]].tolist())
+        for n, rs in zip(L["nodes"][1:], steps):
+            first = n["parent"]["id"] == 0 and L["open0"]
+            v = sum(next(lq) for _ in n["toks"]) - (0. if first else lb[rs[0]]) + lb[rs[-1]]
             chance[n["id"]] = math.exp(v) if math.isfinite(v) else 0.
-            starts = (qs[0] > NEG) & (torch.ones_like(s.B) if first else s.B)
-            kept.setdefault(n["parent"]["id"], int(starts.sum()))
+            kept.setdefault(n["parent"]["id"], (all_ if first else starts)[rs[0]])
         return dict(chance=chance, kept=kept)
 
     @torch.no_grad()
