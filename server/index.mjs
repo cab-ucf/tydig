@@ -24,9 +24,7 @@ const app = express().disable('x-powered-by')
 // No answer says where things live on this machine: errors from git, podman
 // or the filesystem name the data folder, so it never leaves as written.
 app.use((req, res, next) => {
-  const json = res.json.bind(res)
-  res.json = b => { const t = JSON.stringify(b) ?? ''
-    return t.includes(DATA) ? res.type('json').send(t.replaceAll(DATA, '…')) : json(b) }
+  res.json = b => res.type('json').send((JSON.stringify(b) ?? '').replaceAll(DATA, '…'))
   next()
 })
 const TP = process.env.TYDIG_TRUST_PROXY // behind a proxy: hops, 'loopback' or addresses

@@ -84,23 +84,22 @@ try:
     fig, ax = plt.subplots(figsize=(5.4, 3.4))
     ax.plot(t, T, "o", ms=4, color="#16191d", label="sample")
     if tau:
-        fit = [amb + (T1 - amb) * math.exp(-x / tau) for x in t]
+        fit = [amb + math.copysign(math.exp(a + b * x), T1 - amb) for x in t]  # the fitted line
         ax.plot(t, fit, "-", color="#239dad", label=f"Newton fit, tau = {tau:.1f} min")
     ax.axhline(amb, ls="--", lw=1, color="#888", label=f"ambient {amb:.1f} degC")
     ax.set_xlabel("time (min)"); ax.set_ylabel("temperature (degC)")
     ax.legend(frameon=False); fig.tight_layout(); fig.savefig(FIG)
 except ImportError:
     W, H, P = 520, 330, 42
-    xs, ys = t, T
-    sx = lambda x: P + (x - min(xs)) / (max(xs) - min(xs)) * (W - 2 * P)
-    sy = lambda y: H - P - (y - min(ys)) / (max(ys) - min(ys)) * (H - 2 * P)
-    pl = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in zip(xs, ys))
+    sx = lambda x: P + (x - min(t)) / ((max(t) - min(t)) or 1) * (W - 2 * P)  # a flat series: no divide by 0
+    sy = lambda y: H - P - (y - min(T)) / ((max(T) - min(T)) or 1) * (H - 2 * P)
+    pl = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in zip(t, T))
     FIG.write_text(
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}">'
         f'<rect width="{W}" height="{H}" fill="white"/>'
         f'<polyline points="{pl}" fill="none" stroke="#239dad" stroke-width="2"/>'
         + "".join(f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="3" fill="#16191d"/>'
-                  for x, y in zip(xs, ys))
+                  for x, y in zip(t, T))
         + f'<line x1="{P}" y1="{H-P}" x2="{W-P}" y2="{H-P}" stroke="#888"/>'
         f'<line x1="{P}" y1="{P}" x2="{P}" y2="{H-P}" stroke="#888"/></svg>')
 

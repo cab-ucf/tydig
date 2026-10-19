@@ -6,6 +6,7 @@ import { IndexeddbPersistence } from 'y-indexeddb'
 import { $, link, me, projName } from './util.js'
 import { openPicker } from './dialogs.js'
 import { FILE as TAGFILE, TAGS, tagsOf, setTag } from '../../server/tags.mjs'
+import { setText } from '../../server/text.mjs'
 
 if (!projName) { openPicker(); throw new Error('awaiting project choice') }
 
@@ -38,7 +39,7 @@ export const GEN = /^(out|build|figures)\//
 export const isImg = p => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(p)
 export const okPath = p => /^[\w./@ -]+$/.test(p) &&
   p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
-export const setText = (t, s) => ydoc.transact(() => { t.delete(0, t.length); t.insert(0, s) })
+export { setText } // only the span that changed: comment anchors, cursors and undo survive
 
 // A file's tags, from the project's .gitattributes (server/tags.mjs):
 // ai-generated, read-only. Setting one edits that file, so it syncs and is kept.

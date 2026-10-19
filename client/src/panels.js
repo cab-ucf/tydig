@@ -34,9 +34,15 @@ export function tabs() {
     n[m] ? el('b', { className: 'badge', textContent: n[m] }) : '')))
   $('side-tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
-// the pane again, if it is the one open
-// the pane again, if it is the one open; a slow one checks body.dataset.pane before it fills in
-export function redraw(m) { if (mode === m) { $('side-body').dataset.pane = m; panes()[m]($('side-body')) } }
+// the pane again, if it is the one open; a slow one checks body.dataset.pane before it fills in.
+// A composer being typed in keeps the focus and the caret.
+export function redraw(m) {
+  if (mode !== m) return
+  const b = $('side-body'), f = document.activeElement, k = b.contains(f) ? f.dataset.re : null, at = f?.selectionStart
+  b.dataset.pane = m; panes()[m](b)
+  const t = k != null && b.querySelector(`textarea[data-re="${CSS.escape(k)}"]`)
+  if (t) { t.focus(); t.setSelectionRange(at, at) }
+}
 export function toggleSide() {
   if (!settings.sideOpen) return openSidebar(mode || 'comments')
   settings.sideOpen = false; applyLayout()

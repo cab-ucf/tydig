@@ -7,7 +7,7 @@ COPY server/package.json server/
 RUN npm ci -w client
 COPY client/ client/
 COPY fonts/ fonts/
-COPY server/relay.mjs server/refs.mjs server/tags.mjs server/
+COPY server/relay.mjs server/refs.mjs server/tags.mjs server/text.mjs server/
 ARG TYDIG_BRAND=tydig
 RUN npm run build && node client/brotli.mjs
 

@@ -90,7 +90,22 @@ async function hubFetch(req) {
   return new Response(empty ? null : r.body, { status: r.status === 101 ? 200 : r.status, headers: out })
 }
 
-// Same API as a browser WebSocket, carried by /api/bridge (see server/index.mjs).
+// [type u8][length u32][bytes] off a stream, in a buffer that grows by
+// doubling: each byte copied a bounded number of times, however it arrives
+async function* frames(rd) {
+  let buf = new Uint8Array(1 << 16), len = 0, at = 0
+  for (;;) {
+    for (let n; len - at >= 5 && len - at >= 5 + (n = new DataView(buf.buffer).getUint32(at + 1)); at += 5 + n)
+      yield [buf[at], buf.slice(at + 5, at + 5 + n)]
+    const { value, done } = await rd.read()
+    if (done) return
+    if (at) buf.copyWithin(0, at, len), len -= at, at = 0
+    if (len + value.length > buf.length) { const t = new Uint8Array(2 * (len + value.length)); t.set(buf.subarray(0, len)); buf = t }
+    buf.set(value, len); len += value.length
+  }
+}
+
+// Same API as a browser WebSocket, carried by /api/bridge (see server/link.mjs).
 class HubSocket extends EventTarget {
   static CONNECTING = 0; static OPEN = 1; static CLOSING = 2; static CLOSED = 3
   readyState = 0; binaryType = 'blob'; protocol = ''; extensions = ''; bufferedAmount = 0
@@ -112,17 +127,9 @@ class HubSocket extends EventTarget {
         return this.#emit('close', { code: 1000 })
       }
       this.#reader = r.body.getReader(); this.readyState = 1; this.#emit('open')
-      for (let buf = new Uint8Array(0); ;) {
-        const { value, done } = await this.#reader.read()
-        if (done) break
-        const t = new Uint8Array(buf.length + value.length); t.set(buf); t.set(value, buf.length); buf = t
-        for (let n; buf.length >= 5 && buf.length >= 5 + (n = new DataView(buf.buffer).getUint32(1));) {
-          const d = buf.slice(5, 5 + n), text = buf[0] === 1
-          buf = buf.slice(5 + n)
-          this.#emit('message', { data: text ? new TextDecoder().decode(d)
-            : this.binaryType === 'arraybuffer' ? d.buffer : new Blob([d]) })
-        }
-      }
+      for await (const [type, d] of frames(this.#reader))
+        this.#emit('message', { data: type === 1 ? new TextDecoder().decode(d)
+          : this.binaryType === 'arraybuffer' ? d.buffer : new Blob([d]) })
     } catch { if (this.readyState === 0) this.#emit('error') }
     this.readyState = 3; this.#emit('close', { code: 1006 })
   }
