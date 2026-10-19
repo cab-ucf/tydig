@@ -3,8 +3,10 @@
 set -e
 T=$(cd "$(dirname "$0")/../../../templates" && pwd)
 p=$1 t=$2 L=
-case $t in nih*|nsf*) L=grant ;; esac
 for l in $(ls "$T"); do case $t in "$l" | "$l"-*) L="$L $l" ;; esac; done
+b=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], ""))' \
+  "$T/base.json" $L) # the family's shared layer, as server/templates.mjs
+L="$b$L" # (the first of L is the family)
 [ "$3" ] && L="$L brand-$3"
 cd "$p"
 for l in $L; do (cd "$T/$l" && find . -type f) done | sort -u |

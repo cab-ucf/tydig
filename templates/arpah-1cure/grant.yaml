@@ -69,7 +69,8 @@ metrics:
   - { metric: Treatment time, today: 5–8 weeks, goals: ["—", "—", One day] }
 
 # The work: Volume I's milestones, the Task Description Document and the
-# schedule all read this. Months from the start; phase: 1, 2 or 3.
+# schedule all read this. Months from the start; phase: 1, 2 or 3;
+# approach: the steps, for the Task Description Document.
 tasks:
   - { id: "1.1", ta: TA1, phase: 1, title: Select immunoadjuvants, org: UCF,
       start: 1, end: 12, milestone: Optimal immunoadjuvants chosen,
