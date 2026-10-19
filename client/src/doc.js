@@ -17,7 +17,7 @@ export const meta = ydoc.getMap('meta') // diskRev: bumped by the hub whenever t
 // offline edits survive reloads, and merge (it is a CRDT) when the hub is back
 export const local = new IndexeddbPersistence(`tydig:${link ? link.id + ':' : ''}${projName}`, ydoc)
 
-export const user = { name: me.name || me.email,
+export const user = { id: me.id, name: me.name || me.email,
   color: localStorage.userColor ||= `hsl(${Math.floor(Math.random() * 360)} 70% 45%)` }
 export const token = () => /better-auth\.session_token=([^;]+)/.exec(document.cookie)?.[1] || ''
 export const ws = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
@@ -27,6 +27,8 @@ export const provider = new HocuspocusProvider({
   onAuthenticationFailed: () => { alert(`No access to ${projName}: ask a member to share it.`); location.search = '' },
 })
 provider.setAwarenessField('user', { ...user, colorLight: user.color })
+// a reload or a closed tab leaves at once, not 30 s later, when its presence would lapse
+addEventListener('pagehide', () => provider.awareness.setLocalState(null))
 provider.on('status', ({ status }) => {
   $('status').dataset.state = status
   $('status').title = $('status').textContent = { connected: 'online', connecting: 'connecting' }[status]
