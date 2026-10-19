@@ -10,8 +10,8 @@ before it, each sentence's perplexity, and how AI-like each sentence and the who
 - Settings, as variables to `just` and build args: `MODEL`, an attention-only base model
   (`Qwen/Qwen3-0.6B-Base`); `DETECTOR`, `meld` or empty for none; for the image, `TORCH`,
   `cpu` or `cu130` (NVIDIA GPU). `just serve --help` lists the server's options.
-- `ws://HOST:8000/ws` takes `{seq, text, cursor, k, depth, m, a, T}` (`cursor: null` for no
-  completion tree) and answers each `seq`, a newer request cutting the older one short:
+- `ws://HOST:8000/ws` takes `{seq, text, cursor, k, depth, m, a, T, ai}` (`cursor: null` for
+  no completion tree; `ai: false` skips the detector) and answers each `seq`, a newer request cutting the older one short:
   - `hello` on connecting: `model`, `detector` (`null`: none), `watching`
   - `heat`: `words` (`s, e` characters, `bits`, `rank`, `ent`, `toks`), `sents` (`s, e`, `w`
     words, `n` tokens, `bits`), `ppl`, `bpt`, `ntok`

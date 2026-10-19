@@ -51,7 +51,7 @@ router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
       signal.onabort = () => err('replaced by a newer ask', 409)
       timer = setTimeout(() => no(new Error(`no answer in ${secs} s`)), secs * 1000)
       let detector, at
-      ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 })))
+      ws.on('open', () => ws.send(JSON.stringify({ seq: 1, text: req.body, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1, ai })))
       ws.on('error', no).on('close', () => no(new Error('it hung up'))).on('message', m => {
         let j
         try { j = JSON.parse(m) } catch { return no(new Error('it answered nonsense')) }

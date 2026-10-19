@@ -202,7 +202,7 @@ engine.on('connection', ws => { ws.send(JSON.stringify({ type: 'hello', model: '
   const words = [...r.text.matchAll(/\S+/g)].map(x => ({ s: x.index, e: x.index + x[0].length, bits: x[0].length * 2, rank: 5, ent: 2 + x[0].length, toks: [[x[0], x[0].length * 2]] }))
   ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words, sents: [{ s: 0, e: r.text.trimEnd().length, w: words.length, n: words.length, bits: words.length * 6 }],
     ppl: 42, bpt: 5.4, ntok: words.length }))
-  ws.send(JSON.stringify({ type: 'ai', seq: r.seq, score: 3, tail: 0.004, words: words.length, calibrated: false, family: 'gpt', task: 'write',
+  if (r.ai !== false) ws.send(JSON.stringify({ type: 'ai', seq: r.seq, score: 3, tail: 0.004, words: words.length, calibrated: false, family: 'gpt', task: 'write',
     sents: [{ score: 3, tail: 0.004 }] }))
 }) })
 answer = 'http://localhost:8765'
@@ -211,13 +211,13 @@ await page.evaluate(() => document.querySelector('[data-act="scope"]').click());
 const tinted = () => page.evaluate(() => [...document.querySelectorAll('.cm-content [style*="background"]')].map(e => {
   const [r, , b] = e.style.background.match(/\d+/g).map(Number); return { text: e.textContent, cool: b > r } }))
 const sc = { bar: await page.evaluate(() => document.getElementById('scope').textContent), words: (await tinted()).map(w => w.text) }
-check('the overlay tints words by surprise, and the bar gives the file\'s perplexity', sc.bar.startsWith('surprise · ppl 42.0') &&
+check('the overlay tints words by surprise, and the bar gives the file\'s perplexity', sc.bar.startsWith('surprise · ppl 42.0') && sc.bar.endsWith('AI ?') &&
   sc.words.length > 20 && (await tinted()).every(w => !w.cool))
 check('it scores the prose, not the markup', seen.length && !/#(let|set)|@\w|\$/.test(seen.at(-1)) && /water sample was left/.test(seen.at(-1)) &&
   sc.words.every(w => !/^[#$@]/.test(w)))
 await (await page.$('.cm-content [style*="background"]')).hover(); await sleep(800)
 check('hovering a word says what its numbers mean', await page.evaluate(() =>
-  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness 78%: 0\.4% of human sentences read this AI-like/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
+  /Surprise.*chance.*Rank.*Flatness.*unsure.*Sentence.*AI-likeness.*not read yet/s.test(document.querySelector('.cm-scope-tip')?.textContent)))
 await page.mouse.move(0, 0); await page.click('#scope'); await sleep(800)
 check('one click tints by flatness instead, from the same scores', (await tinted()).length > 20 && (await tinted()).every(w => w.cool) &&
   await page.evaluate(() => document.getElementById('scope').textContent.startsWith('flatness')) && seen.length === 1)
@@ -231,8 +231,11 @@ check('typing keeps the marks; in vim, the text is read on leaving insert mode',
 await page.keyboard.type('^5x'); await sleep(1200)
 await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
 await page.click('#scope'); await sleep(800)
-check('another shows AI-likeness per sentence, the most AI-like blocked out', await page.evaluate(() =>
-  document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent)))
+await (await page.$('.scope-ai')).hover(); await sleep(800)
+check('another reads AI-likeness per sentence, only now, the most AI-like blocked out', await page.evaluate(() =>
+  document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent) &&
+  /AI-likeness 78%: 0\.4% of human sentences read this AI-like/.test(document.querySelector('.cm-scope-tip')?.textContent)))
+await page.mouse.move(0, 0)
 await page.evaluate(() => document.getElementById('bar-ai').click()); await sleep(300)
 await page.evaluate(() => document.querySelector('#side-body .go').click()); await sleep(3000)
 check('the AI check reads every file, and lists the most AI-like sentences, each a click away', await page.evaluate(() =>

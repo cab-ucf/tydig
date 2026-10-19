@@ -40,11 +40,11 @@ check('one ask at a time each: a newer one replaces the older', slow.status === 
 const big = 'Heat flowed. '.repeat(25000)
 const h = await (await as(ann, '/p/paper/surprise', big, 'text/plain')).json()
 check('surprise: the text goes to the engine, its scores come back, nothing else', h.ppl === 9 && h.words.length === 1 && !('secret' in h) &&
-  scored.at(-1).text === big && scored.at(-1).cursor === null)
+  scored.at(-1).text === big && scored.at(-1).cursor === null && scored.at(-1).ai === false)
 const a = await (await as(ann, '/p/paper/surprise?ai', big, 'text/plain')).json()
 check('and with ?ai, the detector\'s reading of it, per sentence and whole', a.ai.tail === 0.004 && a.ai.sents[0].tail === 0.004 &&
   'e' in a.ai.sents[0] &&
-  a.ai.family === 'gpt' && !('secret' in a.ai) && Object.keys(a).join() === 'ai')
+  a.ai.family === 'gpt' && !('secret' in a.ai) && Object.keys(a).join() === 'ai' && scored.at(-1).ai === true)
 const long = await as(ann, '/p/paper/surprise', 'too long', 'text/plain')
 check('what the engine refuses, it says why', long.status === 422 && /100,000 characters/.test((await long.json()).error))
 check('a non-member cannot have text scored', (await as(bob, '/p/paper/surprise', 'x', 'text/plain')).status === 403)

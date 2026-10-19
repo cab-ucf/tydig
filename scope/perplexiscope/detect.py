@@ -8,6 +8,7 @@ thresholds MELD set on 22,190 human documents; a sentence's with human sentences
 calibrated (calib.py). Either way the result is how rare the score is among human writing,
 never a probability that the text is AI."""
 import importlib.util, json
+from functools import lru_cache
 from bisect import bisect_left
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -61,12 +62,8 @@ class Detector:
         e = sc.tok(canon, add_special_tokens=False, return_offsets_mapping=True)
         ids, off = e.input_ids[:sc.cap], e.offset_mapping[:sc.cap]
         if not ids: return None
-        f, c, o = [], [], []
-        for i in range(0, len(ids), sc.window):  # MELD's contract: disjoint windows, CLS/SEP, fp32
-            x = torch.tensor([[sc.cls_id, *ids[i:i + sc.window], sc.sep_id]], device=sc.device)
-            for acc, t in zip((f, c, o), sc.model.token_scores(x, torch.ones_like(x))):
-                acc.append(t[0, 1:-1].cpu())
-        f, c, o = torch.cat(f), torch.cat(c), torch.cat(o)
+        f, c, o = map(torch.cat, zip(*(s.win(tuple(ids[i:i + sc.window]))
+                                       for i in range(0, len(ids), sc.window))))
         pos = align(canon, text); at = [pos[a] for a, _ in off]
         score = float(s.tq(c))
         r = dict(score=score, tail=tail(score, s.doc_pts), words=len(canon.split()),
@@ -79,4 +76,10 @@ class Detector:
             r["sents"].append(x if x is None else dict(score=x, tail=tail(x, s.sent_pts or s.doc_pts)))
         s.last = key, r
         return r
+
+    @lru_cache(256)  # an edit re-reads from its window on; the windows before it are kept
+    @torch.no_grad()
+    def win(s, ids):  # MELD's contract: disjoint windows, CLS/SEP, fp32
+        x = torch.tensor([[s.sc.cls_id, *ids, s.sc.sep_id]], device=s.sc.device)
+        return tuple(t[0, 1:-1].cpu() for t in s.sc.model.token_scores(x, torch.ones_like(x)))
 

@@ -113,11 +113,14 @@ const aiMark = a => {
 }
 const share = (t, of) => `AI-likeness ${Math.round(100 * aiPct(t))}%: ${t >= 0.5 ? 'typical of human ' + of
   : `${(100 * t).toFixed(t < 0.01 ? 1 : 0)}% of human ${of} read this AI-like or more`}`
-export const aiText = a => a === undefined ? 'AI …' : !a ? 'no AI detector'
-  : a.words < 100 ? 'AI: too short' : `AI ${Math.round(100 * aiPct(a.tail))}%`
-export const aiAbout = a => a === undefined ? 'MELD is still reading it.' : !a ? 'This engine runs no AI detector.' :
-  `MELD: ${a.words < 100 ? 'needs 100+ words to judge; ' : ''}${share(a.tail, 'documents')}` +
-  `${a.tail < 0.1 ? `; closest to ${a.family}, ${a.task}` : ''}.`
+// false: not read yet; stale: read before the latest edits (MELD reads in
+// AI-likeness mode, or after 10 minutes without an edit)
+export const aiText = a => a === undefined ? 'AI …' : a === false ? 'AI ?' : !a ? 'no AI detector'
+  : a.words < 100 ? 'AI: too short' : `AI ${a.stale ? '≈' : ''}${Math.round(100 * aiPct(a.tail))}%`
+export const aiAbout = a => a === undefined ? 'MELD is still reading it.' : !a ? (a === false ? 'MELD reads it ' +
+  'in AI-likeness mode, or after 10 minutes without an edit.' : 'This engine runs no AI detector.') :
+  `MELD${a.stale ? ', before the latest edits' : ''}: ${a.words < 100 ? 'needs 100+ words to judge; ' : ''}` +
+  `${share(a.tail, 'documents')}${a.tail < 0.1 ? `; closest to ${a.family}, ${a.task}` : ''}.`
 const bits = x => `${x.toFixed(1)} bits`
 const big = n => n < 1e6 ? Math.round(n).toLocaleString() : `10^${Math.round(Math.log10(n))}`
 const el = (tag, props) => Object.assign(document.createElement(tag), props)
@@ -148,7 +151,8 @@ export function surprise(opts) {
     if (!(url || hub) || !view) return state(false)
     if (opts.hold?.()) return
     state(true)
-    const doc = view.state.doc, p = { ...prose(doc.toString(), opts.typst()), doc, ch: ChangeSet.empty(doc.length) }
+    const doc = view.state.doc, ai = due || opts.by() === 'ai'
+    const p = { ...prose(doc.toString(), opts.typst()), doc, ch: ChangeSet.empty(doc.length), ai }
     if (hub) { // the hub's own engine: the newest ask wins there too
       const n = ++seq; sent = p
       return fetch(hub, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: p.text }).then(r => r.json())
@@ -167,7 +171,7 @@ export function surprise(opts) {
         else if (m.type === 'ai') addAi(m.sents ? m : null) }
       return
     }
-    sent = p; ws.send(JSON.stringify({ seq: ++seq, text: p.text, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 }))
+    sent = p; ws.send(JSON.stringify({ seq: ++seq, text: p.text, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1, ai }))
   }
   const show = h => {
     const p = h.p, src = (s, e) => [p.ch.mapPos(p.at[s], 1), p.ch.mapPos(p.at[e - 1] + 1, -1)], marks = []
@@ -196,16 +200,24 @@ export function surprise(opts) {
     show(last)
   }
   const heat = (h, hub, n) => { // fresh scores; then ask the hub for MELD's (an engine here sends it unasked)
-    h.ai = undefined; h.p = sent; show(h)
-    if (hub && last === h) fetch(hub + '?ai', { method: 'POST', headers: { 'content-type': 'text/plain' },
+    h.p = sent
+    if (h.p.ai) h.ai = undefined
+    else { // unasked: MELD's last reading stands, stale, on the sentences that are unchanged
+      h.ai = last?.ai ? { ...last.ai, stale: true } : last?.ai === null ? null : false
+      const old = new Map(last?.sents.map(z => [last.p.text.slice(z.s, z.e), z.ai]))
+      for (const z of h.sents) z.ai = old.get(h.p.text.slice(z.s, z.e))
+    }
+    show(h)
+    if (hub && h.p.ai && last === h) fetch(hub + '?ai', { method: 'POST', headers: { 'content-type': 'text/plain' },
       body: h.p.text }).then(r => r.json())
       .then(r => n === seq && last === h && (r.error ? (addAi(null), opts.report({ error: r.error })) : addAi(r.ai)),
         () => n === seq && last === h && addAi(null))
   }
-  let t
+  let t, idle, due = false
   const plugin = ViewPlugin.define(v => (view = v, last = sent = null, seq++, setTimeout(ask), {
     update: u => {
       if (!u.docChanged) return
+      clearTimeout(idle); due = false; idle = setTimeout(() => (due = true, ask()), 6e5)
       for (const x of new Set([sent, last?.p])) x && (x.ch = x.ch.compose(u.changes))
       if (opts.url() || opts.hub()) { clearTimeout(t); t = setTimeout(ask, 700) }
     },
@@ -232,15 +244,20 @@ export function surprise(opts) {
       if (z) {
         row(dl, 'Sentence', `${z.w} words; a word averages ${bits(z.bits / z.w)} of surprise, ` +
           `${bits(z.ent)} of flatness`)
-        row(dl, 'AI-likeness', z.ai ? share(z.ai.tail, 'sentences') : last?.ai === undefined ? 'MELD is still reading' :
-          last.ai ? 'too short to judge' : 'this engine runs no AI detector', by === 'ai')
+        const a = last?.ai
+        row(dl, 'AI-likeness', z.ai ? share(z.ai.tail, 'sentences') + (a?.stale ? ', before the latest edits' : '')
+          : a === undefined ? 'MELD is still reading' : a === null ? 'this engine runs no AI detector'
+          : a === false ? 'not read yet' : a.stale ? 'not read since it changed' : 'too short to judge', by === 'ai')
       }
       return { dom }
     } }
   })
   // off: clear; a new mode: the same scores, highlighted again
   const refresh = () => {
-    if (opts.url() || opts.hub()) return last ? (show(last), state()) : ask()
+    if (opts.url() || opts.hub()) {
+      if (last) show(last), state()
+      return (!last || opts.by() === 'ai' && (last.ai === false || last.ai?.stale)) && ask()
+    }
     last = null; seq++; ws?.close(); ws = null; state(false) // what is in flight is no longer wanted
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }

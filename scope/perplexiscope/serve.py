@@ -97,7 +97,7 @@ def app(model, detector, watch, dtype, max_chars, **_):
             if box[0] is None and r.get("cursor") is not None:
                 t = await asyncio.to_thread(tree, r, lambda *x: {"sampler": E.overlay(*x)})
                 if box[0] is None: await say(ws, type="tree", seq=r["seq"], **t)
-            if box[0] is None and (not D or h["sents"]):  # bare where no detector runs
+            if box[0] is None and r.get("ai", True) and (not D or h["sents"]):  # bare: no detector
                 ai = D and await asyncio.to_thread(detect, r, h["sents"])
                 await say(ws, type="ai", seq=r["seq"], **(ai or {}))
 
