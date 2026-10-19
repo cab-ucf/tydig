@@ -94,7 +94,7 @@
   == #p.name (months #(edges.at(i) + 1)–#edges.at(i + 1)): #p.aim
   #for t in G.tasks.filter(t => t.phase == i + 1) [
     *Task #t.id (#t.ta): #t.title.* Months #t.start–#t.end; #t.org. \
-    #todo[the approach, step by step] \
+    #t.at("approach", default: todo[the approach, step by step]) \
     _Milestone:_ #t.milestone (month #t.end). _Deliverable:_ #t.deliverable.
     #parbreak()
   ]
