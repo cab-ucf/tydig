@@ -1,7 +1,7 @@
 // What every button and key does (any element with data-act names an
 // action here; keys.js binds the keys), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
-import { $, settings, LAYOUT, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
+import { $, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose }
   from './util.js'
 import { MODES } from './surprise.js'
 import { signOut, changeName, changePassword, deleteAccount } from './auth.js'
@@ -83,7 +83,6 @@ export function applyLayout() {
   }
   saveSettings()
 }
-system.addEventListener('change', applyLayout)
 for (const h of document.querySelectorAll('.sect-head'))
   h.onclick = e => e.target.closest('button') || flip(h.dataset.sect)()
 
