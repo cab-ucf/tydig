@@ -4,5 +4,7 @@
 :root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; }
 /* the bar keeps its black tile, so the light theme's black-lettered logo is for the sign-in alone */
 :root[data-theme="light"] .auth-brand::before { background-image: url(logo-light.svg); }
-/* sign-in: UCF's logo, large, over tydig's */
-:root .auth-brand::before { width: 4.5rem; height: 6rem; margin: 0 0 .75rem; }
+/* sign-in: UCF's logo, large, on top; tydig's small at the foot */
+:root .auth-brand::before { width: 4.5rem; height: 6rem; margin: 0; }
+:root .auth-brand::after { display: none; }
+:root .auth-foot::after { display: block; }
