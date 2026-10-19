@@ -77,11 +77,13 @@ async function writeState(n, doc) {
   await writeFile(await collab(n, `crdt/${hubId}.bin`), Y.encodeStateAsUpdate(doc), { flag: 'w' })
 }
 async function outside(n, doc, head) {
-  const mb = (await git(n, 'merge-base', head, 'FETCH_HEAD')).trim(), files = doc.getMap('files')
+  const mb = await git(n, 'merge-base', head, 'FETCH_HEAD').then(s => s.trim(), () => null), files = doc.getMap('files')
   const show = (c, f) => git(n, 'show', `${c}:${f}`).catch(() => null)
-  for (const p of (await git(n, 'diff', '--name-only', '-z', mb, 'FETCH_HEAD')).split('\0')) {
-    if (!editable(p) || p.startsWith('.collab/')) continue
-    const [base, theirs] = await Promise.all([show(mb, p), show('FETCH_HEAD', p)])
+  // a history of its own, joined: of its files, those the project lacks (its README)
+  const theirsAll = mb ? git(n, 'diff', '--name-only', '-z', mb, 'FETCH_HEAD') : git(n, 'ls-tree', '-r', '--name-only', '-z', 'FETCH_HEAD')
+  for (const p of (await theirsAll).split('\0')) {
+    if (!p || !editable(p) || p.startsWith('.collab/') || !mb && files.has(p)) continue
+    const [base, theirs] = await Promise.all([mb && show(mb, p), show('FETCH_HEAD', p)])
     if (theirs?.includes('\0')) continue
     await mergeInto(files, p, base ?? '', theirs)
   }
@@ -102,21 +104,19 @@ export function sync(n, reason = 'manual') {
       await commit(n, `tydig sync (${reason})`)
       let pulled = 0
       const head = (await git(n, 'rev-parse', 'HEAD')).trim()
-      // never unrelated histories: a project made from the URL takes those
+      // a remote with a history of its own (made with a README) is joined to the
+      // project's; where both have a file, the project's stays
       if (await git(n, 'fetch', c.url, branch).then(() => true, () => false)) {
-        const merged = await git(n, 'merge', '--no-edit', '-X', 'ours', 'FETCH_HEAD').then(() => true, async e => {
-          if (/unrelated histories|refusing to merge/i.test(e.message))
-            return console.warn(`remote: ${n} holds another history: make a project from its URL`), false
+        const merge = (...a) => git(n, 'merge', '--no-edit', '-X', 'ours', ...a, 'FETCH_HEAD')
+        await merge().catch(e => /unrelated histories/i.test(e.message) ? merge('--allow-unrelated-histories')
+          : Promise.reject(e)).catch(async () => { // left in conflict (a binary file): ours
           await git(n, 'checkout', '--ours', '.').catch(() => {})
           await commit(n, 'tydig sync (merge)', '--no-edit')
-          return true
         })
-        if (merged) {
-          pulled = await absorb(n, doc)
-          await outside(n, doc, head)
-          await mirror(n, doc); await writeState(n, doc)
-          await commit(n, 'tydig sync (merge)')
-        }
+        pulled = await absorb(n, doc)
+        await outside(n, doc, head)
+        await mirror(n, doc); await writeState(n, doc)
+        await commit(n, 'tydig sync (merge)')
       }
       // notes under this hub's own namespace: one writer per ref
       let why = ''
