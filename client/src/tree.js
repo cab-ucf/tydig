@@ -25,7 +25,7 @@ files.observe(() => renderTree())
 let where = ''
 provider.awareness.on('change', () => {
   const s = provider.awareness.getStates(), w = [...s].map(([id, x]) => `${id}:${x.file}`).join()
-  $('peers').textContent = `${s.size} online`
+  $('peers').textContent = `${new Set([...s.values()].map(x => x.user?.id ?? x.user?.name)).size} online` // people, not tabs
   if (w !== where) { where = w; renderTree() }
 })
 
@@ -45,7 +45,8 @@ const row = (cls, p, depth, twisty, dots = '') => `<div class="tnode ${cls}" tit
 
 export function renderTree() {
   const here = {}, root = { dirs: new Map(), files: [] }, html = []
-  for (const [, s] of provider.awareness.getStates()) if (s.file && s.user) (here[s.file] ??= []).push(s.user)
+  for (const [, s] of provider.awareness.getStates()) if (s.file && s.user) // one dot a person, however many tabs
+    (here[s.file] ??= new Map()).set(s.user.id ?? s.user.name, s.user)
   for (const p of paths()) {
     let n = root
     for (const d of p.split('/').slice(0, -1))
@@ -60,7 +61,7 @@ export function renderTree() {
     }
     for (const p of n.files.sort()) html.push(row([files.has(p) ? 'text' : 'bin', p === path && 'active',
       picked.has(p) && 'picked'].filter(Boolean).join(' '), p, depth, '',
-      `<span class="dots">${(here[p] ?? []).map(peer).join('')}</span>`))
+      `<span class="dots">${[...here[p]?.values() ?? []].map(peer).join('')}</span>`))
   }
   walk(root, '', 0)
   $('tree').innerHTML = html.join('')

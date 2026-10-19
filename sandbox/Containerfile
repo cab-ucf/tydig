@@ -1,6 +1,12 @@
 # The build sandbox: one container per build (server/sandbox.mjs).
 # Add what your projects' Makefiles need (R, julia, LaTeX).
 FROM docker.io/library/python:3.12-slim
+# fonts/packages: common fonts (Arimo, Carlito, TeX Gyre...), as the preview has them; any
+# outside /usr/share/fonts (TeX Gyre's) linked in, so typst finds them without fontconfig
+COPY fonts/packages /tmp/fontpkgs
+RUN apt-get update && apt-get install -y --no-install-recommends $(cat /tmp/fontpkgs) \
+ && mkdir -p /usr/share/fonts/linked && dpkg -L $(cat /tmp/fontpkgs) | grep -E '\.(ttf|otf)$' \
+  | grep -v '^/usr/share/fonts/' | xargs -r ln -sft /usr/share/fonts/linked && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir numpy pandas matplotlib seaborn pooch openpyxl pypdf ruamel.yaml uv==0.12.23
 # uv run: its venv and cache in /tmp, never a .venv in the project
 ENV UV_PROJECT_ENVIRONMENT=/tmp/venv UV_CACHE_DIR=/tmp/uv

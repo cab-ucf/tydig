@@ -2,10 +2,13 @@
    UCF's own hubs, and --logo shows it; tab.svg is it on UCF's black tab
    (tab-light.svg, white, in the light theme), in the bar from its edge. */
 :root { --brand: 'UCF'; --teal: #ffc904; --on-teal: #000; --logo: url(logo.svg); --logo-w: 2.25rem;
-  --tab: url(tab.svg); --tab-w: 2rem; }
+  --tab: url(tab.svg); --tab-w: 2.7rem; }
 :root[data-theme="light"] { --teal: #000; --on-teal: #ffc904; --tab: url(tab-light.svg); }
 :root[data-theme="light"] .auth-brand::before { background-image: url(logo-light.svg); }
 #brand { margin-left: -.9rem; }
+/* the tab wider than the logo, in its colour; the light theme's bar white, as its tab */
+#brand::before { background-color: #000; }
+:root[data-theme="light"] #brand::before, :root[data-theme="light"] #bar { background-color: #fff; }
 /* sign-in: UCF's logo, large, on top; tydig's small at the foot */
 :root .auth-brand::before { width: 4.5rem; height: 6rem; margin: 0; }
 :root .auth-brand::after { display: none; }
