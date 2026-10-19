@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 110">
+<style>text{font:700 64px "JetBrains Mono",ui-monospace,Menlo,monospace;fill:#1e1e2e}
+</style>
+<rect fill="#2ec4b6" x="20" y="26" width="38" height="66"/>
+<rect fill="#2ec4b6" x="20" y="12" width="14" height="10"/>
+<path class="b" fill="#9b5de5" d="M216 14h22v12h-15v66h-7z"/>
+<text x="20" y="80" letter-spacing="-2"><tspan fill="#1e1e2e">t</tspan>ydig</text>
+</svg>

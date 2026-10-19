@@ -1,4 +1,5 @@
-# tydig
+<h1><picture><source media="(prefers-color-scheme: dark)" srcset="client/src/logo/lockup-dark.svg">
+<img alt="tydig" src="client/src/logo/lockup-light.svg" height="72"></picture></h1>
 
 **Ty**pst, **d**ecentralized collaboration with **i**roh, saved in **g**it.
 
