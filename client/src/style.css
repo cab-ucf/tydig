@@ -6,7 +6,7 @@
   --ink: #000; --ink-2: #111; --ink-3: #333; --editor: #000;
   --paper-bg: #c9ccd1; --paper: #fff;
   --teal: #2fc1d3; --on-teal: #fff; --fg: #f2f2f2; --fg-dim: #a6a6a6; --hi: #fff; --line: #ffffff14; --red: #e06c5b;
-  --brand: 'tydig'; --logo: none; --logo-w: 0px; /* a hub's own: brands/<name>/brand.css */
+  --brand: 'tydig'; --logo: none; --logo-w: 0px; --tab: none; --tab-w: 0px; /* a hub's own: brands/<name>/brand.css */
   --bad-bg: #3b1f1f; --bad-fg: #f0b9af; --good-bg: #1d3326; --good-fg: #a5d6a7;
   --mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
   --sans: system-ui, 'Inter', sans-serif;
@@ -36,10 +36,10 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   display: flex; align-items: center; gap: .75rem; padding: 0 .9rem; height: 44px;
   background: var(--ink); color: var(--fg); border-bottom: 1px solid var(--ink-3);
 }
-/* as Outlook's: the hub's own logo on a tile the bar's full height, then tydig's (logo/) */
-#brand { display: flex; align-items: center; align-self: stretch; margin-left: calc(var(--logo-w) * -.4); gap: .2rem; }
-#brand::before { content: ''; align-self: stretch; width: calc(var(--logo-w) * 1.4);
-  background: #000 var(--logo) center / auto 64% no-repeat; }
+/* as Outlook's: the hub's own tab (--tab) the bar's full height, then tydig's wordmark (logo/) */
+#brand { display: flex; align-items: center; align-self: stretch; }
+#brand::before { content: ''; align-self: stretch; width: var(--tab-w); margin-right: calc(var(--tab-w) / 5);
+  background: var(--tab) center / contain no-repeat; }
 /* -.25rem: the wordmark's own inset, so it sits by the hub's tile */
 #brand::after { content: ''; width: 3.3rem; height: 1.4rem; margin-left: -.25rem;
   background: url(./logo/wordmark-dark.svg) left / contain no-repeat; }
