@@ -1,3 +1,8 @@
+Fonts named in packages (Arimo, Tinos, Cousine, Carlito, Caladea, Open Sans,
+Roboto, Lato, EB Garamond, TeX Gyre) come from those Debian/Ubuntu packages,
+installed where the client and the build sandbox are built; each package's
+license (OFL, Apache 2.0, GUST) is in /usr/share/doc/<package>/copyright.
+
 Fonts from typst-assets v0.15.1 (https://github.com/typst/typst-assets), the set the
 typst CLI embeds. Their licenses, from typst-assets' NOTICE:
 

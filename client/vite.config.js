@@ -1,20 +1,26 @@
 import { defineConfig } from 'vite'
 import wasm from 'vite-plugin-wasm'
 import { readdirSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-// fonts/ (the build sandbox sets type in the same) for the preview, each with
-// its info, measured here by the compiler itself: a face is fetched only once
-// a document sets type in it (typst.worker.js)
+// fonts/ and the Debian packages fonts/packages names (Arimo, Carlito, TeX
+// Gyre...; the build sandbox sets type in the same) for the preview, each
+// with its info, measured here by the compiler itself: a face is fetched only
+// once a document sets type in it (typst.worker.js)
 const fonts = {
   name: 'fonts', resolveId: id => id === 'virtual:fonts' ? '\0fonts' : null,
   async load(id) {
     if (id !== '\0fonts') return
     const c = await import('@myriaddreamin/typst-ts-web-compiler'), dir = `${import.meta.dirname}/../fonts/`
     c.initSync({ module: readFileSync(fileURLToPath(import.meta.resolve('@myriaddreamin/typst-ts-web-compiler/wasm'))) })
-    const fs = readdirSync(dir).filter(f => /\.(otf|ttf)$/.test(f))
-    return fs.map((f, i) => `import u${i} from ${JSON.stringify(dir + f + '?url')}`).join('\n') + '\nexport default [' +
-      fs.map((f, i) => `{ ...${JSON.stringify(c.get_font_info(readFileSync(dir + f)))}, url: u${i} }`) + ']'
+    const pkgs = readFileSync(dir + 'packages', 'utf8').split(/\s+/).filter(Boolean)
+    let sys
+    try { sys = execFileSync('dpkg', ['-L', ...pkgs], { encoding: 'utf8' }) }
+    catch (e) { sys = e.stdout || ''; console.warn(`fonts: without apt install ${pkgs.join(' ')}, the preview lacks some`) }
+    const fs = [...readdirSync(dir).map(f => dir + f), ...sys.split('\n')].filter(f => /\.(otf|ttf)$/.test(f))
+    return fs.map((f, i) => `import u${i} from ${JSON.stringify(f + '?url')}`).join('\n') + '\nexport default [' +
+      fs.map((f, i) => `{ ...${JSON.stringify(c.get_font_info(readFileSync(f)))}, url: u${i} }`) + ']'
   },
 }
 
