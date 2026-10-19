@@ -9,7 +9,7 @@ import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleSco
 import { toggleGhost } from './ghost.js'
 import { addComment, discuss } from './comments.js'
 import { exportPdf, exportDocx, fitText, zoom, scheduleCompile } from './preview.js'
-import { newFile, uploadTo, quickOpen, tagMenu } from './tree.js'
+import { newFile, uploadTo, quickOpen, grep, tagMenu } from './tree.js'
 import { tags } from './doc.js'
 import { mode, openSidebar, toggleSide, checkpoint, cite, citeFromBib } from './panels.js'
 import { toggleComment } from '@codemirror/commands'
@@ -20,6 +20,8 @@ const show = v => () => { settings.view = v; applyLayout() }
 const pane = m => () => openSidebar(m)
 export const actions = {
   'new-file': () => newFile(), upload: () => uploadTo(), projects: openPicker, 'quick-open': quickOpen,
+  grep: () => grep(view?.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), // a selection, searched for as it is
   save: () => checkpoint('save'), checkpoint: () => checkpoint(), 'export-pdf': exportPdf, 'export-docx': exportDocx,
   'download-src': () => download(`/api${P('/archive')}`, `${projName}-src.tar.gz`),
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),

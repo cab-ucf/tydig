@@ -73,18 +73,19 @@ export const toast = (html, ok = true, ms = ok ? 2500 : 8000, click) => {
 }
 // the key every shortcut is held with: Ctrl, or ⌘ on a Mac
 export const MOD = /Mac|iP(hone|ad|od)/.test(navigator.platform) ? '⌘' : 'Ctrl'
-// pick from a list, filtered as typed: [{ label, hint, run }]
-export function choose(items, placeholder) {
+// pick from a list, filtered as typed: [{ label, hint, run }], or what items(typed) gives
+export function choose(items, placeholder, value = '') {
   const dlg = $('qo'), input = $('qo-input'), list = $('qo-list')
   const fits = (q, s) => { let i = 0; for (const c of s.toLowerCase()) if (c === q[i]) i++; return i === q.length }
   let sel = 0, hits = []
   const render = () => {
-    hits = items.filter(x => fits(input.value.toLowerCase(), x.label)).slice(0, 14)
+    hits = (items.call ? items(input.value) : items.filter(x => fits(input.value.toLowerCase(), x.label))).slice(0, 50)
     sel = Math.min(sel, Math.max(0, hits.length - 1))
     list.replaceChildren(...hits.map((x, i) => el('div', { className: i === sel ? 'sel' : '',
       onclick: () => { dlg.close(); x.run() } }, x.label, x.hint ? el('kbd', { textContent: x.hint }) : '')))
+    list.children[sel]?.scrollIntoView({ block: 'nearest' })
   }
-  input.placeholder = placeholder; input.value = ''; sel = 0; render()
+  input.placeholder = placeholder; input.value = value; sel = 0; render()
   input.oninput = () => { sel = 0; render() }
   input.onkeydown = e => {
     const k = { ArrowDown: 1, ArrowUp: -1, ...e.ctrlKey && { j: 1, n: 1, k: -1, p: -1 } }[e.key]

@@ -470,7 +470,7 @@ kbd { font: .7rem var(--mono); padding: .1rem .35rem; border: 1px solid var(--in
   background: var(--ink-2); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 5px;
 }
 #qo-input:focus { border-color: var(--teal); }
-#qo-list { margin-top: .35rem; display: flex; flex-direction: column; }
+#qo-list { margin-top: .35rem; display: flex; flex-direction: column; max-height: 60vh; overflow-y: auto; }
 #qo-list div { display: flex; justify-content: space-between; gap: 1rem; font: .82rem var(--sans); color: var(--fg);
   padding: .35rem .6rem; border-radius: 5px; cursor: pointer; }
 #qo-list div:hover, #qo-list div.sel { background: var(--ink-3); }
