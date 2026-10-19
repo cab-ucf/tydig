@@ -23,7 +23,9 @@ const EDITING = { 'Mod-B, Mod-I': 'bold, italic', 'Mod-Z, Mod-Shift-Z': 'undo, r
   'Ctrl-Space': 'complete', 'F8': 'next problem', 'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus (vim: Space z)' }
 const EX = { ':w': 'save', ':e [file]': 'open a file', ':q': 'close the panel, or leave focus',
   ':vs, :only': 'editor and preview, editor only', ':make': 'the build',
-  ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear' }
+  ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear',
+  'gf': 'open the file named under the cursor', 'Ctrl-^': 'the file before',
+  'mA, `A': 'mark a place in any file (A to Z), go back to it', 'y': 'also copies to the clipboard' }
 
 const label = a => document.querySelector(`#menubar [data-act="${a}"]`)?.firstChild.textContent.trim() ||
   { 'toggle-preview': 'Show or hide the preview', close: 'Close the panel, or leave focus',
@@ -107,6 +109,12 @@ onVim.push(Vim => {
   // Ctrl-^: the file before; mA to mZ mark a place in any file, `A and 'A go back to it
   const act = (keys, name, f, args) => (Vim.defineAction(name, f), Vim.mapCommand(keys, 'action', name, args))
   for (const k of ['<C-6>', '<C-^>', '<C-S-^>']) act(k, 'alternate', () => prev && open(prev).then(() => view?.focus()))
+  // gf: the file named under the cursor, as Typst reads it: /from the root, else from this file's folder
+  act('gf', 'gofile', cm => {
+    const { line, ch } = cm.getCursor(), m = [...cm.getLine(line).matchAll(/[\w./@-]*\w/g)]
+      .find(m => m.index <= ch && ch <= m.index + m[0].length && /[./]/.test(m[0]))
+    m && open(decodeURI(new URL(m[0], 'file:///' + path).pathname.slice(1))).then(() => view?.focus())
+  })
   const M = 'marks:' + projName, marks = JSON.parse(localStorage[M] || '{}'), at = async ([p, line, ch]) => {
     if (p !== path) await open(p)
     view?.cm.setCursor(line, ch); view?.focus()
