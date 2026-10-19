@@ -172,6 +172,7 @@ function rename(p) {
     files.set(np, nyt); files.delete(p)
     for (const { id, from, to, ...c } of moved)
       comments.set(id, { ...c, file: np, anchor: rel(nyt, from, 0), head: rel(nyt, to, -1) })
+    for (const k in tags(p)) tag(np, k, true), tag(p, k, false) // and its tags
   })
   if (path === p) openFile(np)
 }
@@ -183,8 +184,9 @@ export const quickOpen = () => choose(paths().sort().map(p => ({ label: p, run: 
 // (a regular expression; smart case, as rg); Enter opens it with the match selected
 export const grep = (q = '') => choose(q => {
   let re, out = []
-  try { re = q && new RegExp(q, /[A-Z]/.test(q) ? '' : 'i') } catch {}
+  try { re = q && new RegExp(q, /[A-Z]/.test(q.replace(/\\./g, '')) ? '' : 'i') } catch {} // \S is no capital
   if (re) for (const [p, y] of [...files].sort(([a], [b]) => a < b ? -1 : 1)) {
+    if (out.length >= 50) break
     let at = 0
     for (const [i, l] of y.toString().split('\n').entries()) {
       const m = out.length < 50 && re.exec(l), from = at + m?.index

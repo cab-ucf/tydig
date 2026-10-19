@@ -8,7 +8,7 @@ RUN npm ci -w client
 COPY client/ client/
 COPY fonts/ fonts/
 RUN apt-get update && apt-get install -y --no-install-recommends $(cat fonts/packages) && rm -rf /var/lib/apt/lists/*
-COPY server/relay.mjs server/refs.mjs server/tags.mjs server/
+COPY server/relay.mjs server/refs.mjs server/tags.mjs server/text.mjs server/
 ARG TYDIG_BRAND=tydig
 RUN npm run build && node client/brotli.mjs
 

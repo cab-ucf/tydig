@@ -11,7 +11,7 @@ scripts = { perplexiscope = "perplexiscope.serve:main" }
 
 [tool.setuptools]
 packages = ["perplexiscope"]
-package-data = { perplexiscope = ["web/*"] }
+package-data = { perplexiscope = ["web/*", "calib/*.json"] }
 dynamic = { dependencies = { file = "requirements.txt" } }
 
 [build-system]
