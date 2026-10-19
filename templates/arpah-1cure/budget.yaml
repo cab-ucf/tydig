@@ -1,0 +1,22 @@
+# The inputs of the cost: lib/budget.typ computes the totals a year, the
+# Basis of Estimate splits them by phase, `make budget` gives them as Excel
+# (ARPA-H's own cost spreadsheet goes in Volume II). One entry a year.
+# category: subaward, materials, equipment, travel or other.
+rates:
+  fringe: 0.30
+  fa: 0.50        # negotiated rate, on modified total direct costs
+  raise: 0.03
+  fee: 0          # profit/fee, a share of the total (0 for a university)
+personnel:        # base salary, calendar months of effort a year
+  - { name: Ada Lovelace, salary: 180000, months: [3, 3, 3, 3, 3] }
+  - { name: Charles Babbage, salary: 150000, months: [3, 3, 3, 3, 3] }
+  - { name: Postdoctoral researcher (TBN), salary: 65000, months: [24, 24, 24, 12, 12], fringe: 0.25 }
+  - { name: Clinical research coordinator (TBN), salary: 70000, months: [0, 0, 6, 12, 12] }
+other:            # fa: false keeps one out of the F&A base
+  - { item: "Subaward: Example Pharma Inc. (GMP, IND)", cost: [100000, 600000, 900000, 300000, 100000], category: subaward, fa: false }
+  - { item: Animal studies, cost: [250000, 250000, 300000, 50000, 0], category: materials }
+  - { item: Immunoadjuvants and nanoparticle materials, cost: [80000, 80000, 120000, 60000, 40000], category: materials }
+  - { item: GPU cluster for the ATPS, cost: [120000, 0, 0, 0, 0], category: equipment, fa: false }
+  - { item: Clinical trial costs, cost: [0, 0, 0, 900000, 900000], category: other }
+  - { item: Travel to ARPA-H meetings, cost: [10000, 10000, 10000, 12000, 12000], category: travel }
+share: [0, 0, 0, 0, 0]   # cost share a year, if any

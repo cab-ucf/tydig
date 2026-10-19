@@ -15,9 +15,9 @@ const mk = () => me.doc('demo')
 const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
 const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established',
-  'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept'])
+  'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept', 'arpah-1cure'])
   made.push(await nih(t))
-const [r21, r03, sepa, goali, esi, mira, eager, aid, cmmi, cmi, heil, dod, concept] = made
+const [r21, r03, sepa, goali, esi, mira, eager, aid, cmmi, cmi, heil, dod, concept, cure] = made
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
@@ -49,6 +49,9 @@ check('white papers, three styles on one layer: Heilmeier, a DoD BAA\'s (cover p
   /What are the risks\?/.test(get('data/whitepaper-heilmeier/main.typ', 'utf8')) &&
   /section\("cover"/.test(get('data/whitepaper-dod/main.typ', 'utf8')) && /Liberation Serif/.test(yml('whitepaper-dod')) &&
   /questions:/.test(yml('whitepaper-concept')) && !(await api('/templates')).templates.includes('whitepaper'))
+check('ARPA-H 1-CURE: the solution summary first, four volumes, phases from the years',
+  ['summary.typ', 'main.typ', 'volume2.typ', 'lib/arpah.typ', 'lib/grant.typ'].every(f => cure.includes(f)) &&
+  /ARPA-H-SOL-26-147/.test(yml('arpah-1cure')) && /before: true/.test(get('data/arpah-1cure/package.yaml', 'utf8')))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -163,7 +166,7 @@ else {
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
   for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established', 'nsf-eager', 'nsf-aidatasets', 'nsf-cmmi', 'nsf-cmi-research',
-    'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept']) {
+    'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept', 'arpah-1cure']) {
     const r = await api(`/p/${t}/build/full`, { method: 'POST' })
     check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
   }
