@@ -4,7 +4,7 @@ import * as Y from 'yjs'
 import { $, el, dot, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose }
   from './util.js'
 import { ydoc, files, comments, meta, provider, okPath, GEN, setText, tags, tag, TAGS } from './doc.js'
-import { path, open, openFile } from './editor.js'
+import { path, open, openFile, reveal } from './editor.js'
 import { fileComments, rel } from './comments.js'
 import { scheduleCompile } from './preview.js'
 import { checklistBadge } from './panels.js'
@@ -178,3 +178,18 @@ function rename(p) {
 // Ctrl-P: any file, by letters of its path in order
 export const quickOpen = () => choose(paths().sort().map(p => ({ label: p, run: () => open(p) })),
   'open a file...')
+// Mod-Shift-F, Space f w, :grep: every line of every file that matches, as typed
+// (a regular expression; smart case, as rg); Enter opens it with the match selected
+export const grep = (q = '') => choose(q => {
+  let re, out = []
+  try { re = q && new RegExp(q, /[A-Z]/.test(q) ? '' : 'i') } catch {}
+  if (re) for (const [p, y] of [...files].sort(([a], [b]) => a < b ? -1 : 1)) {
+    let at = 0
+    for (const [i, l] of y.toString().split('\n').entries()) {
+      const m = out.length < 50 && re.exec(l), from = at + m?.index
+      if (m) out.push({ label: l.trim().slice(0, 100), hint: `${p}:${i + 1}`, run: () => reveal(p, from, from + m[0].length) })
+      at += l.length + 1
+    }
+  }
+  return out
+}, 'search every file (a regular expression)...', q)

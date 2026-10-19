@@ -7,15 +7,16 @@ import { $, el, settings, saveSettings, MOD, projName } from './util.js'
 import { view, path, prev, open, onVim } from './editor.js'
 import { files } from './doc.js'
 import { actions } from './menu.js'
+import { grep } from './tree.js'
 
-const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save',
+const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+shift+f': 'grep', 'mod+s': 'save',
   'mod+alt+m': 'comment', 'mod+backslash': 'toggle-preview', 'mod+j': 'toggle-side', 'mod+shift+e': 'toggle-tree' }
 // after AstroNvim's leader: w save, q quit, n new, e explorer, / comment a
 // line, f find, g git, u UI; tydig's own: c comment, r references, views
 const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'toggle-tree', '/': 'line-comment',
   c: 'comment', C: 'comments', d: 'chat', b: 'build', z: 'focus', p: 'toggle-preview', j: 'toggle-side',
   1: 'view-editor', 2: 'view-split', 3: 'view-preview', '?': 'shortcuts',
-  f: { name: 'Find', f: 'quick-open', c: 'palette', k: 'shortcuts', p: 'projects', r: 'cite-bib', t: 'theme' },
+  f: { name: 'Find', f: 'quick-open', w: 'grep', c: 'palette', k: 'shortcuts', p: 'projects', r: 'cite-bib', t: 'theme' },
   r: { name: 'References', r: 'cite-bib', c: 'cite', a: 'cite-alone', s: 'spelling', i: 'aicheck' },
   g: { name: 'Git', c: 'history', s: 'checkpoint', r: 'gitremote', S: 'share' },
   u: { name: 'UI', r: 'reset-layout', f: 'fullscreen', t: 'theme', s: 'spell', g: 'ghost', l: 'lsp', o: 'scope', v: 'vim' } }
@@ -23,7 +24,7 @@ const EDITING = { 'Mod-B, Mod-I': 'bold, italic', 'Mod-Z, Mod-Shift-Z': 'undo, r
   'Mod-F': 'find and replace', 'Mod-D': 'select the next match', 'Alt-↑, Alt-↓': 'move the line',
   'Ctrl-Space': 'complete', 'F8': 'next problem', 'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus (vim: Space z)' }
 const EX = { ':w': 'save', ':e [file]': 'open a file', ':q': 'close the panel, or leave focus',
-  ':vs, :only': 'editor and preview, editor only', ':make': 'the build',
+  ':vs, :only': 'editor and preview, editor only', ':make': 'the build', ':grep [pattern]': 'search every file',
   ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear',
   'gf': 'open the file, citation (its .bib entry), DOI or link under the cursor', 'Ctrl-^': 'the file before',
   'mA, `A': 'mark a place in any file (A to Z), go back to it', 'y': 'also copies to the clipboard' }
@@ -91,6 +92,7 @@ onVim.push(Vim => {
   ex('vsplit', 'vs', () => actions['view-split']())
   ex('only', 'on', () => actions['view-editor']())
   ex('make', 'mak', () => actions.build())
+  ex('grep', 'gr', grep)
   // :map and kin, kept in settings and made again at each start
   const MAPS = { map: ['map'], nmap: ['nm', 'normal'], imap: ['im', 'insert'], vmap: ['vm', 'visual'],
     noremap: ['no', , 1], nnoremap: ['nn', 'normal', 1], inoremap: ['ino', 'insert', 1], vnoremap: ['vn', 'visual', 1] }
