@@ -28,6 +28,7 @@
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; font-family: var(--sans); }
+[hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* ---- the bar ---- */
@@ -227,7 +228,6 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
   width: clamp(260px, 24vw, 360px); flex: none; display: flex; flex-direction: column;
   background: var(--ink); color: var(--fg); border-left: 1px solid var(--ink-3);
 }
-#side[hidden] { display: none !important; }
 #side-head {
   display: flex; justify-content: space-between; align-items: center; gap: .3rem;
   height: 34px; padding: 0 .4rem; border-bottom: 1px solid var(--ink-3);
@@ -459,7 +459,6 @@ kbd { font: .7rem var(--mono); padding: .1rem .35rem; border: 1px solid var(--in
 }
 #leader div { display: flex; align-items: baseline; gap: .6rem; padding: .2rem 0; break-inside: avoid; }
 #leader kbd { min-width: 3.2rem; text-align: center; }
-#leader[hidden] { display: none; }
 #leader .group { color: var(--teal); }
 /* vim's mode and : line, quiet under the text */
 .cm-vim-panel { padding: .15rem .6rem !important; font: .75rem var(--mono) !important; background: var(--ink) !important;

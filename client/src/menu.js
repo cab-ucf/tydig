@@ -4,7 +4,7 @@
 import { $, settings, LAYOUT, saveSettings, theme, system, phone, phoneQ, projName, P, download, MOD, choose }
   from './util.js'
 import { MODES } from './surprise.js'
-import { signOut, changePassword, deleteAccount } from './auth.js'
+import { signOut, changeName, changePassword, deleteAccount } from './auth.js'
 import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleScope, scopeBy } from './editor.js'
 import { toggleGhost } from './ghost.js'
 import { addComment, discuss } from './comments.js'
@@ -40,7 +40,7 @@ export const actions = {
   ghost: toggleGhost, scope: toggleScope, 'scope-next': () => scopeBy(),
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,
-  signout: signOut, password: changePassword, 'delete-account': deleteAccount,
+  signout: signOut, name: changeName, password: changePassword, 'delete-account': deleteAccount,
   palette: () => choose([...document.querySelectorAll('#menubar [data-act]')].map(b => ({
     label: b.firstChild.textContent.trim(), hint: b.querySelector('kbd')?.textContent,
     run: () => actions[b.dataset.act]() })), 'find a command...'),

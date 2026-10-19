@@ -22,7 +22,7 @@ import { renderTree } from './tree.js'
 import { applyLayout } from './menu.js'
 import { later } from './warm.js'
 
-export let view = null, path = null
+export let view = null, path = null, prev = null // prev: the file before, for vim's Ctrl-^
 export const undo = new Map() // path -> Y.UndoManager: own edits only
 // vim, loaded only when wanted; who needs its Vim (keys.js) hears when it is
 export const onVim = []
@@ -146,6 +146,7 @@ export async function openFile(p) {
   if (!yt) return
   const my = ++opening, [lang, vimKeys] = await Promise.all([langFor(p), settings.vim ? vimExt() : []])
   if (my !== opening) return // another file was opened meanwhile
+  if (p !== path) prev = path
   path = p; wasRo = !!tags(p)['read-only']
   if (!undo.has(p)) undo.set(p, new Y.UndoManager(yt))
   show(EditorState.create({ doc: yt.toString(), extensions: [
