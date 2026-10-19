@@ -5,6 +5,7 @@
 // ? lists them all.
 import { $, el, settings, saveSettings, MOD, projName } from './util.js'
 import { view, path, prev, open, onVim } from './editor.js'
+import { files } from './doc.js'
 import { actions } from './menu.js'
 
 const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save',
@@ -24,7 +25,7 @@ const EDITING = { 'Mod-B, Mod-I': 'bold, italic', 'Mod-Z, Mod-Shift-Z': 'undo, r
 const EX = { ':w': 'save', ':e [file]': 'open a file', ':q': 'close the panel, or leave focus',
   ':vs, :only': 'editor and preview, editor only', ':make': 'the build',
   ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear',
-  'gf': 'open the file named under the cursor', 'Ctrl-^': 'the file before',
+  'gf': 'open the file, citation (its .bib entry), DOI or link under the cursor', 'Ctrl-^': 'the file before',
   'mA, `A': 'mark a place in any file (A to Z), go back to it', 'y': 'also copies to the clipboard' }
 
 const label = a => document.querySelector(`#menubar [data-act="${a}"]`)?.firstChild.textContent.trim() ||
@@ -109,11 +110,30 @@ onVim.push(Vim => {
   // Ctrl-^: the file before; mA to mZ mark a place in any file, `A and 'A go back to it
   const act = (keys, name, f, args) => (Vim.defineAction(name, f), Vim.mapCommand(keys, 'action', name, args))
   for (const k of ['<C-6>', '<C-^>', '<C-S-^>']) act(k, 'alternate', () => prev && open(prev).then(() => view?.focus()))
-  // gf: the file named under the cursor, as Typst reads it: /from the root, else from this file's folder
+  // gf on a link or a DOI: it, in a new tab; in a .bib entry: its DOI or url; on a citation
+  // (@key, <key>): its entry in the .bib that has it; else the file named, as Typst reads it
+  const web = u => window.open(u, '_blank', 'noopener')
   act('gf', 'gofile', cm => {
-    const { line, ch } = cm.getCursor(), m = [...cm.getLine(line).matchAll(/[\w./@-]*\w/g)]
-      .find(m => m.index <= ch && ch <= m.index + m[0].length && /[./]/.test(m[0]))
-    m && open(decodeURI(new URL(m[0], 'file:///' + path).pathname.slice(1))).then(() => view?.focus())
+    const { line, ch } = cm.getCursor(), here = re => [...cm.getLine(line).matchAll(re)]
+      .find(m => m.index <= ch && ch <= m.index + m[0].length)?.[0]
+    let m
+    if (m = here(/https?:\/\/[^\s"'{}<>]+[^\s"'{}<>.,;)]/g)) return web(m)
+    if (m = here(/\b10\.\d{4,9}\/[^\s"'{}]+[^\s"'{}.,;)]/g)) return web('https://doi.org/' + m)
+    if (path.endsWith('.bib')) {
+      const t = cm.getValue(), i = cm.indexFromPos({ line: line + 1, ch: 0 })
+      const e = t.slice(t.lastIndexOf('@', i), (t.indexOf('\n@', i) + 1 || t.length + 1) - 1)
+      m = /\bdoi\s*=\s*[{"]\s*(?:https?:\/\/(?:dx\.)?doi\.org\/)?([^}"\s]+)/i.exec(e)
+      return m ? web('https://doi.org/' + m[1]) : (m = /\burl\s*=\s*[{"]\s*([^}"\s]+)/i.exec(e)) && web(m[1])
+    }
+    if (m = here(/@[\w:.-]*\w|<[\w:.-]+>/g)) {
+      const key = m.replace(/^[@<]|>$/g, ''), re = new RegExp(`@\\w+\\s*[{(]\\s*${key.replace(/[.]/g, '\\.')}\\s*,`)
+      for (const [p, y] of files) {
+        const i = p.endsWith('.bib') ? y.toString().search(re) : -1
+        if (i >= 0) return open(p).then(() => (view?.cm.setCursor(view.cm.posFromIndex(i)), view?.focus()))
+      }
+    }
+    m = here(/[\w./@-]*\w/g)
+    m && /[./]/.test(m) && open(decodeURI(new URL(m, 'file:///' + path).pathname.slice(1))).then(() => view?.focus())
   })
   const M = 'marks:' + projName, marks = JSON.parse(localStorage[M] || '{}'), at = async ([p, line, ch]) => {
     if (p !== path) await open(p)
