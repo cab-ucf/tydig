@@ -3,8 +3,8 @@
 // which-key does), :w :e :q :vs :only :make, and :map that is remembered.
 // Esc is vim's: with vim keys, Space z, :q or the corner button leave focus.
 // ? lists them all.
-import { $, el, settings, saveSettings, MOD } from './util.js'
-import { view, open, onVim } from './editor.js'
+import { $, el, settings, saveSettings, MOD, projName } from './util.js'
+import { view, path, prev, open, onVim } from './editor.js'
 import { actions } from './menu.js'
 
 const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+s': 'save',
@@ -101,4 +101,20 @@ onVim.push(Vim => {
   })
   Vim.defineEx('mapclear', 'mapc', () => { Vim.mapclear(); settings.vimrc = []; saveSettings() })
   for (const m of settings.vimrc || []) map(...m)
+  // y, d and c reach the system clipboard too, as with clipboard=unnamedplus
+  const rc = Vim.getRegisterController(), push = rc.pushText.bind(rc)
+  rc.pushText = (r, ...a) => { push(r, ...a); r || navigator.clipboard?.writeText(a[1]).catch(() => {}) }
+  // Ctrl-^: the file before; mA to mZ mark a place in any file, `A and 'A go back to it
+  const act = (keys, name, f, args) => (Vim.defineAction(name, f), Vim.mapCommand(keys, 'action', name, args))
+  for (const k of ['<C-6>', '<C-^>', '<C-S-^>']) act(k, 'alternate', () => prev && open(prev).then(() => view?.focus()))
+  const M = 'marks:' + projName, marks = JSON.parse(localStorage[M] || '{}'), at = async ([p, line, ch]) => {
+    if (p !== path) await open(p)
+    view?.cm.setCursor(line, ch); view?.focus()
+  }
+  for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+    act('m' + c, 'mark' + c, cm => (marks[c] = [path, cm.getCursor().line, cm.getCursor().ch],
+      localStorage[M] = JSON.stringify(marks)))
+    act('`' + c, 'jump' + c, () => marks[c] && at(marks[c]))
+    act("'" + c, 'line' + c, () => marks[c] && at([marks[c][0], marks[c][1], 0]))
+  }
 })

@@ -90,8 +90,9 @@ const gate = createAuthMiddleware(async ctx => {
     no('FORBIDDEN', 'projects are created and removed through tydig')
   if (ctx.path === '/sign-in/email' && tooMany(ctx.body?.email))
     no('TOO_MANY_REQUESTS', 'Too many sign-in attempts for this account; try again in 15 minutes.')
+  if ((ctx.path === '/sign-up/email' || ctx.path === '/update-user' && 'name' in (ctx.body || {})) && !String(ctx.body?.name || '').trim())
+    no('BAD_REQUEST', 'Give a name: collaborators see it.')
   if (ctx.path !== '/sign-up/email') return
-  if (!String(ctx.body?.name || '').trim()) no('BAD_REQUEST', 'Give a name: collaborators see it.')
   const invite = ctx.headers?.get?.('x-tydig-invite'), join = ctx.headers?.get?.('x-tydig-join')
   if (OPEN || !db.prepare('SELECT 1 FROM user').get() || invitesFor(ctx.body?.email).some(i => i.id === invite)) return
   if (join) { if (joins.org(join, ctx.headers?.get?.('x-tydig-ip'))) return; no('FORBIDDEN', 'That code is wrong or has expired: ask for a new one.') }

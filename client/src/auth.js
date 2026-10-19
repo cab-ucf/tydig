@@ -18,12 +18,19 @@ export async function requireUser() {
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
-    if (data?.user) return join ? joined(data.user) : data.user
+    if (data?.user) return me = data.user, join ? joined(me) : me
     await loginScreen()
   }
 }
 
+export let me // who is signed in, once requireUser knows
 export const signOut = async () => { await authClient.signOut(); location.search = '' }
+export async function changeName() {
+  const name = prompt('Your name, as collaborators see it:', me.name)?.trim()
+  if (!name || name === me.name) return
+  const { error } = await authClient.updateUser({ name })
+  error ? alert(error.message) : location.reload()
+}
 export async function changePassword() {
   const currentPassword = prompt('Current password:')
   const newPassword = currentPassword && prompt('New password (8+ characters):')
