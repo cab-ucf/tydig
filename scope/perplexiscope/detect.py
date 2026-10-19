@@ -26,6 +26,7 @@ def meld(path):  # MELD's own code at the pinned commit, so scores mean what its
 
 
 def align(a, b):  # for each character of a, where in b it came from (MELD strips markup)
+    if a == b: return list(range(len(a)))  # nothing stripped: no quadratic diff
     out = [-1] * len(a)
     for x, y, k in SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks():
         out[x:x + k] = range(y, y + k)

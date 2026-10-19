@@ -17,7 +17,6 @@ import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asTex
 import { files, provider, token, ws, isImg, okPath, GEN, tags, onTags, TAGS } from './doc.js'
 import { ghost } from './ghost.js'
 import { commentExt } from './comments.js'
-import { scheduleCompile } from './preview.js'
 import { renderTree } from './tree.js'
 import { applyLayout } from './menu.js'
 import { later } from './warm.js'
@@ -98,6 +97,7 @@ export function toggleLsp() {
   if (path) openFile(path)
 }
 
+let counting
 const countWords = () => { // the prose, not the markup
   const src = path?.endsWith('.typ') && view?.state.doc.toString()
   $('wordcount').textContent = src ? `${(prose(src).text.match(/[\p{L}\p{N}']+/gu) || []).length} words` : ''
@@ -154,7 +154,7 @@ export async function openFile(p) {
     keymap.of([indentWithTab, ...wasRo ? [] : yUndoManagerKeymap]), p.endsWith('.typ') ? emphasis : [],
     wasRo ? follow(yt) : yCollab(yt, provider.awareness, { undoManager: undo.get(p) }),
     commentExt, ghost, scope.extension, EditorView.lineWrapping,
-    EditorView.updateListener.of(u => u.docChanged && (scheduleCompile(), countWords())),
+    EditorView.updateListener.of(u => u.docChanged && (clearTimeout(counting), counting = setTimeout(countWords, 300))),
   ] }))
   provider.setAwarenessField('file', p)
   localStorage['last:' + projName] = p

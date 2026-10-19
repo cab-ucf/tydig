@@ -88,7 +88,9 @@ function read(which) {
 }
 // the pane with something new in it
 export function discuss() { openSidebar(unseen().comments ? 'comments' : 'chat') }
-const me = new RegExp(`@${user.name.split(/[\s@]/)[0].replace(/\W/g, '')}\\b`, 'i')
+// @ and the first name, in any script; a name without letters is never mentioned
+const nick = user.name.split(/[\s@]/)[0].replace(/[^\p{L}\p{N}_]/gu, '')
+const me = nick ? new RegExp(`@${nick}(?![\\p{L}\\p{N}_])`, 'iu') : /(?!)/
 const say = (x, where, pane) => {
   if (!others(x) || x.ts < since || (settings.sideOpen && mode === pane)) return
   const to = me.test(x.text)
@@ -194,14 +196,18 @@ const message = m => {
     head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : ''), el('p', {}, ...mentions(m.text)))
 }
 // Enter sends; Shift-Enter is a new line
+// what is typed outlives the pane redrawing around it (panels.js keeps focus)
+const drafts = new Map()
 const composer = (re, hint) => {
-  const t = el('textarea', { className: 'say', rows: 1, placeholder: `${hint}; @name asks an agent` })
+  const k = re ?? '', t = el('textarea', { className: 'say', rows: 1, placeholder: `${hint}; @name asks an agent`,
+    value: drafts.get(k) ?? '', oninput: () => drafts.set(k, t.value) })
+  t.dataset.re = k
   t.onkeydown = e => {
     const text = t.value.trim()
     if (e.key !== 'Enter' || e.shiftKey || !text) return
     e.preventDefault()
     chat.push([{ id: uid(), author: user.name, color: user.color, text, ts: Date.now(), ...re && { re } }])
-    t.value = ''
+    t.value = ''; drafts.delete(k)
   }
   return t
 }

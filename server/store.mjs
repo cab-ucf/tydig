@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { migrate } from './migrate.mjs'
+import { setText } from './text.mjs'
 
 export const run = promisify(execFile)
 export const DATA = path.resolve(process.env.TYDIG_DATA || 'data')
@@ -112,18 +113,6 @@ export async function* walk(dir, base = dir) {
   }
 }
 
-// Replace a Y.Text's content by its changed span alone, so comment anchors
-// and concurrent edits elsewhere survive. Never splits a surrogate pair.
-export function setText(t, s) {
-  const o = t.toString(), hi = i => (o.charCodeAt(i) & 0xFC00) === 0xD800
-  if (o === s) return
-  let a = 0, b = 0
-  while (a < o.length && o[a] === s[a]) a++
-  if (a && hi(a - 1)) a--
-  while (b < o.length - a && b < s.length - a && o.at(-1 - b) === s.at(-1 - b)) b++
-  if (b && hi(o.length - b - 1)) b--
-  t.delete(a, o.length - a - b); t.insert(a, s.slice(a, s.length - b))
-}
 export const putText = (files, rel, s) => files.has(rel) ? setText(files.get(rel), s)
   : files.set(rel, new Y.Text(s))
 

@@ -109,13 +109,14 @@ def app(model, detector, watch, dtype, max_chars, **_):
         async def sample(r):
             await say(ws, type="sample", seq=r["seq"], **await asyncio.to_thread(tree, r, E.sample))
 
-        w = asyncio.create_task(work())
+        w, jobs = asyncio.create_task(work()), set()
         try:
             while True:
                 try: r = json.loads(await ws.receive_text()); r["text"]
                 except (ValueError, TypeError, KeyError):
                     await say(ws, type="error", message="Malformed request."); continue
-                if r.get("type") == "sample": asyncio.create_task(guard(r, sample))
+                if r.get("type") == "sample":  # held, or the loop may drop it unfinished
+                    j = asyncio.create_task(guard(r, sample)); jobs.add(j); j.add_done_callback(jobs.discard)
                 else: box[0] = r; wake.set()
         except WebSocketDisconnect: pass
         finally: w.cancel(); clients.discard(ws)

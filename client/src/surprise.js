@@ -20,7 +20,7 @@ const KEYWORD = /(let|set|show|import|include|if|for|while|context|return)\b/y
 const STRING = /"(\\.|[^"\\])*"?/y, PARA = /\n[ \t]*\n/y, LINE = /[ \t]*(=+[ \t]+|[-+/][ \t]+|\d+\.[ \t]+)?/y
 const FONT = /\b(font|family)\s*:\s*\(?\s*("[^"]*"\s*,\s*)*$/ // a font's name is not prose
 export function prose(src, typst = true) {
-  if (!typst) return { text: src, at: [...src].map((_, i) => i) }
+  if (!typst) return { text: src, at: Array.from({ length: src.length }, (_, i) => i) }
   const out = [], at = []
   let i = 0
   const put = (c, j) => { out.push(c); at.push(j) }
