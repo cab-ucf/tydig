@@ -221,6 +221,15 @@ check('hovering a word says what its numbers mean', await page.evaluate(() =>
 await page.mouse.move(0, 0); await page.click('#scope'); await sleep(800)
 check('one click tints by flatness instead, from the same scores', (await tinted()).length > 20 && (await tinted()).every(w => w.cool) &&
   await page.evaluate(() => document.getElementById('scope').textContent.startsWith('flatness')) && seen.length === 1)
+// typing keeps the marks; in vim the text is read on leaving insert mode
+await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
+await page.focus('.cm-content'); await page.keyboard.type('ggIVery '); await sleep(1500)
+const held = { n: seen.length, marks: (await tinted()).length }
+await page.keyboard.press('Escape'); await sleep(800)
+check('typing keeps the marks; in vim, the text is read on leaving insert mode',
+  held.n === 1 && held.marks > 20 && seen.length === 2 && seen[1].startsWith('Very'))
+await page.keyboard.type('^5x'); await sleep(1200)
+await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
 await page.click('#scope'); await sleep(800)
 check('another shows AI-likeness per sentence, the most AI-like blocked out', await page.evaluate(() =>
   document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent)))

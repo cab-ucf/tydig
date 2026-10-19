@@ -26,8 +26,8 @@ export let view = null, path = null, prev = null // prev: the file before, for v
 export const undo = new Map() // path -> Y.UndoManager: own edits only
 // vim, loaded only when wanted; who needs its Vim (keys.js) hears when it is
 export const onVim = []
-let vimMod
-const vimExt = async () => { vimMod ??= import('@replit/codemirror-vim').then(m => (onVim.forEach(f => f(m.Vim)), m))
+let vimMod, Vm
+const vimExt = async () => { vimMod ??= import('@replit/codemirror-vim').then(m => (Vm = m, onVim.forEach(f => f(m.Vim)), m))
   return (await vimMod).vim({ status: true }) }
 const vimC = new Compartment(), themeC = new Compartment(), spellC = new Compartment(), lspC = new Compartment()
 
@@ -198,8 +198,12 @@ const nextMode = () => modes[(modes.indexOf(settings.scope?.by) + 1) % modes.len
 const scope = surprise({
   url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api${P('/surprise')}`,
   by: () => settings.scope?.by, typst: () => !!path?.endsWith('.typ'), after: later,
-  // while a reading is awaited, the marks fade and a bar sweeps the editor's header
+  // while a reading is awaited, a bar sweeps the editor's header
   busy: on => { $('editor').classList.toggle('scope-busy', on); $('scope').classList.toggle('busy', on) },
+  // in vim, typing is read on the way out of insert mode
+  hold: () => { const cm = settings.vim && Vm?.getCM(view)
+    cm && !cm.scoped && (cm.scoped = cm.on('vim-mode-change', () => scope.poke()) ?? 1)
+    return !!cm?.state?.vim?.insertMode },
   report: r => {
     const b = $('scope')
     b.hidden = !settings.scope

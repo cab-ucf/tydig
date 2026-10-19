@@ -5,7 +5,7 @@
 // how rare its AI-likeness is among human writing, by MELD (an AI-text
 // detector) where the engine runs it. Typst source is scored as the prose it
 // typesets: the engine sees text, the editor keeps where it came from.
-import { StateField, StateEffect } from '@codemirror/state'
+import { StateField, StateEffect, ChangeSet } from '@codemirror/state'
 import { EditorView, Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
 
 // prose: the text a .typ file reads as, and for each of its characters the
@@ -135,7 +135,9 @@ const scopeField = StateField.define({
 // opts: url () an engine's address on this machine, or null; hub () the hub's
 // route, or null; by () 'bits' | 'ent' | 'ai'; typst () is this a .typ;
 // report ({ ppl, ai } | { error }); after, a promise to wait for first;
-// busy (true | false): whether a reading of the text as it is now is awaited
+// busy (true | false): whether a reading is awaited; hold (): not now (vim's
+// insert mode), poke () when that ends. A reading of text typed over since is
+// shown anyway, mapped through the edits: only what changed waits
 export function surprise(opts) {
   let ws, seq = 0, sent = null, view, last = null, pending = false
   const state = (p = pending) => { pending = p; opts.busy?.(pending || opts.by() === 'ai' && !!last && last.ai === undefined) }
@@ -144,8 +146,9 @@ export function surprise(opts) {
     await opts.after
     const url = opts.url(), hub = opts.hub()
     if (!(url || hub) || !view) return state(false)
+    if (opts.hold?.()) return
     state(true)
-    const p = prose(view.state.doc.toString(), opts.typst())
+    const doc = view.state.doc, p = { ...prose(doc.toString(), opts.typst()), doc, ch: ChangeSet.empty(doc.length) }
     if (hub) { // the hub's own engine: the newest ask wins there too
       const n = ++seq; sent = p
       return fetch(hub, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: p.text }).then(r => r.json())
@@ -167,9 +170,7 @@ export function surprise(opts) {
     sent = p; ws.send(JSON.stringify({ seq: ++seq, text: p.text, cursor: null, k: 3, depth: 3, m: 'none', a: 0, T: 1 }))
   }
   const show = h => {
-    const p = sent, cur = prose(view.state.doc.toString(), opts.typst())
-    if (cur.text !== p.text) return ask() // typed since: ask about the text as it is now
-    const src = (s, e) => [p.at[s], p.at[e - 1] + 1], marks = []
+    const p = h.p, src = (s, e) => [p.ch.mapPos(p.at[s], 1), p.ch.mapPos(p.at[e - 1] + 1, -1)], marks = []
     const by = MODES[opts.by()] ? opts.by() : 'bits', ai = by === 'ai'
     let i = 0
     for (const z of h.sents) { // a sentence is its z.w words, in order
@@ -181,7 +182,7 @@ export function surprise(opts) {
     }
     if (!ai) for (const w of h.words) {
       const [a, b] = src(w.s, w.e), c = tint[by](w[by])
-      marks.push(Decoration.mark({ class: 'scope-w', attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
+      if (a < b) marks.push(Decoration.mark({ class: 'scope-w', attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
     }
     last = h
     view.dispatch({ effects: setScope.of(Decoration.set(marks, true)) })
@@ -195,16 +196,21 @@ export function surprise(opts) {
     show(last)
   }
   const heat = (h, hub, n) => { // fresh scores; then ask the hub for MELD's (an engine here sends it unasked)
-    h.ai = undefined; show(h)
+    h.ai = undefined; h.p = sent; show(h)
     if (hub && last === h) fetch(hub + '?ai', { method: 'POST', headers: { 'content-type': 'text/plain' },
-      body: sent.text }).then(r => r.json())
+      body: h.p.text }).then(r => r.json())
       .then(r => n === seq && last === h && (r.error ? (addAi(null), opts.report({ error: r.error })) : addAi(r.ai)),
         () => n === seq && last === h && addAi(null))
   }
   let t
-  const plugin = ViewPlugin.define(v => (view = v, setTimeout(ask), {
-    update: u => { if (u.docChanged && (opts.url() || opts.hub())) { state(true); clearTimeout(t); t = setTimeout(ask, 700) } },
+  const plugin = ViewPlugin.define(v => (view = v, last = sent = null, seq++, setTimeout(ask), {
+    update: u => {
+      if (!u.docChanged) return
+      for (const x of new Set([sent, last?.p])) x && (x.ch = x.ch.compose(u.changes))
+      if (opts.url() || opts.hub()) { clearTimeout(t); t = setTimeout(ask, 700) }
+    },
   }))
+  const poke = () => view && view.state.doc !== sent?.doc && (clearTimeout(t), ask())
   const hover = hoverTooltip((v, pos) => {
     let w, z
     v.state.field(scopeField).between(pos, pos, (a, b, d) => {
@@ -238,7 +244,7 @@ export function surprise(opts) {
     last = null; seq++; ws?.close(); ws = null; state(false) // what is in flight is no longer wanted
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }
-  return { extension: [scopeField, plugin, hover], refresh }
+  return { extension: [scopeField, plugin, hover], refresh, poke }
 }
 
 // MELD's reading of a whole text, apart from the overlay (the AI check):
