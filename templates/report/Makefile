@@ -3,8 +3,8 @@
 # the data and the results, figures, and both PDFs regenerate. Nothing else
 # needs to know the difference.
 #
-# Run from the build panel in the app (it runs these targets in a sandbox
-# container), or in any shell with make, python3, and typst on PATH.
+# `just` runs it in the Containerfile's image, as the build panel does;
+# or any shell with make, python3, and typst on PATH runs it as is.
 
 PY     := python3
 TYPST  := typst

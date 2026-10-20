@@ -156,8 +156,8 @@ function explain(e, at) {
   const gone = missing() // the compiler's own words first: a guess must never hide them
   return raw.split('\n')[0] + '\n\n' + (gone.length ? 'Missing:\n' + gone.map(([, why]) => '  ' + why).join('\n')
     : 'The document reads a file that does not exist in the project.') +
-    (gone.some(([p]) => /^(build|figures|out)\//.test(p)) ? '\nFiles under build/, figures/ or out/ come from ' +
-      'the build: open the build panel and run "all".' : '') +
+    (gone.some(([p]) => /^(build|fig\w*|out)\//i.test(p)) ? '\nFiles under build/, figures/ or out/ come from ' +
+      'the build (make, in the project\'s Containerfile if it has one): open the build panel and run "all".' : '') +
     '\n\nA relative path starts from the file that names it, not from the document; ' +
     'a path starting with / starts at the project root.'
 }

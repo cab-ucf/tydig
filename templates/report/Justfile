@@ -1,0 +1,5 @@
+img := "localhost/" + lowercase(file_name(justfile_directory()))
+
+# make's targets in the Containerfile's image: `just`, `just make report clean`
+make *t="all":
+    podman build -q -t {{img}} . && podman run --rm -v "$PWD:/work:Z" {{img}} make {{t}}
