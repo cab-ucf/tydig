@@ -51,13 +51,15 @@ const NET = ['--http-proxy=false', ...NONET ? ['--network=none'] : ['--network=t
 // runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
 // the host's; gVisor hides .git and .collab itself. Its one need of the
 // container is CAP_SYS_CHROOT, to set up its root; the build gets nothing.
-// Probed at start; TYDIG_RUNTIME=none: plain containers.
+// Probed at start, and on each project image (plain: it would not start on
+// it); TYDIG_RUNTIME=none: plain containers.
 let gvisor = false
-const under = cmd => gvisor ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
+const g = own => gvisor && !own?.plain
+const under = (cmd, own) => g(own) ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
 // as 1000, or in a project's image as its root (the hub's user): no capabilities
 const box = (secs, own) => ['run', '--rm', ...NET, `--timeout=${secs}`, '--log-driver=none',
-  ...own && !gvisor ? ['--user=0:0'] : ['--userns=keep-id:uid=1000,gid=1000'], '--memory=2g', '--pids-limit=512', '--cpus=2',
-  '--cap-drop=ALL', ...gvisor ? ['--cap-add=SYS_CHROOT'] : [], '--security-opt=no-new-privileges',
+  ...own && !g(own) ? ['--user=0:0'] : ['--userns=keep-id:uid=1000,gid=1000'], '--memory=2g', '--pids-limit=512', '--cpus=2',
+  '--cap-drop=ALL', ...g(own) ? ['--cap-add=SYS_CHROOT'] : [], '--security-opt=no-new-privileges',
   '--security-opt=label=level:s0', '--read-only', '--tmpfs=/tmp:rw,size=512m']
 export const at = s => s.includes(':') ? [+s.split(':').pop(), s.split(':')[0]] : [s]
 
@@ -69,12 +71,12 @@ const PIN = 'test "$(stat -c %d:%i /work)" = "$0" || { echo project moved >&2; e
 const args = (proj, secs, i, cmd, own) => {
   const dir = path.join(DATA, proj), s = lstatSync(dir)
   if (!s.isDirectory()) throw new Error('not a project')
-  return [...box(secs, own), ...i ? ['-i'] : [], ...gvisor ? [] : ['--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
+  return [...box(secs, own), ...i ? ['-i'] : [], ...g(own) ? [] : ['--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
     '--tmpfs=/work/.collab:ro,size=4k,notmpcopyup'], // the hub's state, never a build's to write
-    ...ENV.flatMap(e => ['-e', e]), ...own && gvisor ? [`--mount=type=image,src=${own.image},dst=/rootfs`,
+    ...ENV.flatMap(e => ['-e', e]), ...own && g(own) ? [`--mount=type=image,src=${own.image},dst=/rootfs`,
       '-e', 'TYDIG_ROOT=/rootfs', '-e', `TYDIG_ENV=${JSON.stringify([...own.env, ...ENV])}`] : [],
-    '-v', `${dir}:/work:rw,z`, '-w', '/work', own && !gvisor ? own.image : IMAGE,
-    'sh', '-c', PIN, `${s.dev}:${s.ino}`, ...under(cmd)]
+    '-v', `${dir}:/work:rw,z`, '-w', '/work', own && !g(own) ? own.image : IMAGE,
+    'sh', '-c', PIN, `${s.dev}:${s.ino}`, ...under(cmd, own)]
 }
 
 // A project with a Containerfile builds in its own image, as its Justfile
@@ -92,7 +94,11 @@ const mine = async proj => {
     '--ignorefile', `${t}/ignore`, '-t', `${tag}:src`, '-f', path.join(dir, 'Containerfile'), dir], 1800)
   if (log.code) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
   const image = (await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).code ? `${tag}:src` : tag
-  return { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
+  const o = { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
+  const t0 = gvisor && await said(args(proj, 30, false, ['true'], o))
+  if (t0?.code) Object.assign(o, { plain: true, note: 'gVisor would not start on this project\'s image, so it builds ' +
+    `in a plain container: ${t0.err.trim().split('\n').pop()}\n` })
+  return o
 }
 const ok = r => /^[\w-]{1,64}$/.test(r?.proj) && Array.isArray(r.cmd) && r.cmd.length && r.cmd.length < 64 &&
   r.cmd.every(a => typeof a === 'string' && a.length < 4096) && r.secs > 0 && r.secs <= 86400
@@ -112,7 +118,8 @@ const serve = sock => {
     catch { return no('bad sandbox request') }
     if (live >= MAX) return no('the hub is running too many sandboxes; try again shortly')
     live++
-    if (r.own) try { const o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o) }
+    let note = ''
+    if (r.own) try { const o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o), note = o.note || '' }
     catch (e) { live--; return no(e.message) }
     const p = spawn('podman', a, { stdio: ['pipe', 'pipe', r.i ? 'ignore' : 'pipe'] })
     const bye = () => { try { p.kill() } catch {} }, t = setTimeout(bye, (r.secs + 15) * 1000)
@@ -125,7 +132,7 @@ const serve = sock => {
       return sock.resume()
     }
     p.stdin.end()
-    const out = { stdout: '', stderr: '' }
+    const out = { stdout: '', stderr: note }
     p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
     p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
     p.on('close', code => sock.end(JSON.stringify({ code, ...out }) + '\n'))
