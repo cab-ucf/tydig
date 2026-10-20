@@ -1,0 +1,9 @@
+# What the Makefile needs: `just` builds this, then runs make in it. The hub
+# does the same, so a build here and there are one build.
+FROM docker.io/library/python:3.12-slim
+ARG TYPST=0.15.1
+RUN apt-get update && apt-get install -y --no-install-recommends make curl xz-utils \
+ && a=$(uname -m) && curl -fsSL https://github.com/typst/typst/releases/download/v$TYPST/typst-$a-unknown-linux-musl.tar.xz \
+  | tar -xJ -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
+ && pip install --no-cache-dir matplotlib && rm -rf /var/lib/apt/lists/*
+WORKDIR /work

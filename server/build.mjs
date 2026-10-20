@@ -15,14 +15,14 @@ const MAX = Number(process.env.TYDIG_MAX_BUILDS || 2)
 const SANDBOX = at(process.env.TYDIG_SANDBOX || 'sandbox:7000')
 const DOCX = new URL('../sandbox/tydig-docx', import.meta.url).pathname
 
-const ask = (n, cmd, secs, i) => {
+const ask = (n, cmd, secs, i, own) => {
   const s = net.connect(...SANDBOX)
-  s.write(JSON.stringify({ proj: n, cmd, secs, i }) + '\n')
+  s.write(JSON.stringify({ proj: n, cmd, secs, i, own }) + '\n')
   return s
 }
-const inSandbox = (n, cmd, secs) => new Promise((ok, no) => {
+const inSandbox = (n, cmd, secs, own) => new Promise((ok, no) => {
   let out = ''
-  ask(n, cmd, secs).on('data', d => out += d).on('error', no).on('end', () => {
+  ask(n, cmd, secs, false, own).on('data', d => out += d).on('error', no).on('end', () => {
     let r
     try { r = JSON.parse(out) } catch { r = { code: -1, stdout: '', stderr: out ? 'the build sandbox broke off its answer'
       : 'the build sandbox did not answer: it may still be making its image (minutes, once per version)' } }
@@ -36,17 +36,18 @@ const scrub = n => run('find', [proj(n), '-mindepth', '1', '(', '-path', `${proj
   '-o', '!', '-type', 'f', '!', '-type', 'd', '-exec', 'rm', '-f', '{}', '+']).catch(() => {}) // links, fifos
 const MAKEFILES = ['Makefile', 'makefile', 'GNUmakefile']
 const makefile = n => MAKEFILES.find(f => existsSync(inProj(n, f)))
-// a command in the project (cwd /work in the sandbox)
-const sandboxed = (n, [cmd, ...args], secs) => (UNSAFE
+// a command in the project (cwd /work in the sandbox); own: in the image of
+// the project's Containerfile, if it has one
+const sandboxed = (n, [cmd, ...args], secs, own) => (UNSAFE
   ? run(cmd === 'tydig-docx' ? DOCX : cmd, args, { cwd: proj(n), timeout: secs * 1000,
     maxBuffer: 8e6, env: { ...process.env, TYPST_ROOT: proj(n) } })
-  : inSandbox(n, [cmd, ...args], secs)).finally(() => scrub(n))
+  : inSandbox(n, [cmd, ...args], secs, own)).finally(() => scrub(n))
 // one build at a time per project, TYDIG_MAX_BUILDS in all
-async function exec(n, cmd) {
+async function exec(n, cmd, own) {
   if (building.has(n)) throw Object.assign(new Error('a build is already running'), { status: 409 })
   if (building.size >= MAX) throw Object.assign(new Error('the hub is busy; try again shortly'), { status: 429 })
   building.add(n)
-  try { return await sandboxed(n, cmd, 180) } finally { building.delete(n) }
+  try { return await sandboxed(n, cmd, 180, own) } finally { building.delete(n) }
 }
 const why = e => typeof e.code === 'string' || /image not known|initializing source/.test(e.stderr)
   ? 'the build sandbox is not running or has no image: `just` on the hub starts it'
@@ -56,7 +57,7 @@ const why = e => typeof e.code === 'string' || /image not known|initializing sou
 const missing = t => (t = /^(?:make: (\S+): No such file or directory|\/bin\/sh: \d+: (\S+): not found)$/m
   .exec(t || '')?.slice(1).find(Boolean)) ?
   `\n\`${t}\` is not in this hub's build sandbox. If sandbox/Containerfile installs it, the hub's image ` +
-  'is older than its code: `just up` on the hub rebuilds it. If not, add it there.' : ''
+  'is older than its code: `just up` on the hub rebuilds it. If not, add it there, or give the project a Containerfile.' : ''
 
 async function recipes(n) {
   const f = makefile(n)
@@ -82,7 +83,7 @@ router.post('/build/:recipe', async (req, res) => {
   const n = req.params.proj, r = req.params.recipe
   if (!/^\w[\w-]{0,63}$/.test(r)) return res.status(400).json({ error: 'bad recipe' })
   const cmd = makefile(n) ? ['make', ...UNSAFE ? [] : ['-C', '/work'], r] : ['just', r]
-  try { const o = await exec(n, cmd); res.json({ ok: true, output: o.stdout + o.stderr }) }
+  try { const o = await exec(n, cmd, true); res.json({ ok: true, output: o.stdout + o.stderr }) }
   catch (e) { res.status(e.status || 200).json({ ok: false, output: why(e) }) }
 })
 // Word, its citations live EndNote fields: out/<file>.docx
