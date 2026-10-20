@@ -74,7 +74,7 @@ export function applyLayout() {
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
   $('zoom-pct').textContent = settings.zoom ? `${Math.round(100 * settings.zoom)}%` : 'Fit'
   fitText()
-  $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0`
+  split()
   for (const x of document.querySelectorAll('[data-check]')) {
     const k = x.dataset.check
     const [key, is] = k.split('='), on = k.startsWith('scope-') ? settings.scope?.by === k.slice(6)
@@ -86,17 +86,17 @@ export function applyLayout() {
 for (const h of document.querySelectorAll('.sect-head'))
   h.onclick = e => e.target.closest('button') || flip(h.dataset.sect)()
 
-// The divider: drag it; double-click to even it out.
-const split = $('split')
-split.onpointerdown = e => {
+// The divider: drag it (only the panes move; the rest of the layout, once
+// let go); double-click to even it out.
+function split() { $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0` }
+const bar = $('split')
+bar.onpointerdown = e => {
   const left = $('editor').getBoundingClientRect().left, total = $('editor').offsetWidth + $('preview').offsetWidth
-  split.setPointerCapture(e.pointerId)
-  split.onpointermove = m => {
-    settings.split = Math.min(0.8, Math.max(0.2, (m.clientX - left) / total)); applyLayout()
-  }
-  split.onpointerup = () => split.onpointermove = null
+  bar.setPointerCapture(e.pointerId)
+  bar.onpointermove = m => { settings.split = Math.min(0.8, Math.max(0.2, (m.clientX - left) / total)); split() }
+  bar.onlostpointercapture = () => { bar.onpointermove = null; applyLayout() } // let go, or cancelled
 }
-split.ondblclick = () => { settings.split = 0.5; applyLayout() }
+bar.ondblclick = () => { settings.split = 0.5; applyLayout() }
 
 // Phones show one pane at a time, picked in the bottom tab bar; what their bar
 // has no room for moves: the word count under the Edit tab, build into the

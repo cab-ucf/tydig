@@ -40,6 +40,28 @@ const pv = await page.evaluate(() => ({ diagHidden: document.getElementById('dia
 check('preview compiled on a fresh project (no missing files)', pv.diagHidden && pv.svg)
 if (!pv.diagHidden) console.log('  diag:', pv.diag)
 
+// The worker keeps the files it was sent: a new file, an edit and a deletion
+// each reach it (a file deleted must not compile from its old copy)
+{
+  const { doc, Y } = await import('./lib.mjs')
+  const d = doc(B, 'demo', (await page.cookies()).find(c => c.name.endsWith('session_token')).value)
+  await sleep(2000)
+  const shows = () => page.evaluate(() => ({ text: document.getElementById('page').textContent,
+    diag: !document.getElementById('diag').hidden && document.getElementById('diag').textContent }))
+  const main = d.files.get('main.typ'), tail = '\n#include "extra.typ"\n'
+  d.transact(() => { d.files.set('extra.typ', new Y.Text('Zanzibarxq')); main.insert(main.length, tail) }); await sleep(4000)
+  const added = await shows()
+  d.files.get('extra.typ').delete(0, 10); d.files.get('extra.typ').insert(0, 'Quokkaqq'); await sleep(4000)
+  const edited = await shows()
+  d.files.delete('extra.typ'); await sleep(4000)
+  const gone = await shows()
+  main.delete(main.length - tail.length, tail.length); await sleep(4000)
+  const back = await shows()
+  check('the preview follows a file added, edited and deleted, then recovers', added.text.includes('Zanzibarxq') &&
+    edited.text.includes('Quokkaqq') && !edited.text.includes('Zanzibarxq') && /extra\.typ/.test(gone.diag) && !back.diag)
+  d.provider.destroy()
+}
+
 // 0. Comment straight from the preview: select rendered text, click the
 //    button that appears. "decision rule" occurs twice; take the second.
 await page.evaluate(() => {
@@ -327,6 +349,20 @@ const word = await page.evaluate(async () => {
 if (word) writeFileSync(`${tmp}/w.docx`, Buffer.from(word))
 const xml = word ? (await import('node:child_process')).execSync(`unzip -p ${tmp}/w.docx word/document.xml`).toString() : ''
 check('Word export makes the citations EndNote fields, the bibliography its list', /ADDIN EN\.CITE &lt;EndNote&gt;[\s\S]*ADDIN EN\.REFLIST/.test(xml))
+{ // the divider: the panes follow the drag; the layout is kept once let go
+  await page.setViewport({ width: 1400, height: 900 }); await sleep(300)
+  await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click()); await sleep(300)
+  const b = await (await page.$('#split')).boundingBox(), y = b.y + b.height / 2
+  const kept = () => page.evaluate(() => JSON.parse(localStorage.settings || '{}').split)
+  const was = await kept(), flex = () => page.evaluate(() => parseFloat(document.getElementById('editor').style.flex))
+  await page.mouse.move(b.x + b.width / 2, y); await page.mouse.down(); await page.mouse.move(b.x - 200, y, { steps: 5 })
+  const [mid, midKept] = [await flex(), await kept()]
+  await page.mouse.up(); await sleep(100)
+  const end = await kept()
+  check('dragging the divider moves the panes at once and keeps where it was let go', mid < (was ?? 0.5) - 0.05 &&
+    midKept === was && Math.abs(end - mid) < 1e-4)
+  await page.click('#split', { clickCount: 2 })
+}
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)
