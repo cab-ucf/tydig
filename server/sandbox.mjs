@@ -51,14 +51,14 @@ const NET = ['--http-proxy=false', ...NONET ? ['--network=none'] : ['--network=t
 // runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
 // the host's; gVisor hides .git and .collab itself. Its one need of the
 // container is CAP_SYS_CHROOT, to set up its root; the build gets nothing.
-// Probed at start, and on each project image (plain: it would not start on
-// it); TYDIG_RUNTIME=none: plain containers.
+// Probed at start; a build it will not start for runs again in a plain
+// container (plain); TYDIG_RUNTIME=none: plain containers.
 let gvisor = false
 const g = own => gvisor && !own?.plain
 const under = (cmd, own) => g(own) ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
 // as 1000, or in a project's image as its root (the hub's user): no capabilities
 const box = (secs, own) => ['run', '--rm', ...NET, `--timeout=${secs}`, '--log-driver=none',
-  ...own && !g(own) ? ['--user=0:0'] : ['--userns=keep-id:uid=1000,gid=1000'], '--memory=2g', '--pids-limit=512', '--cpus=2',
+  ...own?.image && !g(own) ? ['--user=0:0'] : ['--userns=keep-id:uid=1000,gid=1000'], '--memory=2g', '--pids-limit=512', '--cpus=2',
   '--cap-drop=ALL', ...g(own) ? ['--cap-add=SYS_CHROOT'] : [], '--security-opt=no-new-privileges',
   '--security-opt=label=level:s0', '--read-only', '--tmpfs=/tmp:rw,size=512m']
 export const at = s => s.includes(':') ? [+s.split(':').pop(), s.split(':')[0]] : [s]
@@ -73,9 +73,9 @@ const args = (proj, secs, i, cmd, own) => {
   if (!s.isDirectory()) throw new Error('not a project')
   return [...box(secs, own), ...i ? ['-i'] : [], ...g(own) ? [] : ['--tmpfs=/work/.git:ro,size=4k,notmpcopyup',
     '--tmpfs=/work/.collab:ro,size=4k,notmpcopyup'], // the hub's state, never a build's to write
-    ...ENV.flatMap(e => ['-e', e]), ...own && g(own) ? [`--mount=type=image,src=${own.image},dst=/rootfs`,
+    ...ENV.flatMap(e => ['-e', e]), ...own?.image && g(own) ? [`--mount=type=image,src=${own.image},dst=/rootfs`,
       '-e', 'TYDIG_ROOT=/rootfs', '-e', `TYDIG_ENV=${JSON.stringify([...own.env, ...ENV])}`] : [],
-    '-v', `${dir}:/work:rw,z`, '-w', '/work', own && !g(own) ? own.image : IMAGE,
+    '-v', `${dir}:/work:rw,z`, '-w', '/work', own?.image && !g(own) ? own.image : IMAGE,
     'sh', '-c', PIN, `${s.dev}:${s.ino}`, ...under(cmd, own)]
 }
 
@@ -94,11 +94,7 @@ const mine = async proj => {
     '--ignorefile', `${t}/ignore`, '-t', `${tag}:src`, '-f', path.join(dir, 'Containerfile'), dir], 1800)
   if (log.code) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
   const image = (await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).code ? `${tag}:src` : tag
-  const o = { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
-  const t0 = gvisor && await said(args(proj, 30, false, ['true'], o))
-  if (t0?.code) Object.assign(o, { plain: true, note: 'gVisor would not start on this project\'s image, so it builds ' +
-    `in a plain container: ${t0.err.trim().split('\n').pop()}\n` })
-  return o
+  return { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
 }
 const ok = r => /^[\w-]{1,64}$/.test(r?.proj) && Array.isArray(r.cmd) && r.cmd.length && r.cmd.length < 64 &&
   r.cmd.every(a => typeof a === 'string' && a.length < 4096) && r.secs > 0 && r.secs <= 86400
@@ -118,24 +114,34 @@ const serve = sock => {
     catch { return no('bad sandbox request') }
     if (live >= MAX) return no('the hub is running too many sandboxes; try again shortly')
     live++
-    let note = ''
-    if (r.own) try { const o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o), note = o.note || '' }
+    let o
+    if (r.own) try { o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o) }
     catch (e) { live--; return no(e.message) }
-    const p = spawn('podman', a, { stdio: ['pipe', 'pipe', r.i ? 'ignore' : 'pipe'] })
-    const bye = () => { try { p.kill() } catch {} }, t = setTimeout(bye, (r.secs + 15) * 1000)
-    p.on('error', e => r.i ? sock.destroy() : no(`podman: ${e.message}`))
-    p.on('close', () => { live--; clearTimeout(t) })
-    sock.on('close', bye)
-    if (r.i) {
-      p.stdin.on('error', () => {}); p.stdin.write(head.slice(n + 1))
-      sock.pipe(p.stdin); p.stdout.pipe(sock)
-      return sock.resume()
+    const go = (a, note = '') => {
+      const p = spawn('podman', a, { stdio: ['pipe', 'pipe', r.i ? 'ignore' : 'pipe'] })
+      const bye = () => { try { p.kill() } catch {} }, t = setTimeout(bye, (r.secs + 15) * 1000)
+      p.on('error', e => r.i ? sock.destroy() : no(`podman: ${e.message}`))
+      p.on('close', () => clearTimeout(t))
+      sock.on('close', bye)
+      if (r.i) {
+        p.on('close', () => live--)
+        p.stdin.on('error', () => {}); p.stdin.write(head.slice(n + 1))
+        sock.pipe(p.stdin); p.stdout.pipe(sock)
+        return sock.resume()
+      }
+      p.stdin.end()
+      const out = { stdout: '', stderr: note }
+      p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
+      p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
+      // gVisor failed before the command ran: run it once more, plain
+      p.on('close', code => {
+        if (!code || !g(o) || !/cannot create sandbox/.test(out.stderr)) return live--, sock.end(JSON.stringify({ code, ...out }) + '\n')
+        sock.off('close', bye); o = { ...o, plain: true }
+        go(args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o), 'gVisor would not start for this build, so it ran in a plain ' +
+          `container: ${out.stderr.trim().split('\n').pop()}\n`)
+      })
     }
-    p.stdin.end()
-    const out = { stdout: '', stderr: note }
-    p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
-    p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
-    p.on('close', code => sock.end(JSON.stringify({ code, ...out }) + '\n'))
+    go(a)
   })
 }
 
