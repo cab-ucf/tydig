@@ -1,11 +1,10 @@
 // A git remote as the project's durable home (GitHub, GitLab, a bare repo
 // on a NAS): pushed on save, every TYDIG_GIT_PUSH_MINUTES and on shutdown.
-// Hubs never conflict: each writes only .collab/crdt/<hub id>.bin, and the
-// merged CRDT regenerates the working tree. Commits no hub made (a push by
-// hand, an edit on GitHub) merge into the live text three ways.
+// Git keeps the text only: what any hub, a push by hand or an edit on GitHub
+// committed merges into the live text three ways. The CRDT stays on its hub
+// (store.mjs); an older hub's .collab/crdt/ is read once and taken out.
 // The URL may carry a token: it stays in DATA/.hub, never in .git/config.
 import express from 'express'
-import * as Y from 'yjs'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
@@ -18,7 +17,6 @@ import { publicOnly } from './public.mjs'
 const idFile = path.join(DATA, 'hub-id')
 if (!existsSync(idFile)) writeFileSync(idFile, randomBytes(8).toString('hex') + '\n')
 export const hubId = readFileSync(idFile, 'utf8').trim()
-const MINE = `.collab/crdt/${hubId}.bin`
 
 const cfg = async n => JSON.parse(await readFile(hubFile(n, 'remote.json'), 'utf8').catch(() => 'null'))
 const setCfg = async (n, c) => {
@@ -66,27 +64,21 @@ export async function deployKey(n) {
   return (await readFile(k + '.pub', 'utf8')).trim()
 }
 
-async function absorb(n, doc) {
-  const dir = await collab(n, 'crdt'), peers = existsSync(dir)
-    ? (await readdir(dir)).filter(f => f.endsWith('.bin') && f !== `${hubId}.bin`) : []
-  for (const f of peers) try { Y.applyUpdate(doc, await readFile(path.join(dir, f))) } catch {}
-  return peers.length
-}
-async function writeState(n, doc) {
-  await mkdir(await collab(n, 'crdt'), { recursive: true })
-  await writeFile(await collab(n, `crdt/${hubId}.bin`), Y.encodeStateAsUpdate(doc), { flag: 'w' })
-}
+// an older hub's CRDT files: binary, rewritten whole each sync, so never kept in git
+const unstate = async n => rm(await collab(n, 'crdt'), { recursive: true, force: true })
 async function outside(n, doc, head) {
   const mb = await git(n, 'merge-base', head, 'FETCH_HEAD').then(s => s.trim(), () => null), files = doc.getMap('files')
   const show = (c, f) => git(n, 'show', `${c}:${f}`).catch(() => null)
   // a history of its own, joined: of its files, those the project lacks (its README)
   const theirsAll = mb ? git(n, 'diff', '--name-only', '-z', mb, 'FETCH_HEAD') : git(n, 'ls-tree', '-r', '--name-only', '-z', 'FETCH_HEAD')
+  let merged = 0
   for (const p of (await theirsAll).split('\0')) {
     if (!p || !editable(p) || p.startsWith('.collab/') || !mb && files.has(p)) continue
     const [base, theirs] = await Promise.all([mb && show(mb, p), show('FETCH_HEAD', p)])
     if (theirs?.includes('\0')) continue
-    await mergeInto(files, p, base ?? '', theirs)
+    await mergeInto(files, p, base ?? '', theirs); merged++
   }
+  return merged
 }
 
 const inFlight = new Map()
@@ -100,7 +92,7 @@ export function sync(n, reason = 'manual') {
     return live(n, async doc => {
       await git(n, 'remote', 'remove', 'origin').catch(() => {})
       await git(n, 'branch', '-M', branch).catch(() => {})
-      await mirror(n, doc); await writeState(n, doc)
+      await mirror(n, doc); await unstate(n)
       await commit(n, `tydig sync (${reason})`)
       let pulled = 0
       const head = (await git(n, 'rev-parse', 'HEAD')).trim()
@@ -113,9 +105,8 @@ export function sync(n, reason = 'manual') {
           await git(n, 'checkout', '--ours', '.').catch(() => {})
           await commit(n, 'tydig sync (merge)', '--no-edit')
         })
-        pulled = await absorb(n, doc)
-        await outside(n, doc, head)
-        await mirror(n, doc); await writeState(n, doc)
+        pulled = await outside(n, doc, head) // the files the remote changed
+        await mirror(n, doc); await unstate(n)
         await commit(n, 'tydig sync (merge)')
       }
       // notes under this hub's own namespace: one writer per ref
@@ -135,7 +126,7 @@ export function sync(n, reason = 'manual') {
   return task
 }
 
-// a project from a remote: its history taken whole, then the CRDT from it
+// a project from a remote: its history taken whole, then the live text from it
 export async function adopt(n, url, branch) {
   await check(url, branch ?? 'main', n)
   branch ??= /refs\/heads\/(\S+)\s+HEAD/.exec(await git(n, 'ls-remote', '--symref', url, 'HEAD')
@@ -144,7 +135,7 @@ export async function adopt(n, url, branch) {
   await setCfg(n, { url, branch })
   await git(n, 'fetch', url, branch)
   await git(n, 'checkout', '-B', branch, 'FETCH_HEAD')
-  await live(n, async doc => { await mirror(n, doc); await writeState(n, doc) })
+  await live(n, async doc => { await mirror(n, doc); await unstate(n) })
   await commit(n, 'tydig: adopted from git remote')
 }
 

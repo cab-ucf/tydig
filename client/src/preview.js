@@ -88,7 +88,7 @@ const ask = (op, msg) => new Promise(ok => {
   worker ??= Object.assign(new Worker(new URL('./typst.worker.js', import.meta.url), { type: 'module' }), {
     onmessage: ({ data }) => answer(data),
     onerror: () => { // it did not load (a hub updated under a long-open page): say so, and try again next time
-      worker = null; stale = true; whole = false
+      worker = null; stale = true; whole = false; pkgs.clear()
       for (const id of [...waits.keys()]) answer({ id, error: 'the compiler did not load: reload the page' })
     } })
   waits.set(++asks, ok); worker.postMessage({ id: asks, op, ...msg })
@@ -121,11 +121,29 @@ async function delta(texts) {
 // an ask with what the worker lacks for it, one at a time (each reckons from
 // what the last left); plain: what to fall back to, should a pin break it
 let lane = Promise.resolve()
+// Typst Universe packages go with the ask: those the sources name, and those
+// the worker says it lacks (a package's own), and again with them. New ones
+// come with a new compiler (typst.worker.js), so with every file.
 const send = (op, texts, msg) => lane = lane.catch(() => {}).then(async () => {
-  const { done, ...d } = await delta(texts), r = await ask(op, { ...msg, ...d })
-  if (!r.error || r.diag != null) done(r.plain ? msg.plain : []); else stale = true
-  return r
+  let packages = (await Promise.all(named(texts).map(k => fetchPackage(k).catch(() => null)))).filter(Boolean)
+  for (let more = 8; ; more--) {
+    if (packages.length) stale = true
+    const { done, ...d } = await delta(texts), r = await ask(op, { ...msg, ...d, packages })
+    if (!r.error || r.diag != null) done(r.plain ? msg.plain : []); else stale = true
+    for (const [k] of packages) pkgs.add(k)
+    if (!r.need || !more) return r
+    packages = await Promise.all(r.need.map(fetchPackage))
+  }
 })
+const pkgs = new Set() // name-version the worker has
+const named = texts => [...new Set(texts.flatMap(([, s]) => [...s.matchAll(/@preview\/([a-z0-9-]+):(\d+\.\d+\.\d+)/g)]
+  .map(m => `${m[1]}-${m[2]}`)))].filter(k => !pkgs.has(k))
+// through the hub (server/packages.mjs), which keeps each
+async function fetchPackage(k) {
+  const r = await fetch(`/api/packages/preview/${k}.tar.gz`)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `@preview/${k}: ${r.status}`)
+  return [k, new Uint8Array(await r.arrayBuffer())]
+}
 
 // The compiler calls a file absent from its filesystem "access denied ...
 // outside of project root". Say which file, and that a relative path starts

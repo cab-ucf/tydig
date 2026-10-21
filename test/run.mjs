@@ -15,6 +15,7 @@ const ENV = {
     TYDIG_OPENALEX: 'http://localhost:3999/oa', OPENALEX_API_KEY: 'k' },
   assist: { TYDIG_OLLAMA: 'http://127.0.0.1:11500', TYDIG_GHOST_MODEL: 'fake', TYDIG_PERPLEXISCOPE: 'http://127.0.0.1:8766' },
   remote: { TYDIG_GIT_LOCAL: '1' },
+  ui: { TYDIG_PACKAGES: 'http://localhost:3998' },
   link: { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' },
 }
 const ALL = ['prose', 'egress', 'core', 'auth', 'signup', 'offline', 'prov', 'agent', 'template', 'import', 'assist', 'remote']

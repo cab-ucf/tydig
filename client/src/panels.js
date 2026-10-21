@@ -8,7 +8,7 @@ import { parseBib } from '../../server/refs.mjs'
 import { prose, readAi, aiPct } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist } from './util.js'
-import { files, provider, local, okPath, GEN, setText } from './doc.js'
+import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { renderComments, renderChat, unseen } from './comments.js'
 import { disk, refreshDisk } from './tree.js'
@@ -291,20 +291,22 @@ async function renderTemplate(body) {
 // (The CRDT has merged it all already: this is awareness, and one-click undo.)
 let away = false, review = null
 const snapshot = () => Object.fromEntries([...files].map(([p, t]) => [p, t.toString()]))
+const toReview = before => setTimeout(() => { // once the remote updates have settled
+  const now = snapshot(), changed = [...new Set([...Object.keys(before), ...Object.keys(now)])]
+    .map(p => ({ path: p, before: before[p] ?? '', after: now[p] ?? '' })).filter(c => c.before !== c.after)
+  if (!changed.length) return
+  review = changed; $('status').dataset.review = '1'
+  openSidebar('review')
+}, 1200)
 local.whenSynced.then(() => provider.on('status', ({ status }) => {
   if (status === 'disconnected') away = true
   // 'connected' comes before the sync applies: this is my offline version, my edits in it
   if (status !== 'connected' || !away) return
-  const before = snapshot()
-  away = false
-  setTimeout(() => { // once the remote updates have settled
-    const now = snapshot(), changed = [...new Set([...Object.keys(before), ...Object.keys(now)])]
-      .map(p => ({ path: p, before: before[p] ?? '', after: now[p] ?? '' })).filter(c => c.before !== c.after)
-    if (!changed.length) return
-    review = changed; $('status').dataset.review = '1'
-    openSidebar('review')
-  }, 1200)
+  away = false; toReview(snapshot())
 }))
+// an offline copy the hub refused (doc.js): its text against the hub's
+const kept = sessionStorage[AWAY] && JSON.parse(sessionStorage[AWAY])
+if (kept) provider.on('synced', function was() { provider.off('synced', was); delete sessionStorage[AWAY]; toReview(kept) })
 const lines = (a, b) => {
   const A = a.split('\n'), B = b.split('\n') // past 1000 edits, as a whole
   return (diffArrays(A, B, { maxEditLength: 1000 }) ?? [{ removed: true, value: A }, { added: true, value: B }])

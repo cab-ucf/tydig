@@ -3,8 +3,9 @@
 // comment pins, or without them should a pin break it; what changed of it),
 // the diagnostics, or a PDF. The compiler, renderer and fonts load on the first ask (preview.js
 // makes the worker then). One ask at a time: they share one virtual filesystem.
-import { $typst } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
+import { TypstSnippet } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
 import { loadFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
+import { MemoryAccessModel } from '@myriaddreamin/typst.ts/dist/esm/fs/memory.mjs'
 import fonts from 'virtual:fonts'
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url'
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url'
@@ -16,11 +17,32 @@ const renderer = WebAssembly.compileStreaming(get(rendererWasm))
 // fonts/ at the repo root, as the build sandbox has them, so the preview sets
 // type like the built PDF; each is fetched (from this hub) the first time a
 // document uses it (vite.config.js). assets: false, or typst.ts adds a CDN's.
-$typst.setCompilerInitOptions({ getModule: () => compiler, beforeBuild: [loadFonts(fonts, { assets: false })] })
-$typst.setRendererInitOptions({ getModule: () => renderer })
+// Typst Universe packages come from the page, which has them from the hub: one
+// the compiler wants and lacks fails the compile, and is asked for (need). A
+// compiler asks for each once in its life, so new ones come with a new one.
+const am = new MemoryAccessModel(), tars = new Map(), want = new Set() // name-version -> .tar.gz, or true: unpacked
+const registry = { resolve({ namespace, name, version }, ctx) {
+  const k = `${name}-${version}`, dir = `/@memory/packages/${k}`, t = tars.get(k)
+  if (namespace !== 'preview') return
+  if (!t) return void want.add(k)
+  if (t !== true) ctx.untar(t, (p, d, m) => am.insertFile(`${dir}/${p.replace(/^\.\//, '')}`, d, new Date(m))), tars.set(k, true)
+  return dir
+} }
+const make = () => {
+  const t = new TypstSnippet() // with this registry, not typst.ts's own (to packages.typst.org)
+  t.use(TypstSnippet.withAccessModel(am), TypstSnippet.withPackageRegistry(registry))
+  t.setCompilerInitOptions({ getModule: () => compiler, beforeBuild: [loadFonts(fonts, { assets: false })] })
+  t.setRendererInitOptions({ getModule: () => renderer })
+  return t
+}
+let $typst = make()
 
-// the page's files, as it changed them since the last ask (reset: from none)
-async function load({ reset, put = [], binaries = [], drop = [] }) {
+// the page's files, as it changed them since the last ask (reset: from none;
+// new packages come with a reset, as they come with a new compiler)
+async function load({ reset, put = [], binaries = [], drop = [], packages = [] }) {
+  if (packages.some(([k]) => !tars.has(k))) $typst = make()
+  for (const [k, b] of packages) tars.has(k) || tars.set(k, b)
+  want.clear()
   if (reset) await $typst.resetShadow()
   for (const p of drop) await $typst.unmapShadow('/' + p)
   for (const [p, s] of put) await $typst.addSource('/' + p, s)
@@ -46,6 +68,7 @@ const ops = {
     await load(m)
     const go = async () => parts(await $typst.svg({ mainFilePath: '/' + m.main }), m.all)
     try { return await go() } catch (e) {
+      if (want.size) return lacking()
       if (m.plain) { await load({ put: m.plain }); try { return { ...await go(), plain: true } } catch {} }
       return { error: String(e?.message || e), diag: await diagnose(m.main).catch(() => ''), plain: !!m.plain }
     }
@@ -53,9 +76,10 @@ const ops = {
   last: () => ({ svg: whole }), // the whole, for the hub to keep
   async pdf(m) {
     await load(m)
-    return { pdf: await $typst.pdf({ mainFilePath: '/' + m.main }) }
+    try { return { pdf: await $typst.pdf({ mainFilePath: '/' + m.main }) } } catch (e) { if (want.size) return lacking(); throw e }
   },
 }
+const lacking = () => ({ error: `packages to fetch: ${[...want].join(', ')}`, diag: '', need: [...want] })
 let queue = Promise.resolve()
 onmessage = ({ data }) => queue = queue.then(() => ops[data.op](data))
   .catch(e => ({ error: String(e?.message || e) })).then(r => postMessage({ id: data.id, ...r }))
