@@ -93,7 +93,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <ul>
 <li>One hub per collaboration runs the analysis, so the numbers are reproducible and nobody installs anything. It sees plaintext; it is yours.</li>
 <li>Text is a CRDT (Yjs) in every browser and on the hub; offline edits merge on reconnect.</li>
-<li>Every project is a plain git repo. A remote makes the hub disposable: each hub writes only its own CRDT file, so hubs never conflict.</li>
+<li>Every project is a plain git repo of its text alone: the CRDT stays on the hub, and build output is ignored. A remote makes the hub disposable: rebuilt from it, a hub has the text and its history; comments and the Discussion stay with the hub that had them. Hubs sharing a remote merge each other's commits.</li>
 <li>Signatures, not the server, attest authorship: a clone verifies them offline (<code>refs/notes/provenance</code>).</li>
 <li>Three containers: the hub (no podman), the sandbox service (podman's socket, fixed flags), egress (public HTTPS only).</li>
 </ul>

@@ -7,7 +7,7 @@ import { toNodeHandler } from 'better-auth/node'
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
-import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped } from './store.mjs'
+import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped, epoch } from './store.mjs'
 import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin }
   from './auth.mjs'
 import * as build from './build.mjs'
@@ -178,9 +178,11 @@ app.use((e, req, res, next) => {
 // websockets: /sync (the CRDT) and /lsp, signed in and a member
 const sync = new WebSocketServer({ noServer: true })
 hocuspocus.configure({
-  async onAuthenticate({ token, requestHeaders: h, documentName: n }) {
+  async onAuthenticate({ token, requestHeaders: h, requestParameters: q, documentName: n }) {
     const s = isProj(n) && originOk(h?.origin) && await session(h?.cookie, token)
     if (!s?.user || !access(s.user.id, n)) throw new Error('forbidden')
+    // an offline copy of another lineage (store.mjs): the browser starts again (doc.js)
+    if (q.get('epoch') && q.get('epoch') !== await epoch(n)) throw Object.assign(new Error('epoch'), { reason: 'epoch' })
     return { user: { id: s.user.id, name: s.user.name } }
   },
 })

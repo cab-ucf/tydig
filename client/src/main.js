@@ -18,7 +18,7 @@
 // others' function declarations (hoisted), never their consts.
 import './link.js' // first: patches fetch and WebSocket in link mode
 import { $, settings, projName, me } from './util.js'
-import { files, provider, user } from './doc.js'
+import { files, provider, user, local } from './doc.js'
 import { path, openFile } from './editor.js'
 import { renderMains, start } from './preview.js'
 import { refreshDisk } from './tree.js'
@@ -41,4 +41,4 @@ provider.on('synced', () => {
     : [...files.keys()].sort().find(p => p.endsWith('.typ'))
   if (!path && first) openFile(first)
 })
-provider.connect()
+Promise.race([local.whenSynced, new Promise(r => setTimeout(r, 3000))]).then(() => provider.connect())

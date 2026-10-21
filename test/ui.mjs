@@ -349,6 +349,23 @@ const word = await page.evaluate(async () => {
 if (word) writeFileSync(`${tmp}/w.docx`, Buffer.from(word))
 const xml = word ? (await import('node:child_process')).execSync(`unzip -p ${tmp}/w.docx word/document.xml`).toString() : ''
 check('Word export makes the citations EndNote fields, the bibliography its list', /ADDIN EN\.CITE &lt;EndNote&gt;[\s\S]*ADDIN EN\.REFLIST/.test(xml))
+{ // an offline copy of another lineage (the hub rebuilt from git): refused, cleared, its text offered back
+  await page.setViewport({ width: 1400, height: 900 })
+  await page.goto(`${B}/?proj=demo`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(4000)
+  const { doc, Y } = await import('./lib.mjs')
+  const d = doc(B, 'demo', (await page.cookies()).find(c => c.name.endsWith('session_token')).value); await sleep(2000)
+  const sv = Y.encodeStateVector(d); d.provider.disconnect()
+  d.transact(() => { d.getMap('meta').set('epoch', 'another'); d.files.get('main.typ').insert(0, 'OFFLINE-ONLY\n') })
+  const u = [...Y.encodeStateAsUpdate(d, sv)]; d.provider.destroy()
+  await page.evaluate(u => new Promise(ok => { const r = indexedDB.open('tydig:demo')
+    r.onsuccess = () => { const t = r.result.transaction('updates', 'readwrite'); t.objectStore('updates').add(new Uint8Array(u)); t.oncomplete = ok } }), u)
+  await page.reload({ waitUntil: 'networkidle2' }); await sleep(9000)
+  const after = await page.evaluate(() => ({ review: document.getElementById('status').dataset.review,
+    side: document.getElementById('side-body').innerText.slice(0, 400), doc: document.querySelector('.cm-content')?.textContent.slice(0, 200) }))
+  check('a copy of another lineage is refused and cleared: the text shows once, the offline edit offered to restore',
+    after.review === '1' && /main\.typ/.test(after.side) && /OFFLINE-ONLY/.test(after.side) && !/OFFLINE-ONLY/.test(after.doc))
+  if (after.review !== '1') console.log(JSON.stringify(after))
+}
 { // the divider: the panes follow the drag; the layout is kept once let go
   await page.setViewport({ width: 1400, height: 900 }); await sleep(300)
   await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click()); await sleep(300)

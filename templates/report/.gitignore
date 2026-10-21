@@ -1,1 +1,4 @@
 out/
+# made by `make`: the analysis, its figure (stamped with the time it was drawn)
+build/
+figures/cooling.svg
