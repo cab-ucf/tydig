@@ -264,6 +264,9 @@ export async function exportPdf() { // never with pins
   r.pdf ? saveAs(r.pdf, main.replace(/\.typ$/, '.pdf'), 'application/pdf', false) : toast(esc(r.error), false)
 }
 
+// the text main typesets, as its PDF reads (never with pins): { text } or { error }
+export const typeset = main => send('text', sources().plain, { main })
+
 // Word, made by the hub (pandoc), its citations live fields for EndNote
 export async function exportDocx() {
   const file = $('main-sel').value
