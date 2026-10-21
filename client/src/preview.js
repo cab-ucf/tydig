@@ -8,6 +8,7 @@ import { numbered } from './comments.js'
 import { disk } from './tree.js'
 import { applyLayout } from './menu.js'
 import { previewed } from './warm.js'
+import { toPreview } from './align.js'
 
 // The preview a member last saw, kept by the hub (early.js asks before the
 // app loads; a link visitor's page asks now), and the key of what it shows:
@@ -268,7 +269,7 @@ async function compile() {
     if (!r.parts) throw Object.assign(new Error(r.error), { diag: r.diag })
     whole = false; patch(r.parts); whole = true
     $('diag').hidden = true
-    fitText(); keep(key)
+    fitText(); keep(key); paintAi()
   } catch (e) { clearTimeout(upload); $('diag').textContent = explain(e, e.diag); $('diag').hidden = false }
   first = false; live || previewed(); live = true // the optional waits for this
   busy = false
@@ -291,6 +292,20 @@ export async function exportDocx() {
   if (!r.ok) return toast(esc(r.output), false)
   toast('In Word, EndNote &gt; Update Citations and Bibliography makes them live', true, 8000)
   download(rawUrl(r.path), r.path)
+}
+
+// AI-likeness over the preview, in the editor's bands: each file's sentences
+// [from, to, share], read by the overlay (the open file) or the AI check
+// (every file). An edit drops a file's until it is read again.
+const ai = new Map(), BANDS = [0.08, 0.25, 0.4, 0.7]
+export function aiMarks(file, list) { list?.length ? ai.set(file, list) : ai.delete(file); paintAi() }
+files.observeDeep(evs => evs.forEach(e => e.target !== files && ai.delete(e.path[0])))
+function paintAi() {
+  if (!CSS.highlights) return
+  const hs = BANDS.map(() => new Highlight())
+  for (const [file, list] of ai) toPreview(file, list).forEach((rs, i) =>
+    rs.forEach(r => hs[BANDS.findLastIndex(b => list[i][2] >= b)]?.add(r)))
+  hs.forEach((h, i) => CSS.highlights.set(`ai-${i}`, h))
 }
 
 // On a phone, fit means fit the text, not the paper: the side margins are cut

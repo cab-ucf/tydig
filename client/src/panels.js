@@ -12,6 +12,7 @@ import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { renderComments, renderChat, unseen } from './comments.js'
 import { disk, refreshDisk } from './tree.js'
+import { aiMarks } from './preview.js'
 import { applyLayout } from './menu.js'
 
 export let mode = null
@@ -78,6 +79,7 @@ async function renderAiCheck(body) {
       } catch (e) { out.push({ file, error: e.message }) }
     }
     aiReport = out; redraw('aicheck')
+    for (const f of out) aiMarks(f.file, f.sents?.map(x => [x.from, x.to, x.p]))
   } })
   const r = aiReport, all = (r || []).flatMap(f => f.sents || [])
   body.replaceChildren(el('p', { className: 'hint', textContent: 'How AI-like each sentence reads to MELD, ' +
