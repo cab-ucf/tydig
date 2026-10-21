@@ -21,13 +21,27 @@ export async function refreshDisk() { // a failed listing keeps the last good on
 let metaT
 meta.observe(() => { clearTimeout(metaT); metaT = setTimeout(refreshDisk, 200) })
 files.observe(() => renderTree())
-// redraw when someone opens another file, not on every cursor move
+// who is where, and how long since each stirred: one entry a person, however many tabs
+const ago = t => { const m = (Date.now() - t) / 6e4
+  return m < 1 ? 'active now' : `idle ${m < 60 ? Math.floor(m) + ' min' : Math.floor(m / 60) + ' h'}` }
+function people() {
+  const by = new Map()
+  for (const [, s] of provider.awareness.getStates()) if (s.user) {
+    const id = s.user.id ?? s.user.name, p = by.get(id)
+    if (!p || (s.active ?? 0) > p.active) by.set(id, { ...s.user, file: s.file, active: s.active ?? 0 })
+  }
+  return [...by.values()]
+}
+// redraw when someone opens another file or idles, not on every cursor move
 let where = ''
-provider.awareness.on('change', () => {
-  const s = provider.awareness.getStates(), w = [...s].map(([id, x]) => `${id}:${x.file}`).join()
-  $('peers').textContent = `${new Set([...s.values()].map(x => x.user?.id ?? x.user?.name)).size} online` // people, not tabs
+function sync() {
+  const ps = people(), w = ps.map(p => `${p.id}:${p.file}:${ago(p.active)}`).join()
+  Object.assign($('peers'), { textContent: `${ps.length} online`,
+    title: ps.map(p => `${p.name}: ${p.file ?? '-'}, ${ago(p.active)}`).join('\n') })
   if (w !== where) { where = w; renderTree() }
-})
+}
+provider.awareness.on('change', sync)
+setInterval(sync, 30e3)
 
 const paths = () => [...new Set([...files.keys(), ...disk.map(f => f.path)])]
 const picked = new Set() // Ctrl/Cmd-click picks several; x then deletes them all
@@ -44,9 +58,8 @@ const row = (cls, p, depth, twisty, dots = '') => `<div class="tnode ${cls}" tit
   `${btn('del', 'delete', 'x')}</span></div>`
 
 export function renderTree() {
-  const here = {}, root = { dirs: new Map(), files: [] }, html = []
-  for (const [, s] of provider.awareness.getStates()) if (s.file && s.user) // one dot a person, however many tabs
-    (here[s.file] ??= new Map()).set(s.user.id ?? s.user.name, s.user)
+  const here = Object.groupBy(people().filter(p => p.file), p => p.file)
+  const root = { dirs: new Map(), files: [] }, html = []
   for (const p of paths()) {
     let n = root
     for (const d of p.split('/').slice(0, -1))
@@ -61,13 +74,17 @@ export function renderTree() {
     }
     for (const p of n.files.sort()) html.push(row([files.has(p) ? 'text' : 'bin', p === path && 'active',
       picked.has(p) && 'picked'].filter(Boolean).join(' '), p, depth, '',
-      `<span class="dots">${[...here[p]?.values() ?? []].map(peer).join('')}</span>`))
+      `<span class="dots">${(here[p] ?? []).map(peer).join('')}</span>`))
   }
   walk(root, '', 0)
   $('tree').innerHTML = html.join('')
   checklistBadge()
 }
-const peer = u => dot(u.color, u.name).outerHTML
+const peer = u => {
+  const d = dot(u.color, `${u.name}: ${ago(u.active)}`)
+  d.classList.toggle('idle', Date.now() - u.active > 5 * 6e4)
+  return d.outerHTML
+}
 
 const tree = $('tree')
 tree.onclick = e => {

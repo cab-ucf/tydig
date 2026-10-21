@@ -187,6 +187,7 @@ body.no-tree #tree-pane { display: none; }
 .tnode .tw { width: .75rem; color: var(--fg-dim); flex: none; }
 .tnode .dots { display: flex; gap: 2px; }
 .tnode .dot { width: 7px; height: 7px; }
+.dot.idle { opacity: .35; }
 .tnode .ops { visibility: hidden; display: flex; gap: 2px; }
 .tnode:hover .ops { visibility: visible; }
 .tnode .ops button { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: .68rem; padding: 0 .2rem; }
@@ -331,7 +332,10 @@ textarea.say {
 .commit code { color: var(--teal); font: .75rem var(--mono); }
 .commit.checkpoint { border-color: var(--teal); }
 .commit time { grid-column: 1 / 2; font-size: .68rem; color: var(--fg-dim); }
-.commit button { grid-column: 2; justify-self: end; grid-row: 2; }
+.commit button { grid-column: 2; justify-self: end; }
+.commit .who { grid-column: 1 / -1; font-size: .72rem; color: var(--fg-dim); }
+.commit ins { color: #58a35f; text-decoration: none; }
+.commit del { color: #d0605a; text-decoration: none; }
 .prov { font-size: 10.5px; padding: 0 6px; border-radius: 8px; white-space: nowrap; }
 .prov.ok { color: #58a35f; border: 1px solid #58a35f55; }
 .prov.warn { color: #d9a441; border: 1px solid #d9a44155; }

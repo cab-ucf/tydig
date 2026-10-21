@@ -146,11 +146,16 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
     : `saved, but the push failed: ${esc(push.error || '')}`, !r.error && push?.ok !== false)
   redraw('history')
 }
-const badge = v => !v ? '' : v.verified ? '<span class="prov ok" title="ML-DSA-65 signature by a key ' +
-  `registered to this account; file hashes match (key ${esc(v.keyId)})">signed &#10003;</span>`
-  : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'
+const badge = v => !v ? '' : v.verified ? `<span class="prov ok" title="ML-DSA-65 signature by a key ` +
+  `registered to ${esc(v.by ?? 'this account')}; file hashes match (key ${esc(v.keyId)})">signed by ` +
+  `${esc(v.by ?? '?')} &#10003;</span>` : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'
+const sum = (fs, k) => fs.reduce((n, f) => n + f[k], 0)
+const what = fs => !fs.length ? 'no changes' : `<span title="${esc(fs.map(f => `${f.path}  +${f.add} -${f.del}`)
+  .join('\n'))}">${fs.length === 1 ? esc(fs[0].path) : fs.length + ' files'} <ins>+${sum(fs, 'add')}</ins> ` +
+  `<del>&minus;${sum(fs, 'del')}</del></span>`
 const commit = c => `<div class="commit${c.message.startsWith('checkpoint') ? ' checkpoint' : ''}">` +
-  `<code>${esc(c.hash)}</code><span>${esc(c.message)}</span>${badge(c.provenance)}` +
+  `<code>${esc(c.hash)}</code><span>${esc(c.message)} ${badge(c.provenance)}</span>` +
+  `<div class="who">${esc([c.author, ...c.coauthors].join(', '))} &middot; ${what(c.files)}</div>` +
   `<time>${new Date(c.date).toLocaleString()}</time><button data-hash="${esc(c.hash)}">restore</button></div>`
 async function renderHistory(body) {
   const log = await api(P('/history'))
