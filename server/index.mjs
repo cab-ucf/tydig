@@ -18,6 +18,7 @@ import * as templates from './templates.mjs'
 import * as agents from './agents.mjs'
 import * as assist from './assist.mjs'
 import * as link from './link.mjs'
+import * as packages from './packages.mjs'
 
 const PORT = Number(process.env.PORT || 3000)
 const app = express().disable('x-powered-by')
@@ -83,6 +84,7 @@ app.post('/api/join', async (req, res) => {
 })
 app.get('/api/assist', assist.info)
 app.get('/api/templates', templates.list)
+app.use('/api', packages.router)
 app.use('/api/keys', history.keys)
 app.use('/api', link.bridge(PORT))
 app.get('/api/projects', (req, res) => res.json(projectsOf(req.user.id).filter(p => isProj(p.name))
@@ -93,6 +95,9 @@ app.post('/api/projects/:name', async (req, res) => {
   const n = req.params.name, { template, brand, empty, gitUrl, branch } = req.body || {}
   if (!okName(n)) return res.status(400).json({ error: 'bad project name' })
   if (existsSync(proj(n))) return res.status(409).json({ error: 'a project with that name exists' })
+  // a Typst Universe template is fetched first: one that is not there makes no project
+  if (packages.SPEC.test(template)) try { await packages.template(template) }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message }) }
   const org = await auth.api.createOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { name: n, slug: n } }).catch(e => ({ error: e?.message || 'name unavailable' }))
   if (!org || org.error) return res.status(409).json({ error: org?.error || 'name unavailable' })

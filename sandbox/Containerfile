@@ -28,10 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils b
  && eval sha=\$GVISOR_$a && echo "$sha  /tmp/g.tbz" | sha512sum -c - \
  && tar -xjf /tmp/g.tbz -C /usr/local/bin runsc gvisor-bin && rm /tmp/g.tbz \
  && apt-get purge -y xz-utils bzip2 curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
-# warm the packages documents import: builds may have no network
-ENV TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages
+# packages: warmed ones read-only in the image (builds may have no network);
+# any other is fetched through egress into /tmp, a build's own
 RUN printf '#import "@preview/cetz:0.4.2"\n#import "@preview/tablex:0.0.9"\n' > /tmp/w.typ \
- && (typst compile /tmp/w.typ /tmp/w.pdf || true) && rm -f /tmp/w.* && chmod -R a+rX /opt/typst-packages
+ && (TYPST_PACKAGE_CACHE_PATH=/opt/typst-packages typst compile /tmp/w.typ /tmp/w.pdf || true) \
+ && rm -f /tmp/w.* && chmod -R a+rX /opt/typst-packages
+ENV TYPST_PACKAGE_PATH=/opt/typst-packages TYPST_PACKAGE_CACHE_PATH=/tmp/typst-packages
 # the preview's fonts, so PDFs set type alike; Word export (tydig-docx)
 COPY fonts/ /usr/local/share/fonts/tydig/
 COPY sandbox/tydig-docx sandbox/docx.typ sandbox/endnote.lua /usr/local/share/tydig-docx/

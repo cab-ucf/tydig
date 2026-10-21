@@ -21,7 +21,8 @@ The water was #if R.T1 > R.T2 [cooling] else [heating].
 - Papers as pre-registered reports: the build computes every number.
 - Live preview, multi-cursor editing, comments, offline edits that merge.
 - Every project a git repo; post-quantum signed checkpoints.
-- Grant templates, citations checked at the source, Word export.
+- Grant templates; journal and poster templates from Typst Universe.
+- Citations checked at the source, Word export.
 - Agents over MCP, ghost text, a surprise overlay.
 
 | where | what |
