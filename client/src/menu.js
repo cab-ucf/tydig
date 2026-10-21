@@ -7,7 +7,7 @@ import { MODES } from './surprise.js'
 import { signOut, changeName, changePassword, deleteAccount } from './auth.js'
 import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleScope, scopeBy } from './editor.js'
 import { toggleGhost } from './ghost.js'
-import { addComment, discuss } from './comments.js'
+import { addComment, discuss, showInPreview } from './comments.js'
 import { exportPdf, exportDocx, fitText, zoom, scheduleCompile } from './preview.js'
 import { newFile, uploadTo, quickOpen, grep, tagMenu } from './tree.js'
 import { tags } from './doc.js'
@@ -27,6 +27,7 @@ export const actions = {
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
   undo: () => tags(path)['read-only'] || undo.get(path)?.undo(), redo: () => tags(path)['read-only'] || undo.get(path)?.redo(), comment: () => addComment(), cite: () => cite(),
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
+  'to-preview': showInPreview,
   'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
   'toggle-preview': () => show(settings.view === 'split' ? 'editor' : 'split')(),
   'reset-layout': () => { Object.assign(settings, LAYOUT); applyLayout() },

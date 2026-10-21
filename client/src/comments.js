@@ -4,11 +4,12 @@
 import * as Y from 'yjs'
 import { Annotation, StateField } from '@codemirror/state'
 import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
-import { $, el, esc, dot, uid, toast, settings, projName, icon } from './util.js'
+import { $, el, esc, dot, uid, toast, settings, projName, icon, phone } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
 import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
 import { pinSafe } from './preview.js'
+import { applyLayout } from './menu.js'
 
 // an anchor's start sticks to the text after it, its end to the text before:
 // typing at either edge never stretches a comment
@@ -163,8 +164,8 @@ function locate(before, sel, after) {
   return best.file && { ...best, to: Math.max(best.to, best.from + 1) }
 }
 // [before, selected, after] for a selection inside the preview, else null
-function previewContext() {
-  const s = getSelection(), r = s.rangeCount && s.getRangeAt(0), pg = $('page')
+function previewContext(s = getSelection(), r = s.rangeCount && s.getRangeAt(0)) {
+  const pg = $('page')
   if (!r || r.collapsed || !pg.contains(r.commonAncestorContainer)) return null
   const side = start => {
     const x = document.createRange(); x.selectNodeContents(pg)
@@ -183,6 +184,43 @@ document.addEventListener('mouseup', () => setTimeout(() => {
   b.style.top = `${Math.max(0, r.top - p.top + pv.scrollTop - 30)}px`
   b.onclick = () => { b.hidden = true; getSelection().removeAllRanges(); addComment(ctx) }
 }))
+
+// Double-click in the preview: to that text in the source, as Overleaf's PDF
+// does. And back (Mod-Alt-J): the text at the cursor, shown in the preview,
+// found by the letters around it, the code between them left out.
+const wordAt = (x, y) => { // the word under the pointer
+  const c = document.caretPositionFromPoint?.(x, y), r = c ? null : document.caretRangeFromPoint?.(x, y)
+  const n = c?.offsetNode ?? r?.startContainer, i = c?.offset ?? r?.startOffset
+  if (n?.nodeType !== Node.TEXT_NODE) return null
+  const w = document.createRange()
+  w.setStart(n, n.data.slice(0, i).search(/[\p{L}\p{N}]*$/u)); w.setEnd(n, i + n.data.slice(i).search(/[^\p{L}\p{N}]|$/u))
+  return w
+}
+$('page').addEventListener('dblclick', e => {
+  const ctx = previewContext(null, wordAt(e.clientX, e.clientY)), at = ctx && locate(...ctx)
+  if (!at) return
+  if (phone()) { settings.m = 'edit'; applyLayout() }
+  reveal(at.file, at.from, at.to)
+})
+export function showInPreview() {
+  if (!view || !path?.endsWith('.typ')) return
+  const src = view.state.doc.toString(), at = view.state.selection.main.head
+  const L = norm(src.slice(Math.max(0, at - 300), at)).k.slice(-40), R = norm(src.slice(at, at + 300)).k.slice(0, 40)
+  const w = document.createTreeWalker($('page'), NodeFilter.SHOW_TEXT), of = [] // each letter's node and offset
+  let k = '', best = 3, x = -1
+  for (let n; (n = w.nextNode());) for (let i = 0; i < n.data.length; i++) if (LN.test(n.data[i])) { k += n.data[i]; of.push([n, i]) }
+  for (let i = 0; i <= k.length; i++) { const s = back(k, i, L) + fwd(k, i, R); if (s > best) [best, x] = [s, i] }
+  if (x < 0) return toast('Not in the preview (is it this file\'s document, and compiled?)', false)
+  if (phone()) settings.m = 'preview'
+  if (settings.view === 'editor') settings.view = 'split'
+  applyLayout()
+  // its word marked a while (a highlight, not the selection, which the editor keeps)
+  const [node, i] = of[Math.min(x && LN.test(src[at - 1]) ? x - 1 : x, of.length - 1)], r = document.createRange() // the word it ends, or starts
+  r.setStart(node, node.data.slice(0, i).search(/[\p{L}\p{N}]*$/u)); r.setEnd(node, i + node.data.slice(i).search(/[^\p{L}\p{N}]|$/u))
+  node.parentElement.scrollIntoView({ block: 'center' })
+  CSS.highlights?.set('pv-at', new Highlight(r)); clearTimeout(showInPreview.t)
+  showInPreview.t = setTimeout(() => CSS.highlights?.delete('pv-at'), 3000)
+}
 
 // ---- the panes ----
 // @names stand out: an agent member answers to its own

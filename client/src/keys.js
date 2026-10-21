@@ -10,11 +10,11 @@ import { actions } from './menu.js'
 import { grep } from './tree.js'
 
 const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+shift+f': 'grep', 'mod+s': 'save',
-  'mod+alt+m': 'comment', 'mod+backslash': 'toggle-preview', 'mod+j': 'toggle-side', 'mod+shift+e': 'toggle-tree' }
+  'mod+alt+m': 'comment', 'mod+alt+j': 'to-preview', 'mod+backslash': 'toggle-preview', 'mod+j': 'toggle-side', 'mod+shift+e': 'toggle-tree' }
 // after AstroNvim's leader: w save, q quit, n new, e explorer, / comment a
 // line, f find, g git, u UI; tydig's own: c comment, r references, views
 const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'toggle-tree', '/': 'line-comment',
-  c: 'comment', C: 'comments', d: 'chat', b: 'build', z: 'focus', p: 'toggle-preview', j: 'toggle-side',
+  c: 'comment', C: 'comments', v: 'to-preview', d: 'chat', b: 'build', z: 'focus', p: 'toggle-preview', j: 'toggle-side',
   1: 'view-editor', 2: 'view-split', 3: 'view-preview', '?': 'shortcuts',
   f: { name: 'Find', f: 'quick-open', w: 'grep', c: 'palette', k: 'shortcuts', p: 'projects', r: 'cite-bib', t: 'theme' },
   r: { name: 'References', r: 'cite-bib', c: 'cite', a: 'cite-alone', s: 'spelling', i: 'aicheck' },
@@ -22,7 +22,8 @@ const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'to
   u: { name: 'UI', r: 'reset-layout', f: 'fullscreen', t: 'theme', s: 'spell', g: 'ghost', l: 'lsp', o: 'scope', v: 'vim' } }
 const EDITING = { 'Mod-B, Mod-I': 'bold, italic', 'Mod-Z, Mod-Shift-Z': 'undo, redo', 'Mod-/': 'comment out the line',
   'Mod-F': 'find and replace', 'Mod-D': 'select the next match', 'Alt-↑, Alt-↓': 'move the line',
-  'Ctrl-Space': 'complete', 'F8': 'next problem', 'Mod-wheel': 'zoom the preview', 'Esc': 'leave focus (vim: Space z)' }
+  'Ctrl-Space': 'complete', 'F8': 'next problem', 'Mod-wheel': 'zoom the preview',
+  'double-click the preview': 'to that text in the source', 'Esc': 'leave focus (vim: Space z)' }
 const EX = { ':w': 'save', ':e [file]': 'open a file', ':q': 'close the panel, or leave focus',
   ':vs, :only': 'editor and preview, editor only', ':make': 'the build', ':grep [pattern]': 'search every file',
   ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear',

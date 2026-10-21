@@ -595,3 +595,4 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
   #picker { min-width: 0; width: calc(100vw - 1.5rem); padding: 1rem; }
   .auth-card { width: min(320px, calc(100vw - 2rem)); }
 }
+::highlight(pv-at) { background: color-mix(in srgb, var(--teal) 45%, transparent); color: inherit; }
