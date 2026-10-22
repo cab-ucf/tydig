@@ -4,11 +4,13 @@
 import * as Y from 'yjs'
 import { Annotation, StateField } from '@codemirror/state'
 import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
-import { $, el, esc, dot, uid, toast, settings, projName, icon } from './util.js'
+import { $, el, esc, dot, uid, toast, settings, projName, icon, phone } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
 import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
 import { pinSafe } from './preview.js'
+import { toSource, toPreview } from './align.js'
+import { applyLayout } from './menu.js'
 
 // an anchor's start sticks to the text after it, its end to the text before:
 // typing at either edge never stretches a comment
@@ -109,7 +111,7 @@ chat.observe(e => {
 
 export function addComment(ctx = previewContext()) {
   const sel = view?.state.selection.main
-  const at = ctx ? locate(...ctx) : sel && { file: path, from: sel.from, to: sel.to }
+  const at = ctx ? toSource(ctx) : sel && { file: path, from: sel.from, to: sel.to }
   if (ctx && !at) return alert('Could not find that text in the source. Select it in the editor instead.')
   if (!at || at.from === at.to || !files.has(at.file))
     return alert('Select text to comment on, in the editor or the preview.')
@@ -121,68 +123,52 @@ export function addComment(ctx = previewContext()) {
 }
 
 // ---- from the preview ----
-// Its text is the source less markup, so a selection there is found in the
-// source by letters and digits alone; the text around it picks among repeats,
-// and computed text (#f(R.T1)) anchors to the code between literal text.
-const LN = /[\p{L}\p{N}]/u
-const norm = s => {
-  let k = ''; const at = []
-  for (let i = 0; i < s.length; i++) if (LN.test(s[i])) { k += s[i]; at.push(i) }
-  return { k, at }
+// Its text is found in the source by the letters it shares with it
+// (align.js); computed text (#f(R.T1), #lorem) by the code between.
+// A selection inside the preview, else null
+function previewContext(r = getSelection().rangeCount && getSelection().getRangeAt(0)) {
+  return r && !r.collapsed && $('page').contains(r.commonAncestorContainer) ? r.cloneRange() : null
 }
-// how many characters of b match a just before (back) or from (fwd) index i
-const back = (a, i, b) => {
-  let n = 0
-  while (n < i && n < b.length && a[i - 1 - n] === b[b.length - 1 - n]) n++
-  return n
-}
-const fwd = (a, i, b) => {
-  let n = 0
-  while (i + n < a.length && n < b.length && a[i + n] === b[n]) n++
-  return n
-}
-function locate(before, sel, after) {
-  const [L, Q, R] = [before, sel, after].map(s => norm(s.normalize('NFKC')).k) // 𝑇 -> T, ﬁ -> fi
-  let best = { score: 2 }
-  for (const [file, yt] of files) {
-    if (!file.endsWith('.typ')) continue
-    const src = yt.toString(), { k, at } = norm(src)
-    const hit = (from, to, score) => score > best.score && (best = { score, file, from, to })
-    for (let i = Q ? k.indexOf(Q) : -1; i >= 0; i = k.indexOf(Q, i + 1))
-      hit(at[i], at[i + Q.length - 1] + 1, Q.length + back(k, i, L) + fwd(k, i + Q.length, R))
-    let i = 0, b = 0
-    for (let x = 1; x <= k.length; x++) { const n = back(k, x, L); if (n > b) [i, b] = [x, n] }
-    let j = i, f = 0
-    for (let y = i; y <= Math.min(k.length, i + 400); y++) { const n = fwd(k, y, R); if (n > f) [j, f] = [y, n] }
-    // everything between the two matches, less the whitespace around it
-    let from = i ? at[i - 1] + 1 : 0, to = j < k.length ? at[j] : src.length
-    while (from < to && /\s/.test(src[from])) from++
-    while (to > from && /\s/.test(src[to - 1])) to--
-    hit(from, to, b + f)
-  }
-  return best.file && { ...best, to: Math.max(best.to, best.from + 1) }
-}
-// [before, selected, after] for a selection inside the preview, else null
-function previewContext() {
-  const s = getSelection(), r = s.rangeCount && s.getRangeAt(0), pg = $('page')
-  if (!r || r.collapsed || !pg.contains(r.commonAncestorContainer)) return null
-  const side = start => {
-    const x = document.createRange(); x.selectNodeContents(pg)
-    start ? x.setEnd(r.startContainer, r.startOffset) : x.setStart(r.endContainer, r.endOffset)
-    return x.toString()
-  }
-  return [side(true).slice(-300), r.toString(), side(false).slice(0, 300)]
-}
-// A button follows a selection in the preview. Its context is taken now: a
+// A button follows a selection in the preview. Its range is taken now: a
 // re-render (someone typing) would drop the selection before the click.
 document.addEventListener('mouseup', () => setTimeout(() => {
   const ctx = previewContext(), b = $('pv-comment'), pv = $('pv')
   if (b.hidden = !ctx) return
-  const r = getSelection().getRangeAt(0).getBoundingClientRect(), p = pv.getBoundingClientRect()
+  const r = ctx.getBoundingClientRect(), p = pv.getBoundingClientRect()
   b.style.left = `${r.right - p.left + pv.scrollLeft}px`
   b.style.top = `${Math.max(0, r.top - p.top + pv.scrollTop - 30)}px`
   b.onclick = () => { b.hidden = true; getSelection().removeAllRanges(); addComment(ctx) }
 }))
+
+// Double-click in the preview: to that text in the source, as Overleaf's PDF
+// does. And back (Mod-Alt-J): the text at the cursor, shown in the preview.
+const word = (n, i) => { // the word in a text node around i
+  const r = document.createRange()
+  r.setStart(n, n.data.slice(0, i).search(/[\p{L}\p{N}]*$/u)); r.setEnd(n, i + n.data.slice(i).search(/[^\p{L}\p{N}]|$/u))
+  return r
+}
+$('page').addEventListener('dblclick', e => {
+  const c = document.caretPositionFromPoint?.(e.clientX, e.clientY), r = c ? null : document.caretRangeFromPoint?.(e.clientX, e.clientY)
+  const n = c?.offsetNode ?? r?.startContainer, at = n?.nodeType === Node.TEXT_NODE && toSource(word(n, c?.offset ?? r.startOffset))
+  if (!at) return
+  if (phone()) { settings.m = 'edit'; applyLayout() }
+  reveal(at.file, at.from, at.to)
+})
+export function showInPreview() {
+  if (!view || !path) return
+  const src = view.state.doc.toString(), at = view.state.selection.main.head
+  const a = at - src.slice(0, at).match(/[\p{L}\p{N}]*$/u)[0].length, b = at + src.slice(at).search(/[^\p{L}\p{N}]|$/u)
+  const [w, after, before] = toPreview(path, [[a, Math.max(b, a + 1)], [b, b + 300], [Math.max(0, a - 300), a]])
+  const r = w[0] ?? after[0] ?? before.at(-1)
+  if (!r) return toast('Not in the preview (is it this file\'s document, and compiled?)', false)
+  if (phone()) settings.m = 'preview'
+  if (settings.view === 'editor') settings.view = 'split'
+  applyLayout()
+  // marked a while (a highlight, not the selection, which the editor keeps)
+  r.startContainer.parentElement.scrollIntoView({ block: 'center' })
+  CSS.highlights?.set('pv-at', new Highlight(r)); clearTimeout(showInPreview.t)
+  showInPreview.t = setTimeout(() => CSS.highlights?.delete('pv-at'), 3000)
+}
 
 // ---- the panes ----
 // @names stand out: an agent member answers to its own

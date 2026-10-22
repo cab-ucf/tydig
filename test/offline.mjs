@@ -26,5 +26,14 @@ const c = C.files.get('main.typ')._item.id
 check('the reloaded doc keeps its CRDT identity', c.client === id.client && c.clock === id.clock)
 const A2 = me.doc(P, { document: A }); await sleep(1500)
 check('an edit made offline after unload survives', C.files.get('main.typ').toString().includes('AFTER-UNLOAD'))
-A2.provider.destroy(); C.provider.destroy()
+// A copy of another lineage (the hub rebuilt from git, the project made
+// again) is refused, never merged: merged, its text would show twice
+const lineage = C.getMap('meta').get('epoch')
+check('the hub gives its document a lineage', typeof lineage === 'string' && lineage.length > 8)
+let refused = null
+const D = me.doc(P, { parameters: { epoch: 'another' }, onAuthenticationFailed: e => refused = e.reason }); await sleep(1500)
+check('an offline copy of another lineage is refused, not merged', refused === 'epoch' && !D.files.size)
+const E = me.doc(P, { parameters: { epoch: lineage } }); await sleep(1500)
+check('a copy of its own lineage syncs', E.files.get('main.typ')?.toString().includes('AFTER-UNLOAD'))
+A2.provider.destroy(); C.provider.destroy(); D.provider.destroy(); E.provider.destroy()
 done()

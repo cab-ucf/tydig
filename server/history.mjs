@@ -7,7 +7,7 @@ import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { git, commit, live, mirror, editable, textOf, walk, proj, inProj, putText,
-  hocuspocus, readIn } from './store.mjs'
+  hocuspocus, readIn, edited } from './store.mjs'
 import { db } from './auth.mjs'
 import * as remote from './remote.mjs'
 
@@ -63,6 +63,7 @@ export const router = express.Router({ mergeParams: true })
 router.post('/checkpoint', async (req, res) => {
   const n = req.params.proj, doc = hocuspocus.documents.get(n)
   if (doc) await mirror(n, doc)
+  edited(n, req.user, true)
   await commit(n, `checkpoint: ${String(req.body?.message || 'unnamed').slice(0, 200)}`, '--allow-empty')
   let prov = null
   const { payload, publicKey: pk, signature } = req.body || {}
@@ -82,14 +83,23 @@ router.post('/checkpoint', async (req, res) => {
   res.json({ ok: true, pushed: pushed && { ok: pushed.ok, error: pushed.error || null },
     provenance: prov && { keyId: prov.keyId, verified: prov.verified, sigOk: prov.sigOk, stateOk: prov.stateOk } })
 })
+const nameOf = db.prepare('SELECT name FROM user WHERE id = ?')
+// who made each commit, what it changed, and who signed it
 router.get('/history', async (req, res) => {
-  const log = await git(req.params.proj, 'log', '-n', '1000', '--notes=provenance',
-    '--pretty=format:%h%x1f%aI%x1f%s%x1f%N%x1e').catch(() => '')
-  res.json(log.split('\x1e').map(l => l.trim()).filter(Boolean).map(l => {
-    const [hash, date, message, raw] = l.split('\x1f')
+  const log = await git(req.params.proj, 'log', '-n', '1000', '--notes=provenance', '--numstat',
+    '--pretty=format:%x1e%h%x1f%aI%x1f%an%x1f%(trailers:key=Co-authored-by,valueonly,separator=%x1d)' +
+    '%x1f%s%x1f%N%x1f').catch(() => '')
+  res.json(log.split('\x1e').filter(Boolean).map(l => {
+    const [hash, date, author, co, message, raw, stat] = l.split('\x1f')
     let provenance = null
-    try { const p = JSON.parse(raw); provenance = { alg: p.alg, keyId: p.keyId, verified: p.verified } } catch {}
-    return { hash, date, message, provenance }
+    try {
+      const p = JSON.parse(raw)
+      provenance = { alg: p.alg, keyId: p.keyId, verified: p.verified, by: nameOf.get(p.user)?.name ?? null }
+    } catch {}
+    const files = stat.trim().split('\n').filter(Boolean).map(s => s.split('\t'))
+      .map(([a, d, path]) => ({ path, add: +a || 0, del: +d || 0 }))
+    return { hash, date, author, coauthors: co ? co.split('\x1d').map(c => c.replace(/ <.*/, '')) : [],
+      message, provenance, files }
   }))
 })
 // every text file as it was at a commit, live for everyone

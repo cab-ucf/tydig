@@ -2,7 +2,7 @@
 // agents) and the git remote.
 import { authClient } from './auth.js'
 import { plain } from './link.js'
-import { $, api, post, del, esc, el, toast, projName, P } from './util.js'
+import { $, api, post, del, esc, el, toast, projName, P, choose } from './util.js'
 
 const go = n => location.search = `?proj=${n}`
 const modal = id => $(id).open || $(id).showModal()
@@ -27,10 +27,26 @@ export async function renderProjects() {
 }
 
 export async function openPicker() {
-  const [list, { templates, brands }] = await Promise.all([api('/projects'), api('/templates')])
+  const [list, { templates, brands, featured }] = await Promise.all([api('/projects'), api('/templates')])
   $('proj-list').replaceChildren(...list.map(({ name: n, role }) => el('a', { href: `?proj=${n}${location.hash}`,
     className: n === projName ? 'current' : '', textContent: role === 'owner' ? `${n} (owner)` : n })))
-  $('proj-tpl').replaceChildren(...templates.map(t => new Option(t)))
+  // tydig's own, then Typst Universe's (server/packages.mjs): the featured, or any, searched for
+  const group = (label, opts) => el('optgroup', { label }, ...opts)
+  const universe = (kind, label) => group(label, featured.filter(f => f.kind === kind).map(f => new Option(f.label, f.spec)))
+  $('proj-tpl').replaceChildren(group('Grants and reports', templates.map(t => new Option(t))),
+    universe('journal', 'Journals and conferences (Typst Universe)'), universe('poster', 'Posters (Typst Universe)'),
+    new Option('Search every Typst Universe template…', 'search'))
+  $('proj-tpl').onchange = async ({ target: s }) => {
+    if (s.value !== 'search') return
+    s.value = templates[0]
+    const all = await api('/universe')
+    if (all.error) return alert(all.error)
+    choose(q => all.filter(t => q.toLowerCase().split(/\s+/).every(w =>
+      `${t.spec} ${t.description} ${t.categories}`.toLowerCase().includes(w))).map(t => ({
+      label: `${t.spec.slice(9)}: ${t.description}`, hint: t.categories.join(' '),
+      run: () => { s.append(new Option(t.spec.slice(9), t.spec)); s.value = t.spec } })),
+    'search Typst Universe: journal, poster, thesis, IEEE…')
+  }
   $('proj-brand').replaceChildren(new Option('no branding', ''), ...brands.map(b => new Option(b)))
   $('proj-new').onsubmit = async () => {
     const n = $('proj-name').value

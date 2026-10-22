@@ -8,6 +8,7 @@ import { numbered } from './comments.js'
 import { disk } from './tree.js'
 import { applyLayout } from './menu.js'
 import { previewed } from './warm.js'
+import { toPreview } from './align.js'
 
 // The preview a member last saw, kept by the hub (early.js asks before the
 // app loads; a link visitor's page asks now), and the key of what it shows:
@@ -88,7 +89,7 @@ const ask = (op, msg) => new Promise(ok => {
   worker ??= Object.assign(new Worker(new URL('./typst.worker.js', import.meta.url), { type: 'module' }), {
     onmessage: ({ data }) => answer(data),
     onerror: () => { // it did not load (a hub updated under a long-open page): say so, and try again next time
-      worker = null; stale = true; whole = false
+      worker = null; stale = true; whole = false; pkgs.clear()
       for (const id of [...waits.keys()]) answer({ id, error: 'the compiler did not load: reload the page' })
     } })
   waits.set(++asks, ok); worker.postMessage({ id: asks, op, ...msg })
@@ -121,11 +122,29 @@ async function delta(texts) {
 // an ask with what the worker lacks for it, one at a time (each reckons from
 // what the last left); plain: what to fall back to, should a pin break it
 let lane = Promise.resolve()
+// Typst Universe packages go with the ask: those the sources name, and those
+// the worker says it lacks (a package's own), and again with them. New ones
+// come with a new compiler (typst.worker.js), so with every file.
 const send = (op, texts, msg) => lane = lane.catch(() => {}).then(async () => {
-  const { done, ...d } = await delta(texts), r = await ask(op, { ...msg, ...d })
-  if (!r.error || r.diag != null) done(r.plain ? msg.plain : []); else stale = true
-  return r
+  let packages = (await Promise.all(named(texts).map(k => fetchPackage(k).catch(() => null)))).filter(Boolean)
+  for (let more = 8; ; more--) {
+    if (packages.length) stale = true
+    const { done, ...d } = await delta(texts), r = await ask(op, { ...msg, ...d, packages })
+    if (!r.error || r.diag != null) done(r.plain ? msg.plain : []); else stale = true
+    for (const [k] of packages) pkgs.add(k)
+    if (!r.need || !more) return r
+    packages = await Promise.all(r.need.map(fetchPackage))
+  }
 })
+const pkgs = new Set() // name-version the worker has
+const named = texts => [...new Set(texts.flatMap(([, s]) => [...s.matchAll(/@preview\/([a-z0-9-]+):(\d+\.\d+\.\d+)/g)]
+  .map(m => `${m[1]}-${m[2]}`)))].filter(k => !pkgs.has(k))
+// through the hub (server/packages.mjs), which keeps each
+async function fetchPackage(k) {
+  const r = await fetch(`/api/packages/preview/${k}.tar.gz`)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `@preview/${k}: ${r.status}`)
+  return [k, new Uint8Array(await r.arrayBuffer())]
+}
 
 // The compiler calls a file absent from its filesystem "access denied ...
 // outside of project root". Say which file, and that a relative path starts
@@ -250,7 +269,7 @@ async function compile() {
     if (!r.parts) throw Object.assign(new Error(r.error), { diag: r.diag })
     whole = false; patch(r.parts); whole = true
     $('diag').hidden = true
-    fitText(); keep(key)
+    fitText(); keep(key); paintAi()
   } catch (e) { clearTimeout(upload); $('diag').textContent = explain(e, e.diag); $('diag').hidden = false }
   first = false; live || previewed(); live = true // the optional waits for this
   busy = false
@@ -276,6 +295,20 @@ export async function exportDocx() {
   if (!r.ok) return toast(esc(r.output), false)
   toast('In Word, EndNote &gt; Update Citations and Bibliography makes them live', true, 8000)
   download(rawUrl(r.path), r.path)
+}
+
+// AI-likeness over the preview, in the editor's bands: each file's sentences
+// [from, to, share], read by the overlay (the open file) or the AI check
+// (every file). An edit drops a file's until it is read again.
+const ai = new Map(), BANDS = [0.08, 0.25, 0.4, 0.7]
+export function aiMarks(file, list) { list?.length ? ai.set(file, list) : ai.delete(file); paintAi() }
+files.observeDeep(evs => evs.forEach(e => e.target !== files && ai.delete(e.path[0])))
+function paintAi() {
+  if (!CSS.highlights) return
+  const hs = BANDS.map(() => new Highlight())
+  for (const [file, list] of ai) toPreview(file, list).forEach((rs, i) =>
+    rs.forEach(r => hs[BANDS.findLastIndex(b => list[i][2] >= b)]?.add(r)))
+  hs.forEach((h, i) => CSS.highlights.set(`ai-${i}`, h))
 }
 
 // On a phone, fit means fit the text, not the paper: the side margins are cut

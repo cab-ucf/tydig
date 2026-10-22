@@ -35,7 +35,8 @@ table{border-collapse:collapse;width:100%;font-size:.92em}td{padding:.25rem .5re
 <li>A pre-registered report: prose written before the results, numbers computed by the build (<code>make</code>).
 <pre><code>#let R = json("build/results.json")
 The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
-<li>Live preview in the browser, multi-cursor editing, comments pinned to the preview, a Discussion.</li>
+<li>Live preview in the browser, multi-cursor editing, comments pinned to the preview, a Discussion. Double-click the preview to go to that text in the source; <code>Ctrl/⌘-Alt-J</code> shows the cursor's text in the preview.</li>
+<li>Typst Universe packages (<code>#import "@preview/cetz:0.4.2"</code>) work in the preview and in builds: the hub fetches each once.</li>
 <li>Select text for <b>💬 Comment</b> and <b>❝ Cite</b>: cite from the bibliography (any word of a reference finds it), or find papers for the selection, steered by the file's topic or on its words alone.</li>
 <li>Tags (the tree's <code>#</code>, or Edit): <b>AI-generated</b> labels a file as written by AI; <b>read-only</b> keeps it as a reference that neither the editor nor an agent changes. They live in <code>.gitattributes</code>, so they travel with the project; templates ship their <code>lib/</code> tagged both.</li>
 <li><b>Discuss</b> in the bar counts what is new; @name tells a person or asks an agent.</li>
@@ -52,6 +53,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <h2>Templates</h2>
 <ul>
 <li><code>report</code>, and grants: NIH R03, R21, R25 SEPA, R35 MIRA (early-stage and established); NSF EAGER, AI Datasets (NSF 26-512), CMMI (NSF 26-515), CMI (NSF 26-519) and CMI GOALI; white papers to a program manager in three styles (Heilmeier, a DoD BAA's, a two-page concept paper); ARPA-H 1-CURE (ARPA-H-SOL-26-147: the solution summary, then four volumes). Grey prompts quote the funder: check the current solicitation.</li>
+<li>Journal articles and posters from <a href="https://typst.app/universe">Typst Universe</a>: IEEE, ACM, Springer LNCS and Nature, Elsevier, APA 7, arXiv, MDPI, Physical Review, IOP, NeurIPS, and five poster designs, each checked to build here; any other Universe template by search. Their authors keep them current.</li>
 <li>Grants: <code>make all</code> (each attachment), <code>make full</code> (one PDF and what is missing), <code>make budget</code> (Excel). The checklist shows <code>package.yaml</code>, live.</li>
 <li>A template is a folder in <code>templates/</code>; <code>nih-r21</code> layers on <code>nih</code>, which <code>base.json</code> puts on <code>grant</code>. <code>brand-&lt;x&gt;</code> goes last.</li>
 <li>Switching template merges three ways: your writing stays; a rewritten file lands beside yours (<code>main.nih-r21.typ</code>).</li>
@@ -93,7 +95,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <ul>
 <li>One hub per collaboration runs the analysis, so the numbers are reproducible and nobody installs anything. It sees plaintext; it is yours.</li>
 <li>Text is a CRDT (Yjs) in every browser and on the hub; offline edits merge on reconnect.</li>
-<li>Every project is a plain git repo. A remote makes the hub disposable: each hub writes only its own CRDT file, so hubs never conflict.</li>
+<li>Every project is a plain git repo of its text alone: the CRDT stays on the hub, and build output is ignored. A remote makes the hub disposable: rebuilt from it, a hub has the text and its history; comments and the Discussion stay with the hub that had them. Hubs sharing a remote merge each other's commits.</li>
 <li>Signatures, not the server, attest authorship: a clone verifies them offline (<code>refs/notes/provenance</code>).</li>
 <li>Three containers: the hub (no podman), the sandbox service (podman's socket, fixed flags), egress (public HTTPS only).</li>
 </ul>

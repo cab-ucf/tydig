@@ -24,7 +24,7 @@ const first = await a.post(`/p/${PROJ}/gitremote/sync`)
 check('first push to the git server succeeded', first.ok === true)
 const remoteFiles = (await run('git', ['-C', REMOTE, 'ls-tree', '-r', '--name-only', 'main'])).stdout
 check('working tree is on the remote (readable on any git host)', /main\.typ/.test(remoteFiles) && /scripts\/analysis\.py/.test(remoteFiles))
-check('per-hub CRDT state is on the remote', /\.collab\/crdt\/.+\.bin/.test(remoteFiles))
+check('git keeps the text, never the CRDT state', !/\.collab\/crdt/.test(remoteFiles))
 check('build outputs are not pushed', !/(^|\n)out\//.test(remoteFiles))
 
 // B adopts the project from the git server alone -- no peer online, no invite
@@ -41,12 +41,18 @@ await sleep(3000)
 
 await a.post(`/p/${PROJ}/gitremote/sync`)      // A pushes its edit
 const bPull = await b.post(`/p/${PROJ}/gitremote/sync`)   // B merges + pushes its own
-check('B absorbed A\'s CRDT state on merge', bPull.ok === true && bPull.pulled >= 1)
+check('B merged the files A changed', bPull.ok === true && bPull.pulled >= 1)
 check('A\'s edit reached B\'s disk through git',
   await until(async () => (await readFile(`${DATA_B}/${PROJ}/main.typ`, 'utf8')).includes(MA)))
 const aPull = await a.post(`/p/${PROJ}/gitremote/sync`)   // A merges B's
 check('A absorbed B\'s state', aPull.ok === true)
 check('B\'s new file reached A\'s disk through git', await until(async () => (await readFile(`${DATA_A}/${PROJ}/notes-b.typ`, 'utf8')).includes(MB)))
+check('each hub\'s document has a lineage of its own: A\'s copy is refused by B', await (async () => {
+  let why = null
+  const d = b.doc(PROJ, { parameters: { epoch: docA.getMap('meta').get('epoch') }, onAuthenticationFailed: e => why = e.reason })
+  await sleep(1500); d.provider.destroy()
+  return why === 'epoch'
+})())
 check('concurrent edits both survived (no clobber)',
   (await readFile(`${DATA_A}/${PROJ}/main.typ`, 'utf8')).includes(MA) &&
   (await readFile(`${DATA_B}/${PROJ}/notes-b.typ`, 'utf8')).includes(MB))
@@ -79,6 +85,15 @@ await a.post(`/p/${PROJ}/gitremote/sync`)
 const live = () => docA.getMap('files').get('summary.typ').toString()
 check('an agent\'s pushed edit reaches the live editor', await until(async () => live().includes('AGENT WAS HERE')))
 check('and typing done meanwhile survives it', live().includes('// LIVE TYPING'))
+
+// An older hub's CRDT file on the remote: read if there, then taken out of git
+await g('pull', '-q', '--no-rebase')
+await (await import('node:fs/promises')).mkdir(`${REMOTE}-clone/.collab/crdt`, { recursive: true })
+await (await import('node:fs/promises')).writeFile(`${REMOTE}-clone/.collab/crdt/old.bin`, Buffer.from([0, 0]))
+await g('add', '-A'); await g('commit', '-qm', 'an older hub'); await g('push', '-q', 'origin', 'main')
+await a.post(`/p/${PROJ}/gitremote/sync`)
+check('an older hub\'s CRDT file is taken out of git', !/\.collab\/crdt/.test(
+  (await run('git', ['-C', REMOTE, 'ls-tree', '-r', '--name-only', 'main'])).stdout))
 
 // An agent editing the hub's own files on disk: merged into the live text
 await appendFile(`${DATA_A}/${PROJ}/main.typ`, '\nDISK EDIT\n')

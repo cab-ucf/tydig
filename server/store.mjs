@@ -69,8 +69,24 @@ export const git = (n, ...a) => {
   gitQ.set(n, r.catch(() => {}))
   return r.then(r => r.stdout)
 }
-export const commit = (n, msg, ...flags) =>
-  git(n, 'add', '-A').then(() => git(n, 'commit', '-q', ...flags, '-m', msg)).catch(() => {})
+// whoever edited since the last commit is its author, or a co-author
+const editors = new Map() // project -> Map(id -> user)
+export function edited(n, u, first) {
+  if (!u?.email) return
+  const m = editors.get(n) ?? new Map()
+  editors.set(n, first ? new Map([[u.id, u], ...m]) : m.set(u.id, u))
+}
+const who = u => `${String(u.name || u.email).replace(/[<>\n]/g, '')} <${u.email}>`
+// each commit stores what changed whole, loose, until git packs it as deltas:
+// packed early, so an autosaving hub's .git stays the size of its history
+export function commit(n, msg, ...flags) {
+  const [a, ...co] = editors.get(n)?.values() ?? []
+  editors.delete(n)
+  if (a) flags.push(`--author=${who(a)}`)
+  if (co.length) flags.push('-m', co.map(u => `Co-authored-by: ${who(u)}`).join('\n'))
+  return git(n, 'add', '-A').then(() => git(n, 'commit', '-q', '-m', msg, ...flags))
+    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet')).catch(() => {})
+}
 export async function ensureRepo(n) {
   if (existsSync(inProj(n, '.git'))) return
   await fs.mkdir(proj(n), { recursive: true })
@@ -213,9 +229,20 @@ export async function collab(n, rel = '') {
   return path.join(root, rel)
 }
 
-// This hub's CRDT state lives in .git (never committed); peer hubs' in
-// .collab/crdt/ (from the git remote). Text newer on disk wins.
+// The CRDT state lives in .git, never committed: git keeps the text, and the
+// state is the hub's alone. An older hub's, in .collab/crdt/, is read if there.
+// Text newer on disk wins.
 const crdtFile = n => inProj(n, '.git/tydig-crdt')
+// The state's lineage: made with it, gone with it. A browser's offline copy of
+// another (this hub rebuilt from git, the project made again) is refused at
+// connect (index.mjs), never merged: merged, its text would show twice.
+export const epoch = async n => {
+  const f = inProj(n, '.git/tydig-epoch'), e = await fs.readFile(f, 'utf8').catch(() => null)
+  if (e) return e.trim()
+  const made = randomUUID()
+  await fs.writeFile(f, made, { flag: 'wx' }).catch(() => {}) // two asking at once: one wins
+  return (await fs.readFile(f, 'utf8')).trim()
+}
 async function load(n, doc) {
   const files = doc.getMap('files'), peers = await collab(n, 'crdt')
   const states = [crdtFile(n), ...existsSync(peers)
@@ -231,6 +258,8 @@ async function load(n, doc) {
     if (t != null) texts.push([rel, t])
   }
   doc.transact(() => texts.forEach(([rel, t]) => putText(files, rel, t)))
+  const e = await epoch(n), meta = doc.getMap('meta')
+  if (meta.get('epoch') !== e) meta.set('epoch', e)
   mirrored.set(n, new Map([...files.keys()].map(k => [k, null]))) // first save writes all
   watchProject(n, doc)
 }

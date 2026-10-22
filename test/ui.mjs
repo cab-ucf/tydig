@@ -36,6 +36,25 @@ await page.type('input[name=name]', 'Ada'); await page.type('input[name=email]',
 await page.click('.auth-submit'); await sleep(2000)
 await page.evaluate(async () => (await fetch('/api/projects/demo', { method: 'POST' })).json())
 await page.goto(`${B}/?proj=demo`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(12000)
+// A stand-in Typst Universe (server/packages.mjs): a template whose package
+// imports another, so the preview fetches packages in two rounds
+const universe = await (async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, readFileSync } = await import('node:fs'), { execSync } = await import('node:child_process')
+  const d = mkdtempSync('/tmp/tydig-universe-'), pkg = (name, files) => {
+    mkdirSync(`${d}/${name}/template`, { recursive: true })
+    for (const [p, t] of Object.entries(files)) writeFileSync(`${d}/${name}/${p}`, t)
+    execSync(`tar -czf ${d}/${name}-0.1.0.tar.gz -C ${d}/${name} .`)
+  }
+  pkg('tiny-dep', { 'typst.toml': '[package]\nname = "tiny-dep"\nversion = "0.1.0"\nentrypoint = "lib.typ"\n',
+    'lib.typ': '#let mark = [UNIVERSE-DEP]\n' })
+  pkg('tiny-paper', { 'typst.toml': '[package]\nname = "tiny-paper"\nversion = "0.1.0"\nentrypoint = "lib.typ"\n' +
+    '[template]\npath = "template"\nentrypoint = "main.typ"\n', 'lib.typ': '#import "@preview/tiny-dep:0.1.0": mark\n' +
+    '#let paper(body) = [#mark #body]\n', 'template/main.typ': '#import "@preview/tiny-paper:0.1.0": paper\n#show: paper\nHello from Universe.\n' })
+  const index = JSON.stringify([{ name: 'tiny-paper', version: '0.1.0', description: 'A tiny paper', categories: ['paper'], template: {} }])
+  return (await import('node:http')).createServer((q, r) => q.url === '/preview/index.json' ? r.end(index)
+    : /^\/preview\/tiny-(paper|dep)-0\.1\.0\.tar\.gz$/.test(q.url) ? r.end(readFileSync(d + q.url.slice(8)))
+    : (r.statusCode = 404, r.end())).listen(3998)
+})()
 const pv = await page.evaluate(() => ({ diagHidden: document.getElementById('diag').hidden, svg: document.querySelectorAll('#page svg use, #page svg path').length > 0, diag: document.getElementById('diag').textContent.slice(0, 200) }))
 check('preview compiled on a fresh project (no missing files)', pv.diagHidden && pv.svg)
 if (!pv.diagHidden) console.log('  diag:', pv.diag)
@@ -80,6 +99,37 @@ const pvAnchor = await page.evaluate(() => {
   return { line: i + 1, text: lines[i]?.querySelector('.cm-comment-anchor').textContent }
 })
 check('comment from a preview selection lands on the right source text', pvBtn && pvAnchor.text === 'decision rule' && pvAnchor.line === 23)
+
+// Double-click a word in the preview: the editor goes to it. Mod-Alt-J: back,
+// the cursor's text selected in the preview
+await page.evaluate(() => getSelection().removeAllRanges())
+const newton = await page.evaluate(() => {
+  const w = document.createTreeWalker(document.getElementById('page'), NodeFilter.SHOW_TEXT)
+  for (let n; (n = w.nextNode());) { const i = n.data.indexOf('Newton')
+    if (i >= 0) { const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + 6); const b = r.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } } }
+})
+if (newton) await page.mouse.click(newton.x, newton.y, { count: 2, clickCount: 2 })
+await sleep(800)
+const jumped = await page.evaluate(() => document.querySelector('.cm-activeLine')?.textContent ?? '')
+check('double-clicking a word in the preview goes to it in the source', !!newton && jumped.includes('Newton'))
+// a word found all over: its own, by the text around it
+const the = await page.evaluate(() => {
+  const w = document.createTreeWalker(document.getElementById('page'), NodeFilter.SHOW_TEXT)
+  for (let n; (n = w.nextNode());) { const i = n.data.indexOf('rule: the ')
+    if (i >= 0) { const r = document.createRange(); r.setStart(n, i + 6); r.setEnd(n, i + 9); const b = r.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } } }
+})
+if (the) await page.mouse.click(the.x, the.y, { count: 2, clickCount: 2 })
+await sleep(800)
+check('double-clicking "the" goes to that "the"', !!the && await page.evaluate(() => getSelection().toString() === 'the' &&
+  document.querySelector('.cm-activeLine')?.textContent.includes('decision rule: the')))
+if (newton) await page.mouse.click(newton.x, newton.y, { count: 2, clickCount: 2 })
+await sleep(800)
+await page.keyboard.down('Control'); await page.keyboard.down('Alt'); await page.keyboard.press('j')
+await page.keyboard.up('Alt'); await page.keyboard.up('Control'); await sleep(500)
+const toPv = await page.evaluate(() => { const r = [...CSS.highlights.get('pv-at') ?? []][0]
+  return { sel: r?.toString() ?? '', inPage: !!r && document.getElementById('page').contains(r.startContainer) } })
+check('Mod-Alt-J marks the cursor\'s text in the preview', toPv.inPage && jumped.includes(toPv.sel) && toPv.sel.length > 1)
+if (!toPv.inPage) console.log('  ', JSON.stringify(toPv), jumped.slice(0, 80))
 await page.hover('.cm-comment-anchor'); await sleep(900)
 check('hovering commented text shows the comment', !!(await page.$eval('.cm-comment-tip', e => e.textContent).catch(() => '')))
 
@@ -325,6 +375,15 @@ const kept = await page.evaluate(() => !!document.querySelector('#page img')), e
 await page.waitForFunction(() => document.querySelector('#page svg'), { timeout: 90000 }); page.off('request', onWasm)
 check('a page opens on the preview the hub keeps, before loading a compiler; then compiles its own', kept && !early)
 
+// the bar never runs off the page: what the menus hold gives way
+const spills = []
+for (let w = 640; w <= 1800; w += 40) {
+  await page.setViewport({ width: w, height: 900 }); await sleep(150)
+  if (await page.evaluate(() => { const b = document.getElementById('bar'); return b.scrollWidth > b.clientWidth })) spills.push(w)
+}
+check('the top bar fits at every width', !spills.length)
+if (spills.length) console.log('  spills at', spills.join())
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
@@ -337,10 +396,10 @@ check('the Preview tab picks which file to compile, and still fits', await page.
   const sel = document.getElementById('main-sel'), r = sel.getBoundingClientRect()
   return r.width > 40 && r.right <= 390 && [...sel.options].some(o => o.value === 'summary.typ') && document.documentElement.scrollWidth <= 390 }))
 check('the other tabs leave it out', (await shows('edit')) && await page.evaluate(() => !document.getElementById('main-sel').getBoundingClientRect().width))
-check('the word count sits under the Edit tab, and build in the tab bar opens the Build panel', await page.evaluate(() =>
-  /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
-  (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
-   await page.evaluate(() => document.body.dataset.m === 'side') && (await side()).title === 'build'))
+check('the word count sits under the Edit tab; the Panel tab opens the panel, its own tabs pick Build', await page.evaluate(() =>
+  /\d+ words/.test(document.getElementById('mt-edit').textContent)) && (await shows('side')).join() === 'side' &&
+  (await page.evaluate(() => [...document.querySelectorAll('#side-tabs button')].find(b => b.firstChild.textContent === 'Build').click()),
+   await sleep(400), (await side()).title === 'build'))
 // Word: the citations are EndNote's fields, the bibliography its list
 const word = await page.evaluate(async () => {
   const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then(r => r.json())
@@ -350,6 +409,40 @@ const word = await page.evaluate(async () => {
 if (word) writeFileSync(`${tmp}/w.docx`, Buffer.from(word))
 const xml = word ? (await import('node:child_process')).execSync(`unzip -p ${tmp}/w.docx word/document.xml`).toString() : ''
 check('Word export makes the citations EndNote fields, the bibliography its list', /ADDIN EN\.CITE &lt;EndNote&gt;[\s\S]*ADDIN EN\.REFLIST/.test(xml))
+{ // an offline copy of another lineage (the hub rebuilt from git): refused, cleared, its text offered back
+  await page.setViewport({ width: 1400, height: 900 })
+  await page.goto(`${B}/?proj=demo`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(4000)
+  const { doc, Y } = await import('./lib.mjs')
+  const d = doc(B, 'demo', (await page.cookies()).find(c => c.name.endsWith('session_token')).value); await sleep(2000)
+  const sv = Y.encodeStateVector(d); d.provider.disconnect()
+  d.transact(() => { d.getMap('meta').set('epoch', 'another'); d.files.get('main.typ').insert(0, 'OFFLINE-ONLY\n') })
+  const u = [...Y.encodeStateAsUpdate(d, sv)]; d.provider.destroy()
+  await page.evaluate(u => new Promise(ok => { const r = indexedDB.open('tydig:demo')
+    r.onsuccess = () => { const t = r.result.transaction('updates', 'readwrite'); t.objectStore('updates').add(new Uint8Array(u)); t.oncomplete = ok } }), u)
+  await page.reload({ waitUntil: 'networkidle2' }); await sleep(9000)
+  const after = await page.evaluate(() => ({ review: document.getElementById('status').dataset.review,
+    side: document.getElementById('side-body').innerText.slice(0, 400), doc: document.querySelector('.cm-content')?.textContent.slice(0, 200) }))
+  check('a copy of another lineage is refused and cleared: the text shows once, the offline edit offered to restore',
+    after.review === '1' && /main\.typ/.test(after.side) && /OFFLINE-ONLY/.test(after.side) && !/OFFLINE-ONLY/.test(after.doc))
+  if (after.review !== '1') console.log(JSON.stringify(after))
+}
+{ // a project from a Typst Universe template: its files, and its packages through the hub
+  await page.setViewport({ width: 1400, height: 900 })
+  const made = await page.evaluate(async () => (await fetch('/api/projects/uni', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ template: '@preview/tiny-paper:0.1.0' }) })).json())
+  const cookie = (await page.cookies()).map(c => `${c.name}=${c.value}`).join('; ')
+  const none = (await fetch(`${B}/api/projects/nope`, { method: 'POST', headers: { cookie, origin: B,
+    'content-type': 'application/json' }, body: JSON.stringify({ template: '@preview/no-such:1.0.0' }) })).status
+  await page.goto(`${B}/?proj=uni`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(8000)
+  const shown = await page.evaluate(() => ({ text: document.getElementById('page').textContent,
+    diag: !document.getElementById('diag').hidden && document.getElementById('diag').textContent }))
+  const found = await page.evaluate(async () => (await (await fetch('/api/universe')).json()).map(t => t.spec))
+  check('a project from a Typst Universe template previews, its packages fetched through the hub',
+    made.ok && /UNIVERSE-DEP\s*Hello from Universe/.test(shown.text) && !shown.diag && found.includes('@preview/tiny-paper:0.1.0'))
+  check('a template Universe lacks makes no project', none === 404)
+  if (shown.diag) console.log('  diag:', shown.diag)
+  universe.close()
+}
 { // the divider: the panes follow the drag; the layout is kept once let go
   await page.setViewport({ width: 1400, height: 900 }); await sleep(300)
   await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click()); await sleep(300)
@@ -362,7 +455,7 @@ check('Word export makes the citations EndNote fields, the bibliography its list
   const end = await kept()
   check('dragging the divider moves the panes at once and keeps where it was let go', mid < (was ?? 0.5) - 0.05 &&
     midKept === was && Math.abs(end - mid) < 1e-4)
-  await page.click('#split', { clickCount: 2 })
+  await page.click('#split', { count: 2, clickCount: 2 })
 }
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)

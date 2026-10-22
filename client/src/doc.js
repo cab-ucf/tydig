@@ -22,12 +22,30 @@ export const user = { id: me.id, name: me.name || me.email,
   color: localStorage.userColor ||= `hsl(${Math.floor(Math.random() * 360)} 70% 45%)` }
 export const token = () => /better-auth\.session_token=([^;]+)/.exec(document.cookie)?.[1] || ''
 export const ws = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
-// connected by main.js, once every module listens
+// This copy's lineage goes with each connect, and the hub refuses another's
+// (server/store.mjs): the hub's document began anew. Then this copy's text is
+// kept to review (panels.js), the copy cleared, and the hub's taken.
+export const AWAY = `tydig.away:${link ? link.id + ':' : ''}${projName}`
+async function anew() {
+  if (sessionStorage[AWAY]) return alert('This project was made again on the hub. Close its other tabs, then reload.')
+  sessionStorage[AWAY] = JSON.stringify(Object.fromEntries([...files].map(([p, t]) => [p, t.toString()])))
+  await Promise.race([local.clearData(), new Promise(r => setTimeout(r, 3000))])
+  location.reload()
+}
+// connected by main.js, once every module listens and the offline copy is read
+const q = {} // the connect's parameters
 export const provider = new HocuspocusProvider({
-  url: `${ws}/sync`, name: projName, document: ydoc, token, connect: false,
-  onAuthenticationFailed: () => { alert(`No access to ${projName}: ask a member to share it.`); location.search = '' },
+  url: `${ws}/sync`, name: projName, document: ydoc, token, connect: false, parameters: q,
+  onAuthenticationFailed: ({ reason }) => reason === 'epoch' ? anew()
+    : (alert(`No access to ${projName}: ask a member to share it.`), location.search = ''),
 })
+meta.observe(() => meta.get('epoch') ? q.epoch = meta.get('epoch') : delete q.epoch)
 provider.setAwarenessField('user', { ...user, colorLight: user.color })
+// when this person last stirred here, so the others can see who is idle
+let stirred = 0
+const stir = () => Date.now() - stirred > 15e3 && provider.setAwarenessField('active', stirred = Date.now())
+for (const e of ['pointermove', 'pointerdown', 'keydown', 'wheel']) addEventListener(e, stir, { passive: true })
+stir()
 // a reload or a closed tab leaves at once, not 30 s later, when its presence would lapse
 addEventListener('pagehide', () => provider.awareness.setLocalState(null))
 provider.on('status', ({ status }) => {

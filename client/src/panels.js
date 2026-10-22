@@ -8,9 +8,9 @@ import { parseBib } from '../../server/refs.mjs'
 import { prose, readAi, aiPct } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist } from './util.js'
-import { files, provider, local, okPath, GEN, setText } from './doc.js'
+import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
-import { typeset } from './preview.js'
+import { typeset, aiMarks } from './preview.js'
 import { renderComments, renderChat, unseen } from './comments.js'
 import { disk, refreshDisk } from './tree.js'
 import { applyLayout } from './menu.js'
@@ -87,6 +87,13 @@ async function renderAiCheck(body) {
         ({ p: aiPct(x.tail), text: text.slice(x.s, x.e).replace(/\s+/g, ' ').trim() })) }
     } catch (e) { aiReport = { file: main, error: e.message } }
     redraw('aicheck')
+    // on the preview too: each sentence where it was written
+    const prs = [...files].filter(([p]) => p.endsWith('.typ')).map(([p, t]) => [p, prose(t.toString())]), by = new Map()
+    for (const x of aiReport.sents || []) {
+      const at = source(x.text, prs)
+      if (at) (by.get(at[0]) ?? by.set(at[0], []).get(at[0])).push([at[1], at[2], x.p])
+    }
+    by.forEach((l, f) => aiMarks(f, l))
   } })
   const r = aiReport, all = r?.sents || []
   const prs = r ? [...files].filter(([p]) => p.endsWith('.typ')).map(([p, t]) => [p, prose(t.toString())]) : []
@@ -158,11 +165,16 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
     : `saved, but the push failed: ${esc(push.error || '')}`, !r.error && push?.ok !== false)
   redraw('history')
 }
-const badge = v => !v ? '' : v.verified ? '<span class="prov ok" title="ML-DSA-65 signature by a key ' +
-  `registered to this account; file hashes match (key ${esc(v.keyId)})">signed &#10003;</span>`
-  : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'
+const badge = v => !v ? '' : v.verified ? `<span class="prov ok" title="ML-DSA-65 signature by a key ` +
+  `registered to ${esc(v.by ?? 'this account')}; file hashes match (key ${esc(v.keyId)})">signed by ` +
+  `${esc(v.by ?? '?')} &#10003;</span>` : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'
+const sum = (fs, k) => fs.reduce((n, f) => n + f[k], 0)
+const what = fs => !fs.length ? 'no changes' : `<span title="${esc(fs.map(f => `${f.path}  +${f.add} -${f.del}`)
+  .join('\n'))}">${fs.length === 1 ? esc(fs[0].path) : fs.length + ' files'} <ins>+${sum(fs, 'add')}</ins> ` +
+  `<del>&minus;${sum(fs, 'del')}</del></span>`
 const commit = c => `<div class="commit${c.message.startsWith('checkpoint') ? ' checkpoint' : ''}">` +
-  `<code>${esc(c.hash)}</code><span>${esc(c.message)}</span>${badge(c.provenance)}` +
+  `<code>${esc(c.hash)}</code><span>${esc(c.message)} ${badge(c.provenance)}</span>` +
+  `<div class="who">${esc([c.author, ...c.coauthors].join(', '))} &middot; ${what(c.files)}</div>` +
   `<time>${new Date(c.date).toLocaleString()}</time><button data-hash="${esc(c.hash)}">restore</button></div>`
 async function renderHistory(body) {
   const log = await api(P('/history'))
@@ -303,20 +315,22 @@ async function renderTemplate(body) {
 // (The CRDT has merged it all already: this is awareness, and one-click undo.)
 let away = false, review = null
 const snapshot = () => Object.fromEntries([...files].map(([p, t]) => [p, t.toString()]))
+const toReview = before => setTimeout(() => { // once the remote updates have settled
+  const now = snapshot(), changed = [...new Set([...Object.keys(before), ...Object.keys(now)])]
+    .map(p => ({ path: p, before: before[p] ?? '', after: now[p] ?? '' })).filter(c => c.before !== c.after)
+  if (!changed.length) return
+  review = changed; $('status').dataset.review = '1'
+  openSidebar('review')
+}, 1200)
 local.whenSynced.then(() => provider.on('status', ({ status }) => {
   if (status === 'disconnected') away = true
   // 'connected' comes before the sync applies: this is my offline version, my edits in it
   if (status !== 'connected' || !away) return
-  const before = snapshot()
-  away = false
-  setTimeout(() => { // once the remote updates have settled
-    const now = snapshot(), changed = [...new Set([...Object.keys(before), ...Object.keys(now)])]
-      .map(p => ({ path: p, before: before[p] ?? '', after: now[p] ?? '' })).filter(c => c.before !== c.after)
-    if (!changed.length) return
-    review = changed; $('status').dataset.review = '1'
-    openSidebar('review')
-  }, 1200)
+  away = false; toReview(snapshot())
 }))
+// an offline copy the hub refused (doc.js): its text against the hub's
+const kept = sessionStorage[AWAY] && JSON.parse(sessionStorage[AWAY])
+if (kept) provider.on('synced', function was() { provider.off('synced', was); delete sessionStorage[AWAY]; toReview(kept) })
 const lines = (a, b) => {
   const A = a.split('\n'), B = b.split('\n') // past 1000 edits, as a whole
   return (diffArrays(A, B, { maxEditLength: 1000 }) ?? [{ removed: true, value: A }, { added: true, value: B }])

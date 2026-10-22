@@ -10,7 +10,8 @@ import path from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { proj, inProj, walk, live, mirror, commit, putFile, fileNow, textOf, mergeFile,
-  mergeInto, collab } from './store.mjs'
+  mergeInto, collab, writeIn, okPath } from './store.mjs'
+import { FEATURED, SPEC, template as universe } from './packages.mjs'
 
 const DIR = path.resolve(process.env.TYDIG_TEMPLATES || new URL('../templates', import.meta.url).pathname)
 const LAYERS = readdirSync(DIR, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name).sort()
@@ -39,6 +40,11 @@ const record = async (n, template, brand, files) => {
   await writeFile(await collab(n, 'template.json'), JSON.stringify({ template, brand: brand || null }))
 }
 export async function scaffold(n, template, brand) {
+  if (SPEC.test(template)) { // a Typst Universe template: its files, as `typst init` gives them
+    const files = await universe(template)
+    for (const [p, data] of files) if (okPath(p)) await writeIn(n, p, data)
+    return record(n, template, null, files)
+  }
   const t = NAMES.includes(template) ? template : 'report'
   for (const l of layers(t, brand)) await cp(path.join(DIR, l), proj(n), { recursive: true })
   await record(n, t, brand, await stack(t, brand))
@@ -77,7 +83,7 @@ async function swap(n, doc, template, brand) {
   return r
 }
 
-export const list = (req, res) => res.json({ templates: NAMES, brands: BRANDS })
+export const list = (req, res) => res.json({ templates: NAMES, brands: BRANDS, featured: FEATURED })
 export const router = express.Router({ mergeParams: true })
 router.get('/template', async (req, res) => {
   const r = await recorded(req.params.proj)
