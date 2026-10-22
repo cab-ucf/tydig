@@ -26,15 +26,23 @@ export function openSidebar(m) {
   applyLayout(); tabs()
   redraw(m)
 }
-// the panes always at hand, each with what is new in it; any other, a tab while open
-const TABS = { comments: 'Comments', chat: 'Discussion', history: 'History', build: 'Build' }
+// the rail: a pane's button opens it, or closes it if open; comments and
+// the Discussion count what is new. The panel is titled by its pane.
+const TITLES = { comments: 'Comments', chat: 'Discussion', history: 'History', build: 'Build', checklist: 'Checklist',
+  aicheck: 'AI check', cite: 'Cite', review: 'Changes while away', spelling: 'Spelling and grammar', template: 'Template' }
 export function tabs() {
-  const n = unseen(), extra = mode && !TABS[mode] ? { [mode]: { aicheck: 'AI check' }[mode] ?? mode[0].toUpperCase() + mode.slice(1) } : {}
-  $('side-tabs').replaceChildren(...Object.entries({ ...TABS, ...extra }).map(([m, t]) => el('button',
-    { className: m === mode ? 'on' : '', onclick: () => openSidebar(m) }, t,
-    n[m] ? el('b', { className: 'badge', textContent: n[m] }) : '')))
-  $('side-tabs').querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  const n = unseen()
+  for (const b of $('rail').querySelectorAll('[data-pane]')) {
+    const m = b.dataset.pane, badge = b.querySelector('.badge')
+    b.classList.toggle('on', settings.sideOpen && m === mode)
+    if (m in n) { badge.hidden = !n[m]; badge.textContent = n[m] }
+  }
+  $('side-title').textContent = TITLES[mode] ?? ''
 }
+$('rail').addEventListener('click', e => {
+  const m = e.target.closest('[data-pane]')?.dataset.pane
+  if (m) settings.sideOpen && mode === m && !phone() ? toggleSide() : openSidebar(m)
+})
 // the pane again, if it is the one open; a slow one checks body.dataset.pane before it fills in.
 // A composer being typed in keeps the focus and the caret.
 export function redraw(m) {
@@ -46,9 +54,9 @@ export function redraw(m) {
 }
 export function toggleSide() {
   if (!settings.sideOpen) return openSidebar(mode || 'comments')
-  settings.sideOpen = false; applyLayout()
+  settings.sideOpen = false; applyLayout(); tabs()
 }
-$('side-close').onclick = () => { settings.sideOpen = false; mode = null; if (settings.m === 'side') settings.m = 'edit'; applyLayout() }
+$('side-close').onclick = () => { settings.sideOpen = false; mode = null; if (settings.m === 'side') settings.m = 'edit'; applyLayout(); tabs() }
 
 // ---- AI check ----
 // The document as typeset, what a reviewer reads (the computed numbers, the
@@ -180,7 +188,7 @@ async function renderHistory(body) {
   const log = await api(P('/history'))
   if (mode !== 'history') return // another pane was opened meanwhile
   body.innerHTML = log.map(commit).join('') ||
-    '<p class="empty">No commits yet. Edits autosave every few seconds.</p>'
+    '<p class="empty">No commits yet. Edits are kept at once, and committed when editing pauses.</p>'
   body.querySelectorAll('[data-hash]').forEach(b => b.onclick = () => confirm(`Restore ${b.dataset.hash}? ` +
     'Applies live for everyone; restore a later commit to go back.') && post(P('/restore/' + b.dataset.hash)))
 }
@@ -265,12 +273,13 @@ function renderChecklist(body) {
     '(package.yaml). Build "all" for what is made here, "full" for the whole application in one PDF.' }),
   ...(checklist() || []).map(item))
 }
-// the bar's count: required components that are here, of all required
+// the rail's count: required components that are here, of all required
 export function checklistBadge() {
-  const items = checklist(), b = $('bar-check')
+  const items = checklist(), b = $('rail').querySelector('[data-pane=checklist]')
   if (b.hidden = !items) return
-  const need = items.filter(i => i.when === 'always' && i.file)
-  b.textContent = `checklist ${need.filter(i => i.have?.length).length}/${need.length}`
+  const need = items.filter(i => i.when === 'always' && i.file), have = need.filter(i => i.have?.length).length
+  b.querySelector('.badge').textContent = `${have}/${need.length}`
+  b.title = `Checklist: ${have} of the ${need.length} required parts are here`
   redraw('checklist')
 }
 

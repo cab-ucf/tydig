@@ -94,36 +94,33 @@
       </div></div>
     </nav>
     <span id="projname"></span>
-    <span id="peers" title="who is here"></span>
     <span class="spacer"></span>
     <button id="bar-cmd" data-act="palette" title="Find any command"><span>Find a command</span><kbd>Mod-K</kbd></button>
     <span class="spacer"></span>
-    <button id="bar-comment" data-act="comment" title="Comment on the selected text (Mod-Alt-M)">Comment</button>
-    <button id="bar-cite" data-act="cite" title="Find papers for the selection; check references">Cite</button>
-    <button id="bar-build" data-act="build" title="Run the project's build (make)">Build</button>
-    <button id="bar-ai" data-act="aicheck" title="How AI-like each sentence of the PDF reads" hidden>AI check</button>
-    <button id="bar-check" data-act="checklist" title="What the application needs, and what is here" hidden>Checklist</button>
-    <button id="bar-chat" data-act="discuss" title="Comments and the Discussion">Discuss<b class="badge" hidden></b></button>
-    <button id="scope" class="tgl" data-act="scope-next" hidden></button>
-    <span id="views" role="group" aria-label="layout">
-      <button data-act="toggle-tree" data-check="treeOpen" title="File tree (Mod-Shift-E)"><svg viewBox="0 0 16 16">
-        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M5.5 2.5v11"/></svg></button>
-      <span class="seg">
-        <button data-act="view-editor" data-check="view=editor" title="Editor only"><svg viewBox="0 0 16 16">
-          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6h7M4.5 8.5h7M4.5 11h4"/></svg></button>
-        <button data-act="view-split" data-check="view=split" title="Editor and preview (Mod-\)"><svg viewBox="0 0 16 16">
-          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg></button>
-        <button data-act="view-preview" data-check="view=preview" title="Preview only"><svg viewBox="0 0 16 16">
-          <path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5"/></svg></button>
-      </span>
-      <button data-act="toggle-side" data-check="sideOpen" title="Side panel (Mod-J)"><svg viewBox="0 0 16 16">
-        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M10.5 2.5v11"/></svg></button>
-    </span>
+    <span id="people" title="who is here"></span>
     <button id="bar-share" data-act="share" class="go" title="Invite people; the link they open">Share</button>
-    <span id="me"></span>
     <span id="status" data-state="connecting">connecting</span>
   </header>
   <main id="layout">
+    <nav id="rail" aria-label="panels">
+      <button data-act="toggle-tree" data-check="treeOpen" title="Files (Mod-Shift-E)"><svg viewBox="0 0 16 16">
+        <path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3A1 1 0 0 0 2 4.5z"/></svg></button>
+      <button data-pane="comments" title="Comments"><svg viewBox="0 0 16 16"><path d="M2.5 3h11v7.5h-6L4.5 13v-2.5h-2z"/></svg><b class="badge" hidden></b></button>
+      <button data-pane="chat" title="Discussion"><svg viewBox="0 0 16 16"><path d="M2 3h8.5v6H6l-2.5 2V9H2z"/><path d="M12.5 6H14v6h-1.5V14l-2.5-2H6.5"/></svg><b class="badge" hidden></b></button>
+      <button data-pane="history" title="History"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg></button>
+      <button data-pane="build" title="Build (make)"><svg viewBox="0 0 16 16"><path d="M5 3 2 8l3 5M11 3l3 5-3 5M9.5 2.5l-3 11"/></svg></button>
+      <button data-pane="checklist" title="Checklist: what the application needs" hidden><svg viewBox="0 0 16 16">
+        <path d="m3 4.5 1.2 1.2L6.5 3.5M3 10.5l1.2 1.2 2.3-2.2M8.5 5h5M8.5 11h5"/></svg><b class="badge"></b></button>
+      <button data-pane="aicheck" title="AI check: how AI-like each sentence of the PDF reads" hidden><svg viewBox="0 0 16 16">
+        <path d="M8 2v2.5M8 11.5V14M2 8h2.5M11.5 8H14M3.8 3.8l1.8 1.8M10.4 10.4l1.8 1.8M3.8 12.2l1.8-1.8M10.4 5.6l1.8-1.8"/></svg></button>
+      <span class="spacer"></span>
+      <button data-act="view-editor" data-check="view=editor" title="Editor only"><svg viewBox="0 0 16 16">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6h7M4.5 8.5h7M4.5 11h4"/></svg></button>
+      <button data-act="view-split" data-check="view=split" title="Editor and preview (Mod-\)"><svg viewBox="0 0 16 16">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M8 2.5v11"/></svg></button>
+      <button data-act="view-preview" data-check="view=preview" title="Preview only"><svg viewBox="0 0 16 16">
+        <path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3M5.5 8h5M5.5 10.5h5"/></svg></button>
+    </nav>
     <nav id="tree-pane">
       <div class="sect">
         <div class="sect-head" data-sect="projectsOpen"><span class="tw">&#9662;</span> projects
@@ -145,7 +142,8 @@
     <div id="split" title="drag to resize; double-click to even out"></div>
     <section id="preview">
       <div class="pane-head" id="zoomctl">
-        <label id="main-label">Compile <select id="main-sel"></select></label><span class="spacer"></span>
+        <label id="main-label" title="The file to compile"><select id="main-sel"></select></label><span class="spacer"></span>
+        <button id="scope" class="tgl" data-act="scope-next" hidden></button>
         <button data-z="-" title="Zoom out">&minus;</button><button data-z="fit" id="zoom-pct"
           title="Fit the pane">Fit</button><button data-z="+" title="Zoom in">+</button>
       </div>
@@ -155,7 +153,7 @@
       </div>
     </section>
     <aside id="side" hidden>
-      <div id="side-head"><nav id="side-tabs"></nav>
+      <div id="side-head"><span id="side-title"></span>
         <button id="side-close" title="close the panel">&times;</button></div>
       <div id="side-body"></div>
     </aside>
@@ -163,6 +161,7 @@
   <nav id="mtabs">
     <button data-m="files">Files</button><button data-m="edit" id="mt-edit">Edit</button>
     <button data-m="preview">Preview</button><button data-m="side">Panel<b class="badge" hidden></b></button>
+    <button id="mt-more" data-act="palette" title="Every command">&middot;&middot;&middot;</button>
   </nav>
   <button id="focus-exit" data-act="focus" title="Leave focus (Esc; with vim keys, Space z or :q)">Leave focus</button>
   <dialog id="keys"><h3>Keyboard shortcuts</h3><div id="keys-body"></div>
