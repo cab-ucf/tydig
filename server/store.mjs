@@ -265,12 +265,18 @@ async function load(n, doc) {
 }
 
 // State first, then the tree: a crash between leaves the disk older,
-// which the next load ignores.
-export async function save(n, doc) {
+// which the next load ignores. The text is on disk within seconds; a commit
+// of it once editing pauses (2 min), or every 10 while it goes on, or now
+// (the project closed, the hub stopping): a history worth reading.
+const due = new Map() // project -> { since, timer }
+export async function save(n, doc, now) {
   if (!isProj(n) || dropped.has(n)) return
   await writeAtomic(crdtFile(n), Y.encodeStateAsUpdate(doc))
   await mirror(n, doc)
-  await commit(n, 'autosave')
+  const d = due.get(n) ?? { since: Date.now() }, go = () => (due.delete(n), commit(n, 'autosave'))
+  clearTimeout(d.timer)
+  if (now || Date.now() - d.since > 6e5) return go()
+  due.set(n, Object.assign(d, { timer: setTimeout(go, 12e4) }))
 }
 
 export const hocuspocus = Server.configure({
@@ -279,7 +285,10 @@ export const hocuspocus = Server.configure({
     if (isProj(n) && !doc.getMap('files').size) await load(n, doc)
     return doc
   },
-  afterUnloadDocument: async ({ documentName: n }) => { watchers.get(n)?.close(); watchers.delete(n) },
+  afterUnloadDocument: async ({ documentName: n }) => {
+    watchers.get(n)?.close(); watchers.delete(n)
+    if (due.has(n)) { clearTimeout(due.get(n).timer); due.delete(n); await commit(n, 'autosave') }
+  },
   onStoreDocument: ({ documentName: n, document: doc }) => save(n, doc),
 })
 

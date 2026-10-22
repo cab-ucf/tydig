@@ -214,7 +214,7 @@ let leaving = false
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, async () => {
   if (leaving) process.exit(1)
   leaving = true
-  for (const [n, doc] of hocuspocus.documents) await save(n, doc).catch(e => console.warn(`save ${n}: ${e.message}`))
+  for (const [n, doc] of hocuspocus.documents) await save(n, doc, true).catch(e => console.warn(`save ${n}: ${e.message}`))
   await remote.syncAll('shutdown')
   process.exit(0)
 })
