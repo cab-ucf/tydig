@@ -41,6 +41,11 @@ export const provider = new HocuspocusProvider({
 })
 meta.observe(() => meta.get('epoch') ? q.epoch = meta.get('epoch') : delete q.epoch)
 provider.setAwarenessField('user', { ...user, colorLight: user.color })
+// when this person last stirred here, so the others can see who is idle
+let stirred = 0
+const stir = () => Date.now() - stirred > 15e3 && provider.setAwarenessField('active', stirred = Date.now())
+for (const e of ['pointermove', 'pointerdown', 'keydown', 'wheel']) addEventListener(e, stir, { passive: true })
+stir()
 // a reload or a closed tab leaves at once, not 30 s later, when its presence would lapse
 addEventListener('pagehide', () => provider.awareness.setLocalState(null))
 provider.on('status', ({ status }) => {

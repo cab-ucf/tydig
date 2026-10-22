@@ -20,6 +20,7 @@ import { commentExt } from './comments.js'
 import { renderTree } from './tree.js'
 import { applyLayout } from './menu.js'
 import { later } from './warm.js'
+import { aiMarks } from './preview.js'
 
 export let view = null, path = null, prev = null // prev: the file before, for vim's Ctrl-^
 export const undo = new Map() // path -> Y.UndoManager: own edits only
@@ -198,6 +199,7 @@ const nextMode = () => modes[(modes.indexOf(settings.scope?.by) + 1) % modes.len
 const scope = surprise({
   url: () => settings.scope?.url, hub: () => settings.scope?.hub && `/api${P('/surprise')}`,
   by: () => settings.scope?.by, typst: () => !!path?.endsWith('.typ'), after: later,
+  marks: l => aiMarks(path, l),
   // while a reading is awaited, a bar sweeps the editor's header
   busy: on => { $('editor').classList.toggle('scope-busy', on); $('scope').classList.toggle('busy', on) },
   // in vim, typing is read on the way out of insert mode

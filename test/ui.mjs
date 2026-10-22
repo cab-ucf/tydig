@@ -112,6 +112,18 @@ if (newton) await page.mouse.click(newton.x, newton.y, { count: 2, clickCount: 2
 await sleep(800)
 const jumped = await page.evaluate(() => document.querySelector('.cm-activeLine')?.textContent ?? '')
 check('double-clicking a word in the preview goes to it in the source', !!newton && jumped.includes('Newton'))
+// a word found all over: its own, by the text around it
+const the = await page.evaluate(() => {
+  const w = document.createTreeWalker(document.getElementById('page'), NodeFilter.SHOW_TEXT)
+  for (let n; (n = w.nextNode());) { const i = n.data.indexOf('rule: the ')
+    if (i >= 0) { const r = document.createRange(); r.setStart(n, i + 6); r.setEnd(n, i + 9); const b = r.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } } }
+})
+if (the) await page.mouse.click(the.x, the.y, { count: 2, clickCount: 2 })
+await sleep(800)
+check('double-clicking "the" goes to that "the"', !!the && await page.evaluate(() => getSelection().toString() === 'the' &&
+  document.querySelector('.cm-activeLine')?.textContent.includes('decision rule: the')))
+if (newton) await page.mouse.click(newton.x, newton.y, { count: 2, clickCount: 2 })
+await sleep(800)
 await page.keyboard.down('Control'); await page.keyboard.down('Alt'); await page.keyboard.press('j')
 await page.keyboard.up('Alt'); await page.keyboard.up('Control'); await sleep(500)
 const toPv = await page.evaluate(() => { const r = [...CSS.highlights.get('pv-at') ?? []][0]
@@ -362,6 +374,15 @@ const kept = await page.evaluate(() => !!document.querySelector('#page img')), e
 await page.waitForFunction(() => document.querySelector('#page svg'), { timeout: 90000 }); page.off('request', onWasm)
 check('a page opens on the preview the hub keeps, before loading a compiler; then compiles its own', kept && !early)
 
+// the bar never runs off the page: what the menus hold gives way
+const spills = []
+for (let w = 640; w <= 1800; w += 40) {
+  await page.setViewport({ width: w, height: 900 }); await sleep(150)
+  if (await page.evaluate(() => { const b = document.getElementById('bar'); return b.scrollWidth > b.clientWidth })) spills.push(w)
+}
+check('the top bar fits at every width', !spills.length)
+if (spills.length) console.log('  spills at', spills.join())
+
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
@@ -374,10 +395,10 @@ check('the Preview tab picks which file to compile, and still fits', await page.
   const sel = document.getElementById('main-sel'), r = sel.getBoundingClientRect()
   return r.width > 40 && r.right <= 390 && [...sel.options].some(o => o.value === 'summary.typ') && document.documentElement.scrollWidth <= 390 }))
 check('the other tabs leave it out', (await shows('edit')) && await page.evaluate(() => !document.getElementById('main-sel').getBoundingClientRect().width))
-check('the word count sits under the Edit tab, and build in the tab bar opens the Build panel', await page.evaluate(() =>
-  /\d+ words/.test(document.getElementById('mt-edit').textContent) && document.getElementById('mtabs').contains(document.getElementById('bar-build'))) &&
-  (await page.evaluate(() => document.getElementById('bar-build').click()), await sleep(400),
-   await page.evaluate(() => document.body.dataset.m === 'side') && (await side()).title === 'build'))
+check('the word count sits under the Edit tab; the Panel tab opens the panel, its own tabs pick Build', await page.evaluate(() =>
+  /\d+ words/.test(document.getElementById('mt-edit').textContent)) && (await shows('side')).join() === 'side' &&
+  (await page.evaluate(() => [...document.querySelectorAll('#side-tabs button')].find(b => b.firstChild.textContent === 'Build').click()),
+   await sleep(400), (await side()).title === 'build'))
 // Word: the citations are EndNote's fields, the bibliography its list
 const word = await page.evaluate(async () => {
   const post = (u, body) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body }).then(r => r.json())

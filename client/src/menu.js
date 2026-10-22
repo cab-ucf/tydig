@@ -87,6 +87,18 @@ export function applyLayout() {
 for (const h of document.querySelectorAll('.sect-head'))
   h.onclick = e => e.target.closest('button') || flip(h.dataset.sect)()
 
+// The bar sheds what the menus also hold, least needed first, until it fits;
+// then the project's name gives way
+const SHED = ['me', 'peers', 'bar-ai', 'bar-check', 'bar-cite', 'bar-comment', 'bar-build', 'scope', 'bar-chat', 'views']
+function fit() {
+  const b = $('bar'), over = () => b.scrollWidth > b.clientWidth
+  b.classList.remove('tight'); SHED.forEach(id => $(id).classList.remove('shed'))
+  for (const id of SHED) over() && $(id).classList.add('shed')
+  b.classList.toggle('tight', over())
+}
+new ResizeObserver(fit).observe($('bar'))
+new MutationObserver(fit).observe($('bar'), { subtree: true, childList: true, characterData: true, attributeFilter: ['hidden'] })
+
 // The divider: drag it (only the panes move; the rest of the layout, once
 // let go); double-click to even it out.
 function split() { $('editor').style.flex = `${settings.split} 1 0`; $('preview').style.flex = `${1 - settings.split} 1 0` }
@@ -99,15 +111,13 @@ bar.onpointerdown = e => {
 }
 bar.ondblclick = () => { settings.split = 0.5; applyLayout() }
 
-// Phones show one pane at a time, picked in the bottom tab bar; what their bar
-// has no room for moves: the word count under the Edit tab, build into the
-// tab bar.
+// Phones show one pane at a time, picked in the bottom tab bar (the panel's
+// own tabs pick within it); the word count moves under the Edit tab.
 // (iOS zooms into a field under 16px when tapped; maximum-scale stops it.)
 if (/iP(hone|ad|od)/.test(navigator.userAgent))
   document.querySelector('meta[name=viewport]').content += ', maximum-scale=1'
-const moves = [['wordcount', 'mt-edit', 'append'],
-  ['bar-build', 'mtabs', 'append']].map(([id, to, how]) => [$(id), $(id).parentNode, $(id).nextSibling, $(to), how])
-const place = () => moves.forEach(([e, home, next, to, how]) => phone() ? to[how](e) : home.insertBefore(e, next))
+const wc = $('wordcount'), home = [wc.parentNode, wc.nextSibling]
+const place = () => phone() ? $('mt-edit').append(wc) : home[0].insertBefore(wc, home[1])
 phoneQ.addEventListener('change', place); place()
 phoneQ.addEventListener('change', applyLayout)
 $('mtabs').onclick = e => {

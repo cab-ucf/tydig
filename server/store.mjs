@@ -69,11 +69,24 @@ export const git = (n, ...a) => {
   gitQ.set(n, r.catch(() => {}))
   return r.then(r => r.stdout)
 }
+// whoever edited since the last commit is its author, or a co-author
+const editors = new Map() // project -> Map(id -> user)
+export function edited(n, u, first) {
+  if (!u?.email) return
+  const m = editors.get(n) ?? new Map()
+  editors.set(n, first ? new Map([[u.id, u], ...m]) : m.set(u.id, u))
+}
+const who = u => `${String(u.name || u.email).replace(/[<>\n]/g, '')} <${u.email}>`
 // each commit stores what changed whole, loose, until git packs it as deltas:
 // packed early, so an autosaving hub's .git stays the size of its history
-export const commit = (n, msg, ...flags) => git(n, 'add', '-A')
-  .then(() => git(n, 'commit', '-q', ...flags, '-m', msg))
-  .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet')).catch(() => {})
+export function commit(n, msg, ...flags) {
+  const [a, ...co] = editors.get(n)?.values() ?? []
+  editors.delete(n)
+  if (a) flags.push(`--author=${who(a)}`)
+  if (co.length) flags.push('-m', co.map(u => `Co-authored-by: ${who(u)}`).join('\n'))
+  return git(n, 'add', '-A').then(() => git(n, 'commit', '-q', '-m', msg, ...flags))
+    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet')).catch(() => {})
+}
 export async function ensureRepo(n) {
   if (existsSync(inProj(n, '.git'))) return
   await fs.mkdir(proj(n), { recursive: true })

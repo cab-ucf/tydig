@@ -134,7 +134,8 @@ const scopeField = StateField.define({
 
 // opts: url () an engine's address on this machine, or null; hub () the hub's
 // route, or null; by () 'bits' | 'ent' | 'ai'; typst () is this a .typ;
-// report ({ ppl, ai } | { error }); after, a promise to wait for first;
+// report ({ ppl, ai } | { error }); marks ([[from, to, AI-likeness]] |
+// null): each sentence's, for the preview; after, a promise to wait for first;
 // busy (true | false): whether a reading is awaited; hold (): not now (vim's
 // insert mode), poke () when that ends. A reading of text typed over since is
 // shown anyway, mapped through the edits: only what changed waits
@@ -185,6 +186,7 @@ export function surprise(opts) {
       if (a < b) marks.push(Decoration.mark({ class: 'scope-w', attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
     }
     last = h
+    opts.marks?.(ai && h.sents.filter(z => z.ai).map(z => [...src(z.s, z.e), aiPct(z.ai.tail)]))
     view.dispatch({ effects: setScope.of(Decoration.set(marks, true)) })
     opts.report({ ppl: h.ppl, bpt: h.bpt, ai: h.ai }); state(false)
   }
@@ -242,6 +244,7 @@ export function surprise(opts) {
   const refresh = () => {
     if (opts.url() || opts.hub()) return last ? (show(last), state()) : ask()
     last = null; seq++; ws?.close(); ws = null; state(false) // what is in flight is no longer wanted
+    opts.marks?.(null)
     view?.dispatch({ effects: setScope.of(Decoration.none) })
   }
   return { extension: [scopeField, plugin, hover], refresh, poke }

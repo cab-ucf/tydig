@@ -55,6 +55,8 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   margin-right: calc(var(--logo-w) / 5); background: var(--logo) left / contain no-repeat;
 }
 #bar > * { flex: none; white-space: nowrap; }
+#bar .shed { display: none !important; } /* menu.js: the bar's overflow, held by the menus */
+#bar.tight > #projname { flex: 0 1 auto; min-width: 2rem; overflow: hidden; text-overflow: ellipsis; }
 #bar > .spacer { flex: 1 1 0; min-width: 0; }
 #peers { font-size: .75rem; color: var(--fg-dim); }
 /* one kind of button: quiet until pointed at; Share alone is filled */
@@ -68,7 +70,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 #bar button.go:hover { filter: brightness(1.1); }
 .tgl { font-size: .75rem !important; }
 #projname { font: 600 .85rem var(--sans); }
-#bar #bar-cmd { flex: 0 1 16rem; min-width: 0; justify-content: space-between; overflow: hidden;
+#bar #bar-cmd { flex: 0 1 16rem; min-width: 5rem; justify-content: space-between; overflow: hidden;
   border: 1px solid var(--ink-3); background: var(--ink-2); }
 #bar-cmd span { overflow: hidden; text-overflow: ellipsis; }
 #bar #bar-cmd kbd { font: .68rem var(--mono); color: var(--fg-dim); }
@@ -113,10 +115,6 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
 #status::before { content: '● '; }
 #status[data-state="connected"] { font-size: 0; }
 #status[data-state="connected"]::before { font-size: .7rem; }
-/* narrower: what the menus also hold goes from the bar first */
-@media (max-width: 1360px) { #bar-cmd span { display: none; } }
-@media (max-width: 1280px) { #peers, #me { display: none; } }
-@media (max-width: 1100px) { #bar-cite, #bar-check, #bar-comment, #bar-build, #bar-ai { display: none !important; } }
 #status[data-state="connected"] { color: var(--teal); }
 #status[data-state="disconnected"] { color: var(--red); }
 #status[data-review="1"]::after { content: ' review'; font-size: .72rem; color: var(--teal); }
@@ -187,6 +185,7 @@ body.no-tree #tree-pane { display: none; }
 .tnode .tw { width: .75rem; color: var(--fg-dim); flex: none; }
 .tnode .dots { display: flex; gap: 2px; }
 .tnode .dot { width: 7px; height: 7px; }
+.dot.idle { opacity: .35; }
 .tnode .ops { visibility: hidden; display: flex; gap: 2px; }
 .tnode:hover .ops { visibility: visible; }
 .tnode .ops button { background: none; border: none; color: var(--fg-dim); cursor: pointer; font-size: .68rem; padding: 0 .2rem; }
@@ -331,7 +330,10 @@ textarea.say {
 .commit code { color: var(--teal); font: .75rem var(--mono); }
 .commit.checkpoint { border-color: var(--teal); }
 .commit time { grid-column: 1 / 2; font-size: .68rem; color: var(--fg-dim); }
-.commit button { grid-column: 2; justify-self: end; grid-row: 2; }
+.commit button { grid-column: 2; justify-self: end; }
+.commit .who { grid-column: 1 / -1; font-size: .72rem; color: var(--fg-dim); }
+.commit ins { color: #58a35f; text-decoration: none; }
+.commit del { color: #d0605a; text-decoration: none; }
 .prov { font-size: 10.5px; padding: 0 6px; border-radius: 8px; white-space: nowrap; }
 .prov.ok { color: #58a35f; border: 1px solid #58a35f55; }
 .prov.warn { color: #d9a441; border: 1px solid #d9a44155; }
@@ -565,8 +567,7 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
   #projname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #main-label { font-size: 0; }
   #main-sel { max-width: 15rem; }
-  /* moved by menu.js: the count and build to the tabs */
-  #mtabs #bar-build { display: block !important; text-transform: capitalize; }
+  /* moved by menu.js: the count to the tabs */
   #mtabs #wordcount { display: block !important; font-size: .65rem; }
   .menu > button { padding: .45rem .5rem; }
   .dropdown { max-width: calc(100vw - 1rem); }
@@ -595,4 +596,10 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
   #picker { min-width: 0; width: calc(100vw - 1.5rem); padding: 1rem; }
   .auth-card { width: min(320px, calc(100vw - 2rem)); }
 }
+/* AI-likeness over the preview (preview.js): the editor's violet, magenta
+   from 70%; light, as the page's text shows through */
+::highlight(ai-0) { background-color: color-mix(in srgb, var(--ai-hi) 18%, transparent); }
+::highlight(ai-1) { background-color: color-mix(in srgb, var(--ai-hi) 32%, transparent); }
+::highlight(ai-2) { background-color: color-mix(in srgb, var(--ai-hi) 48%, transparent); }
+::highlight(ai-3) { background-color: color-mix(in srgb, var(--ai-top) 55%, transparent); }
 ::highlight(pv-at) { background: color-mix(in srgb, var(--teal) 45%, transparent); color: inherit; }
