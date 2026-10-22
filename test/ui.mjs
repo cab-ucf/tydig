@@ -325,6 +325,9 @@ check('a message from someone else is counted on the bar and said in a note', aw
 await page.click('#toast'); await sleep(600)
 check('a click on the note opens the Discussion, and the count clears', (await side()).title === 'discussion' &&
   await page.evaluate(() => document.querySelector('#bar-chat .badge').hidden && !/^\(/.test(document.title)))
+await page.type('#side-body textarea.say', 'sent once'); await page.keyboard.press('Enter'); await sleep(500)
+check('sending in the Discussion empties its box', await page.evaluate(() => document.querySelector('#side-body textarea.say').value === '' &&
+  [...document.querySelectorAll('#side-body .msg p')].some(p => p.textContent === 'sent once')))
 beaDoc.provider.destroy()
 
 // the layout: one of three views, each a button in the bar; Reset layout restores the standard

@@ -55,6 +55,7 @@ html, body { height: 100%; margin: 0; font-family: var(--sans); }
   margin-right: calc(var(--logo-w) / 5); background: var(--logo) left / contain no-repeat;
 }
 #bar > * { flex: none; white-space: nowrap; }
+#bar { overflow-x: clip; } /* never the page's sideways scroll; menus still drop down */
 #bar .shed { display: none !important; } /* menu.js: the bar's overflow, held by the menus */
 #bar.tight > #projname { flex: 0 1 auto; min-width: 2rem; overflow: hidden; text-overflow: ellipsis; }
 #bar > .spacer { flex: 1 1 0; min-width: 0; }

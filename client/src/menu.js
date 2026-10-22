@@ -97,6 +97,7 @@ function fit() {
   b.classList.toggle('tight', over())
 }
 new ResizeObserver(fit).observe($('bar'))
+document.fonts?.addEventListener('loadingdone', fit) // wider letters, same bar
 new MutationObserver(fit).observe($('bar'), { subtree: true, childList: true, characterData: true, attributeFilter: ['hidden'] })
 
 // The divider: drag it (only the panes move; the rest of the layout, once

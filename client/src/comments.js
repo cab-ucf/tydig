@@ -192,8 +192,8 @@ const composer = (re, hint) => {
     const text = t.value.trim()
     if (e.key !== 'Enter' || e.shiftKey || !text) return
     e.preventDefault()
+    t.value = ''; drafts.delete(k) // first: the push redraws the pane, from the drafts
     chat.push([{ id: uid(), author: user.name, color: user.color, text, ts: Date.now(), ...re && { re } }])
-    t.value = ''; drafts.delete(k)
   }
   return t
 }
