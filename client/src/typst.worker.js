@@ -1,7 +1,7 @@
 // The compiler, off the page's thread, so typing never waits on it. The page
 // sends what changed of its files since it last asked; it asks for the preview (svg, with
 // comment pins, or without them should a pin break it; what changed of it),
-// the diagnostics, or a PDF. The compiler, renderer and fonts load on the first ask (preview.js
+// the diagnostics, a PDF, or the text it typesets. The compiler, renderer and fonts load on the first ask (preview.js
 // makes the worker then). One ask at a time: they share one virtual filesystem.
 import { TypstSnippet } from '@myriaddreamin/typst.ts/dist/esm/contrib/snippet.mjs'
 import { loadFonts } from '@myriaddreamin/typst.ts/dist/esm/options.init.mjs'
@@ -63,6 +63,22 @@ const parts = (svg, all) => {
   shown = ps; whole = svg
   return { parts: out }
 }
+// What a reader reads: typst.ts's SVG carries each run of text for selecting
+// (.tsel), in reading order, and the break that ends a line (a content hint:
+// a space, or a newline closing a paragraph). A run in a new frame (a
+// heading, a running head) starts a line; one after a soft hyphen goes on.
+const RUN = /class="tsel"[^>]*>([^<]*)|data-hint="(\w+)"|(typst-group)/g
+const XML = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+const unxml = s => s.replace(/&(#x?)?(\w+);/g, (_, n, v) => n ? String.fromCodePoint(parseInt(v, n[1] ? 16 : 10)) : XML[v])
+const reads = svg => {
+  let out = '', frame = false
+  for (const [, t, h] of svg.matchAll(RUN)) {
+    if (t == null && !h) { frame = true; continue }
+    if (frame && /[^\s\u00ad]$/.test(out)) out += '\n'
+    out += h ? String.fromCodePoint(parseInt(h, 16)) : unxml(t); frame = false
+  }
+  return out.replace(/\u00ad/g, '').replace(/[^\S\n]+/g, ' ').replace(/ *\n\s*/g, '\n').trim()
+}
 const ops = {
   async svg(m) { // plain: the pinned files without pins, should a pin break the compile
     await load(m)
@@ -74,6 +90,10 @@ const ops = {
     }
   },
   last: () => ({ svg: whole }), // the whole, for the hub to keep
+  async text(m) { // the document as typeset, apart from the preview's parts
+    await load(m)
+    return { text: reads(await $typst.svg({ mainFilePath: '/' + m.main })) }
+  },
   async pdf(m) {
     await load(m)
     try { return { pdf: await $typst.pdf({ mainFilePath: '/' + m.main }) } } catch (e) { if (want.size) return lacking(); throw e }

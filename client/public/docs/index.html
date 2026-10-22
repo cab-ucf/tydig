@@ -66,7 +66,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
   --header "Authorization: Bearer tyd_..."</code></pre></li>
 <li><code>TYDIG_AGENT_TOKEN=tyd_... just agent PROJECT</code> answers each <code>@name</code> mention with Claude Code.</li>
 <li>Ghost text: <code>TYDIG_OLLAMA</code> + <code>TYDIG_GHOST_MODEL</code> (e.g. <code>qwen2.5-coder:1.5b</code>), or each person's own Ollama with <code>OLLAMA_ORIGINS</code> set to the page.</li>
-<li>Surprise overlay: <code>TYDIG_SCOPE=1</code> runs Perplexiscope (<code>scope/</code>): word surprise, flatness, and AI-likeness by MELD: sentences tinted from 8%, blocked out from 70% (0% reads like half of human writing, 100% like 1 in 1,000). <b>AI check</b> (Edit menu, or the bar) reads every file and lists the most AI-like sentences. A flag is evidence to discuss, never a verdict.</li>
+<li>Surprise overlay: <code>TYDIG_SCOPE=1</code> runs Perplexiscope (<code>scope/</code>): word surprise, flatness, and AI-likeness by MELD: sentences tinted from 8%, blocked out from 70% (0% reads like half of human writing, 100% like 1 in 1,000). <b>AI check</b> (Edit menu, or the bar) reads the document as typeset, what a reviewer reads, and lists the most AI-like sentences, each a click from its source. A flag is evidence to discuss, never a verdict.</li>
 </ul>
 
 <h2>Settings (<code>.env</code>)</h2>
