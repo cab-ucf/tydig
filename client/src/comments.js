@@ -80,7 +80,7 @@ export function unseen() {
 }
 export function count() {
   const n = unseen(), all = n.comments + n.chat
-  for (const b of document.querySelectorAll('.badge')) { b.hidden = !all; b.textContent = all }
+  for (const b of document.querySelectorAll('#mtabs .badge')) { b.hidden = !all; b.textContent = all }
   document.title = (all ? `(${all}) ` : '') + document.title.replace(/^\(\d+\) /, '')
   tabs()
 }

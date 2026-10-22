@@ -28,8 +28,7 @@ import { applyLayout } from './menu.js'
 import './keys.js'
 
 $('projname').textContent = projName
-// who this is: your cursor's colour and name in the bar, the address in Settings
-Object.assign($('me'), { textContent: user.name, title: `signed in as ${me.email}` }).style.setProperty('--c', user.color)
+// who this is: the address in Settings (the others are in the bar)
 $('whoami').textContent = `Signed in as ${me.name} (${me.email})`
 applyLayout()
 if (settings.sideOpen) openSidebar('comments')

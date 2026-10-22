@@ -28,7 +28,7 @@ page.on('dialog', async d => { if (d.type() === 'prompt') await d.accept(answer 
 let yes = false
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const side = () => page.evaluate(() => ({ hidden: document.getElementById('side').hidden,
-  title: document.querySelector('#side-tabs .on')?.firstChild.textContent.toLowerCase(), body: document.getElementById('side-body').innerText.slice(0, 300) }))
+  title: document.getElementById('side-title').textContent.toLowerCase(), body: document.getElementById('side-body').innerText.slice(0, 300) }))
 
 await page.goto(B, { waitUntil: 'networkidle2', timeout: 60000 })
 await page.waitForSelector('#auth-form'); await page.click('.auth-tabs button[data-tab="up"]')
@@ -165,8 +165,8 @@ yes = false
 await page.evaluate(() => document.querySelector('[data-action="comments"], button[data-act="comments"]')?.click())
 await sleep(500); const s = await side()
 check('comments pane opens', !s.hidden && s.title === 'comments')
-check('the panel has tabs for comments, the Discussion, history and build', await page.evaluate(() =>
-  [...document.querySelectorAll('#side-tabs button')].map(b => b.firstChild.textContent).join() === 'Comments,Discussion,History,Build'))
+check('the rail has the panels: comments, the Discussion, history and build', await page.evaluate(() =>
+  ['comments', 'chat', 'history', 'build'].every(m => document.querySelector(`#rail [data-pane=${m}]`)?.checkVisibility())))
 // Ctrl-K finds any command by name
 await page.keyboard.down('Control'); await page.keyboard.press('k'); await page.keyboard.up('Control'); await sleep(300)
 await page.keyboard.type('discussion'); await page.keyboard.press('Enter'); await sleep(500)
@@ -185,7 +185,7 @@ await page.keyboard.press('End'); for (let i = 0; i < 9; i++) await page.keyboar
 
 
 // 3. Build: run "all" from the build pane, wait, see the preview keep working
-await page.evaluate(() => document.getElementById('bar-build').click()); await sleep(1500)
+await page.evaluate(() => document.querySelector('#rail [data-pane=build]').click()); await sleep(1500)
 await page.evaluate(() => [...document.querySelectorAll('#side-body .recipe')].find(r => r.textContent.includes('make all'))?.querySelector('button').click())
 await sleep(25000)
 const build = await page.evaluate(() => document.querySelector('.buildlog')?.textContent.slice(-400))
@@ -305,7 +305,7 @@ await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').clic
 await page.click('#scope'); await sleep(800)
 check('another shows AI-likeness per sentence, the most AI-like blocked out', await page.evaluate(() =>
   document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent)))
-await page.evaluate(() => document.getElementById('bar-ai').click()); await sleep(300)
+await page.evaluate(() => document.querySelector('#rail [data-pane=aicheck]').click()); await sleep(300)
 await page.evaluate(() => document.querySelector('#side-body .go').click()); await sleep(3000)
 check('the AI check reads the document as typeset, and lists the most AI-like sentences, each a click away', await page.evaluate(() =>
   /1 blocked out/.test(document.getElementById('side-body').innerText) && document.querySelectorAll('#side-body .ai-row').length > 0) &&
@@ -321,10 +321,10 @@ await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST', headers
 const bea = await person('Bea', { hub: B, email: 'bea@example.com' }), beaDoc = bea.doc('demo'); await sleep(2000)
 beaDoc.getArray('chat').push([{ id: 'b1', author: 'Bea', text: '@Ada look at the intro', ts: Date.now() }]); await sleep(1500)
 check('a message from someone else is counted on the bar and said in a note', await page.evaluate(() =>
-  document.querySelector('#bar-chat .badge').textContent === '1' && /Bea.*mentioned you.*look at the intro/.test(document.getElementById('toast')?.textContent)))
+  document.querySelector('#rail [data-pane=chat] .badge').textContent === '1' && /Bea.*mentioned you.*look at the intro/.test(document.getElementById('toast')?.textContent)))
 await page.click('#toast'); await sleep(600)
 check('a click on the note opens the Discussion, and the count clears', (await side()).title === 'discussion' &&
-  await page.evaluate(() => document.querySelector('#bar-chat .badge').hidden && !/^\(/.test(document.title)))
+  await page.evaluate(() => document.querySelector('#rail [data-pane=chat] .badge').hidden && !/^\(/.test(document.title)))
 await page.type('#side-body textarea.say', 'sent once'); await page.keyboard.press('Enter'); await sleep(500)
 check('sending in the Discussion empties its box', await page.evaluate(() => document.querySelector('#side-body textarea.say').value === '' &&
   [...document.querySelectorAll('#side-body .msg p')].some(p => p.textContent === 'sent once')))
@@ -334,18 +334,18 @@ beaDoc.provider.destroy()
 const vis = () => page.evaluate(() => ['editor', 'preview', 'side']
   .map(id => getComputedStyle(document.getElementById(id)).display !== 'none' ? id[0] : '-').join(''))
 await page.evaluate(() => document.querySelector('#menubar [data-act=comments]').click())
-await page.click('#views [data-act=view-editor]'); const onlyEd = await vis()
-await page.click('#views [data-act=view-preview]'); const onlyPv = await vis()
+await page.click('#rail [data-act=view-editor]'); const onlyEd = await vis()
+await page.click('#rail [data-act=view-preview]'); const onlyPv = await vis()
 await page.evaluate(() => document.querySelector('#menubar [data-act=reset-layout]').click()); await sleep(200)
 check('editor only, preview only, then Reset layout brings back both, panel closed', onlyEd === 'e-s' && onlyPv === '-ps' &&
-  await vis() === 'ep-' && await page.evaluate(() => document.querySelector('#views [data-act=view-split]').ariaPressed === 'true'))
+  await vis() === 'ep-' && await page.evaluate(() => document.querySelector('#rail [data-act=view-split]').ariaPressed === 'true'))
 
 // keys: Mod-\ hides the preview; in vim, Space 3 is the preview alone, :only the editor; ? lists them
 const v = () => page.evaluate(() => document.body.dataset.view), key = async (...k) => { for (const x of k) await page.keyboard.press(x); await sleep(150) }
 await page.keyboard.down('Control'); await key('Backslash'); await page.keyboard.up('Control'); const hid = await v()
 await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
 await page.click('.cm-line:nth-child(22)'); await key('Escape', 'Space', '3'); const leader = await v()
-await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click())
+await page.evaluate(() => document.querySelector('#rail [data-act=view-split]').click())
 await page.click('.cm-line:nth-child(22)'); await key('Escape'); await page.keyboard.type(':only'); await key('Enter'); const ex = await v()
 await page.click('#projname'); await key('?'); const help = await page.evaluate(() => document.getElementById('keys').open)
 await key('Escape'); await page.evaluate(() => { document.querySelector('#menubar [data-act=vim]').click(); document.querySelector('#menubar [data-act=reset-layout]').click() })
@@ -390,18 +390,19 @@ if (spills.length) console.log('  spills at', spills.join())
 // a phone: the page fits the screen, and the tab bar shows one pane at a time
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true }); await sleep(800)
 const shows = async m => { await page.evaluate(m => document.querySelector(`#mtabs [data-m="${m}"]`).click(), m); await sleep(400)
-  return page.evaluate(() => ['tree-pane', 'editor', 'preview', 'side'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')) }
+  return page.evaluate(() => ['rail', 'tree-pane', 'editor', 'preview', 'side'].filter(id => getComputedStyle(document.getElementById(id)).display !== 'none')) }
 check('on a phone the page fits the screen', await page.evaluate(() => document.documentElement.scrollWidth <= 390))
 check('and its tabs show one pane each', (await shows('files')).join() === 'tree-pane' && (await shows('edit')).join() === 'editor' &&
-  (await shows('preview')).join() === 'preview' && (await shows('side')).join() === 'side')
+  (await shows('preview')).join() === 'preview' && (await shows('side')).join() === 'rail,side')
 await shows('preview')
 check('the Preview tab picks which file to compile, and still fits', await page.evaluate(() => {
   const sel = document.getElementById('main-sel'), r = sel.getBoundingClientRect()
   return r.width > 40 && r.right <= 390 && [...sel.options].some(o => o.value === 'summary.typ') && document.documentElement.scrollWidth <= 390 }))
 check('the other tabs leave it out', (await shows('edit')) && await page.evaluate(() => !document.getElementById('main-sel').getBoundingClientRect().width))
-check('the word count sits under the Edit tab; the Panel tab opens the panel, its own tabs pick Build', await page.evaluate(() =>
-  /\d+ words/.test(document.getElementById('mt-edit').textContent)) && (await shows('side')).join() === 'side' &&
-  (await page.evaluate(() => [...document.querySelectorAll('#side-tabs button')].find(b => b.firstChild.textContent === 'Build').click()),
+check('one bar on a phone, at the foot; the word count under Edit; the Panel tab opens the panel, its rail picks Build', await page.evaluate(() =>
+  /\d+ words/.test(document.getElementById('mt-edit').textContent) && !document.getElementById('bar').checkVisibility()) &&
+  (await shows('side')).join() === 'rail,side' &&
+  (await page.evaluate(() => document.querySelector('#rail [data-pane=build]').click()),
    await sleep(400), (await side()).title === 'build'))
 // Word: the citations are EndNote's fields, the bibliography its list
 const word = await page.evaluate(async () => {
@@ -448,7 +449,7 @@ check('Word export makes the citations EndNote fields, the bibliography its list
 }
 { // the divider: the panes follow the drag; the layout is kept once let go
   await page.setViewport({ width: 1400, height: 900 }); await sleep(300)
-  await page.evaluate(() => document.querySelector('#views [data-act=view-split]').click()); await sleep(300)
+  await page.evaluate(() => document.querySelector('#rail [data-act=view-split]').click()); await sleep(300)
   const b = await (await page.$('#split')).boundingBox(), y = b.y + b.height / 2
   const kept = () => page.evaluate(() => JSON.parse(localStorage.settings || '{}').split)
   const was = await kept(), flex = () => page.evaluate(() => parseFloat(document.getElementById('editor').style.flex))

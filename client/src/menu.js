@@ -58,7 +58,7 @@ document.addEventListener('click', e => {
   menu ? menu.classList.toggle('open', !was) : b && actions[b.dataset.act]?.()
 })
 // buttons that act on the selection must not take it away
-for (const id of ['pv-comment', 'bar-comment', 'bar-cite']) $(id).onmousedown = e => e.preventDefault()
+$('pv-comment').onmousedown = e => e.preventDefault()
 
 export function applyLayout() {
   const b = document.body, on = (c, x) => b.classList.toggle(c, !!x), t = theme()
@@ -70,7 +70,7 @@ export function applyLayout() {
     h.firstElementChild.textContent = settings[h.dataset.sect] ? '▾' : '▸'
   })
   $('side').hidden = !settings.sideOpen // hidden in the markup, so it does not flash before this
-  $('scope').hidden = !settings.scope; $('bar-ai').hidden = !settings.scope
+  $('scope').hidden = !settings.scope; $('rail').querySelector('[data-pane=aicheck]').hidden = !settings.scope
   document.documentElement.dataset.theme = t; on('dark-preview', t !== 'light'); restyle()
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
   $('zoom-pct').textContent = settings.zoom ? `${Math.round(100 * settings.zoom)}%` : 'Fit'
@@ -89,7 +89,7 @@ for (const h of document.querySelectorAll('.sect-head'))
 
 // The bar sheds what the menus also hold, least needed first, until it fits;
 // then the project's name gives way
-const SHED = ['me', 'peers', 'bar-ai', 'bar-check', 'bar-cite', 'bar-comment', 'bar-build', 'scope', 'bar-chat', 'views']
+const SHED = ['people', 'bar-cmd']
 function fit() {
   const b = $('bar'), over = () => b.scrollWidth > b.clientWidth
   b.classList.remove('tight'); SHED.forEach(id => $(id).classList.remove('shed'))
@@ -112,13 +112,14 @@ bar.onpointerdown = e => {
 }
 bar.ondblclick = () => { settings.split = 0.5; applyLayout() }
 
-// Phones show one pane at a time, picked in the bottom tab bar (the panel's
-// own tabs pick within it); the word count moves under the Edit tab.
+// Phones show one pane at a time, picked in the bottom tab bar, the only
+// bar: its ... is every command (the menus), the panes' own rail is above
+// the panel; the word count moves under Edit, the connection's dot to ....
 // (iOS zooms into a field under 16px when tapped; maximum-scale stops it.)
 if (/iP(hone|ad|od)/.test(navigator.userAgent))
   document.querySelector('meta[name=viewport]').content += ', maximum-scale=1'
-const wc = $('wordcount'), home = [wc.parentNode, wc.nextSibling]
-const place = () => phone() ? $('mt-edit').append(wc) : home[0].insertBefore(wc, home[1])
+const moves = [['wordcount', 'mt-edit'], ['status', 'mt-more']].map(([id, to]) => [$(id), $(id).parentNode, $(id).nextSibling, $(to)])
+const place = () => moves.forEach(([e, home, next, to]) => phone() ? to.append(e) : home.insertBefore(e, next))
 phoneQ.addEventListener('change', place); place()
 phoneQ.addEventListener('change', applyLayout)
 $('mtabs').onclick = e => {
