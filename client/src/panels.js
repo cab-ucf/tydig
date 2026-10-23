@@ -184,10 +184,20 @@ const commit = c => `<div class="commit${c.message.startsWith('checkpoint') ? ' 
   `<code>${esc(c.hash)}</code><span>${esc(c.message)} ${badge(c.provenance)}</span>` +
   `<div class="who">${esc([c.author, ...c.coauthors].join(', '))} &middot; ${what(c.files)}</div>` +
   `<time>${new Date(c.date).toLocaleString()}</time><button data-hash="${esc(c.hash)}">restore</button></div>`
+// a run of autosaves, folded into one: who, what (each file's lines summed), when
+const folded = cs => {
+  const by = [...new Set(cs.flatMap(c => [c.author, ...c.coauthors]))], fs = new Map()
+  for (const f of cs.flatMap(c => c.files)) { const g = fs.get(f.path) ?? { path: f.path, add: 0, del: 0 }; g.add += f.add; g.del += f.del; fs.set(f.path, g) }
+  const t = d => new Date(d).toLocaleString()
+  return `<details class="autos"><summary><span>${cs.length} autosaves</span><div class="who">${esc(by.join(', '))} &middot; ` +
+    `${what([...fs.values()])}</div><time>${t(cs.at(-1).date)} &ndash; ${t(cs[0].date)}</time></summary>${cs.map(commit).join('')}</details>`
+}
 async function renderHistory(body) {
   const log = await api(P('/history'))
   if (mode !== 'history') return // another pane was opened meanwhile
-  body.innerHTML = log.map(commit).join('') ||
+  const runs = [] // the log, each run of autosaves one entry
+  for (const c of log) c.message.startsWith('autosave') && runs.at(-1)?.[0].message.startsWith('autosave') ? runs.at(-1).push(c) : runs.push([c])
+  body.innerHTML = runs.map(r => r.length > 1 ? folded(r) : commit(r[0])).join('') ||
     '<p class="empty">No commits yet. Edits are kept at once, and committed when editing pauses.</p>'
   body.querySelectorAll('[data-hash]').forEach(b => b.onclick = () => confirm(`Restore ${b.dataset.hash}? ` +
     'Applies live for everyone; restore a later commit to go back.') && post(P('/restore/' + b.dataset.hash)))

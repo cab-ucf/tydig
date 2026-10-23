@@ -340,9 +340,18 @@ textarea.say {
 .commit.checkpoint { border-color: var(--teal); }
 .commit time { grid-column: 1 / 2; font-size: .68rem; color: var(--fg-dim); }
 .commit button { grid-column: 2; justify-self: end; }
+.autos { border: 1px dashed var(--ink-3); border-radius: 6px; font-size: .8rem; }
+.autos > summary { display: grid; grid-template-columns: auto 1fr; gap: .15rem .5rem; padding: .45rem .6rem; cursor: pointer; color: var(--fg-dim); }
+.autos > summary::marker { content: none; }
+.autos > summary > span::before { content: '\25B8  '; }
+.autos[open] > summary > span::before { content: '\25BE  '; }
+.autos > summary :is(.who, time) { grid-column: 1 / -1; }
+.autos time { font-size: .68rem; }
+.autos[open] { display: flex; flex-direction: column; gap: .4rem; padding-bottom: .4rem; }
+.autos > .commit { margin: 0 .4rem; }
 .commit .who { grid-column: 1 / -1; font-size: .72rem; color: var(--fg-dim); }
-.commit ins { color: #58a35f; text-decoration: none; }
-.commit del { color: #d0605a; text-decoration: none; }
+:is(.commit, .autos) ins { color: #58a35f; text-decoration: none; }
+:is(.commit, .autos) del { color: #d0605a; text-decoration: none; }
 .prov { font-size: 10.5px; padding: 0 6px; border-radius: 8px; white-space: nowrap; }
 .prov.ok { color: #58a35f; border: 1px solid #58a35f55; }
 .prov.warn { color: #d9a441; border: 1px solid #d9a44155; }
