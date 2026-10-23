@@ -5,9 +5,9 @@ import express from 'express'
 import compression from 'compression'
 import { toNodeHandler } from 'better-auth/node'
 import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
-import { DATA, HUB, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped, epoch, edited } from './store.mjs'
+import { DATA, HUB, hubFile, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped, epoch, edited } from './store.mjs'
 import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin }
   from './auth.mjs'
 import * as build from './build.mjs'
@@ -87,8 +87,10 @@ app.get('/api/templates', templates.list)
 app.use('/api', packages.router)
 app.use('/api/keys', history.keys)
 app.use('/api', link.bridge(PORT))
+// archived: done, so out of the list and locked in the picker; any member flips it
+const shelf = n => hubFile(n, 'archived')
 app.get('/api/projects', (req, res) => res.json(projectsOf(req.user.id).filter(p => isProj(p.name))
-  .map(({ name, role }) => ({ name, role }))))
+  .map(({ name, role }) => ({ name, role, archived: existsSync(shelf(name)) }))))
 
 // a new project: from a template, empty (for an archive), or a git remote
 app.post('/api/projects/:name', async (req, res) => {
@@ -147,6 +149,18 @@ p.delete('/members/:id', (req, res, next) => self(req) ? next() : admin(req, res
   await (self(req) ? auth.api.leaveOrganization({ headers, body: { organizationId } })
     : auth.api.removeMember({ headers, body: { memberIdOrEmail: req.params.id, organizationId } }))
   kick(req.params.proj); res.json({ ok: true })
+})
+p.put('/archived', async (req, res) => {
+  await mkdir(hubFile(req.params.proj, ''), { recursive: true })
+  await writeFile(shelf(req.params.proj), ''); res.json({ ok: true })
+})
+p.delete('/archived', async (req, res) => { await rm(shelf(req.params.proj), { force: true }); res.json({ ok: true }) })
+// the owner deletes it: members, files, history; a git remote is untouched
+p.delete('/', admin, async (req, res) => {
+  const r = await auth.api.deleteOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
+    body: { organizationId: req.org.id } }).catch(e => ({ error: e.message }))
+  if (r?.error) return res.status(403).json(r)
+  await lifecycle.dropProject(req.params.proj); res.json({ ok: true })
 })
 lifecycle.dropProject = async n => {
   if (!isProj(n)) return

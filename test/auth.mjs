@@ -48,6 +48,23 @@ check('Ann adds Bob', (await (await post(ann, `/p/${proj}/members`, { email: bob
 check('Bob now sees and reads the project', (await (await as(bob, '/projects')).json()).some(p => p.name === proj) &&
   (await as(bob, `/p/${proj}/files`)).ok)
 
+// archived: a flag any member flips; leaving and deleting
+const listed = async jar => (await (await as(jar, '/projects')).json()).find(p => p.name === proj)
+await as(bob, `/p/${proj}/archived`, { method: 'PUT' })
+check('a member archives the project, for everyone', (await listed(ann)).archived === true)
+await as(ann, `/p/${proj}/archived`, { method: 'DELETE' })
+check('and unarchives it', (await listed(bob)).archived === false)
+check('Bob cannot delete it', (await as(bob, `/p/${proj}`, { method: 'DELETE' })).status === 403)
+const mine = (await (await as(bob, `/auth/organization/get-full-organization?organizationSlug=${proj}`)).json())
+  .members.find(m => m.user.email === bobEmail)
+await as(bob, `/p/${proj}/members/${mine.id}`, { method: 'DELETE' })
+check('Bob leaves', !await listed(bob))
+const gone = 'gone' + Date.now().toString(36)
+await as(ann, `/projects/${gone}`, { method: 'POST' })
+check('Ann deletes her project', (await (await as(ann, `/p/${gone}`, { method: 'DELETE' })).json()).ok &&
+  !(await (await as(ann, '/projects')).json()).some(p => p.name === gone))
+check('and its name is free again', (await (await as(ann, `/projects/${gone}`, { method: 'POST' })).json()).ok)
+
 // Hardening: none of these may reach git, the disk outside a project, or another project
 const { existsSync } = await import('node:fs')
 check('projects cannot be minted over HTTP',
