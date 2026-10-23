@@ -2,7 +2,7 @@
 // citations (cite.js) and spelling (spell.js): history and checkpoints, builds (and watch), the
 // grant checklist, the template switch, and changes made while you were away.
 import * as Y from 'yjs'
-import { diffArrays } from 'diff'
+import { diffArrays, diffWordsWithSpace } from 'diff'
 import { renderCite, citeAt, bibOf } from './cite.js'
 import { parseBib } from '../../server/refs.mjs'
 import { prose, readAi, aiPct } from './surprise.js'
@@ -350,12 +350,33 @@ local.whenSynced.then(() => provider.on('status', ({ status }) => {
 // an offline copy the hub refused (doc.js): its text against the hub's
 const kept = sessionStorage[AWAY] && JSON.parse(sessionStorage[AWAY])
 if (kept) provider.on('synced', function was() { provider.off('synced', was); delete sessionStorage[AWAY]; toReview(kept) })
-const lines = (a, b) => {
-  const A = a.split('\n'), B = b.split('\n') // past 1000 edits, as a whole
-  return (diffArrays(A, B, { maxEditLength: 1000 }) ?? [{ removed: true, value: A }, { added: true, value: B }])
-    .flatMap(c => c.value.map(l => `<div class="dl ${c.added ? 'add' : c.removed ? 'del' : 'same'}">` +
-      `${c.added ? '+' : c.removed ? '-' : '&nbsp;'} ${esc(l) || '&nbsp;'}</div>`)).join('')
+// side by side: [mine, now, changed, line numbers]; a blank side is a gap
+const rows = (a, b) => {
+  const A = a.split('\n'), B = b.split('\n'), r = [], n = [0, 0] // past 1000 edits, as a whole
+  const cs = diffArrays(A, B, { maxEditLength: 1000 }) ?? [{ removed: true, value: A }, { added: true, value: B }]
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i]
+    if (!c.added && !c.removed) { c.value.forEach(l => r.push([l, l, 0, ++n[0], ++n[1]])); continue }
+    const o = c.removed ? c.value : [], m = c.added ? c.value : cs[i + 1]?.added ? cs[++i].value : []
+    for (let j = 0; j < Math.max(o.length, m.length); j++)
+      r.push([o[j], m[j], 1, o[j] != null && ++n[0], m[j] != null && ++n[1]])
+  }
+  return r
 }
+const row = ([o, n, ch, i, j]) => { // the words that changed, marked within the line
+  const w = ch && o != null && n != null ? diffWordsWithSpace(o, n) : [{ value: o ?? n }]
+  const half = (t, k, skip, mark, tag) => t == null ? '<div class="dl gap"></div>' :
+    `<div class="dl ${ch ? tag : 'same'}" data-n="${k}">${w.filter(p => !p[skip]).map(p =>
+      p[mark] ? `<${tag}>${esc(p.value)}</${tag}>` : esc(p.value)).join('') || '&nbsp;'}</div>`
+  return half(o, i, 'added', 'removed', 'del') + half(n, j, 'removed', 'added', 'ins')
+}
+// the changes, k lines around each (all of it without k)
+const sbs = (r, k) => { let last = -1
+  return '<div class="sbs"><div class="dh">yours, offline</div><div class="dh">now</div>' + r.map((x, i) => {
+    if (k != null && !r.slice(Math.max(0, i - k), i + k + 1).some(y => y[2])) return ''
+    const s = i > last + 1 ? '<div class="dsep">\u22EF</div>' : ''; last = i
+    return s + row(x)
+  }).join('') + '</div>' }
 function renderReview(body) {
   if (!review?.length) return body.innerHTML = '<p class="empty">No changes to review. This appears after ' +
     'reconnecting if others edited while you were offline.</p>'
@@ -364,10 +385,11 @@ function renderReview(body) {
     renderReview(body) }
   body.replaceChildren(el('p', { className: 'review-head', textContent: 'While you were away, ' +
     `${review.length} file(s) changed. Keep what others did, or revert to your offline version.` }),
-  ...review.map(({ path: p, before, after }) => {
+  ...review.map(({ path: p, before, after }) => { let r
     const e = el('div', { className: 'review-file', innerHTML: `<div class="review-file-head"><b>${esc(p)}</b>` +
       '<span><button>keep theirs</button><button class="revert">revert to mine</button></span></div>' +
-      `<div class="review-diff">${lines(before, after)}</div>` })
+      `<div class="review-diff">${sbs(r = rows(before, after), 2)}</div>` +
+      `<details><summary>whole file</summary><div class="review-diff">${sbs(r)}</div></details>` })
     const [keep, revert] = e.querySelectorAll('button')
     keep.onclick = () => { if (files.has(p)) openFile(p); done(p) }
     revert.onclick = () => {
