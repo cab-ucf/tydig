@@ -50,11 +50,12 @@ await sleep(1500)
 A.files.get('main.typ').insert(0, 'ann ')
 B.files.get('main.typ').insert(0, 'bob ')
 await sleep(4000)
-const commits = async () => (await ann.get(`/p/${P}/history`)).filter(h => h.message === 'autosave')
+const commits = async () => (await ann.get(`/p/${P}/history`)).filter(h => h.message.startsWith('autosave'))
 check('edits are not committed while editing goes on', !(await commits()).length)
 A.provider.destroy(); B.provider.destroy(); await sleep(3000) // closed: committed now
 const [auto] = await commits()
-check('an autosave names who edited', auto?.author === 'Ann' && auto.coauthors.includes('Bob'))
+check('an autosave names who edited, in its author, co-authors and message', auto?.author === 'Ann' &&
+  auto.coauthors.includes('Bob') && auto.message === 'autosave by Ann, Bob')
 const note = JSON.parse(execSync(`git -C data/${P} notes --ref=provenance show ${signed.hash}`))
 check('the note alone verifies offline', ml_dsa65.verify(Buffer.from(note.signature, 'base64url'),
   new TextEncoder().encode(canon(note.payload)), Buffer.from(note.publicKey, 'base64url')))
