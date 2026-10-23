@@ -1,0 +1,76 @@
+# Everything the proposal says more than once lives here: edit it once, and
+# the concept outline, description, summary, budget and letters all follow.
+# NSF 26-512, Unlocking Dataset Value for AI-Enabled Scientific Discovery,
+# Planning track: community meetings, the AI challenges of a field's data,
+# early curation concepts, toward an Impact or Flagship proposal. A planning
+# proposal (PAPPG 24-1 II.F.1): first a Concept Outline (concept.typ, two
+# pages) emailed (note.typ) to the program; only with the program officer's
+# approving email may the proposal be submitted, and that email is uploaded.
+title: "AIDatasets:Planning: Toward one harmonized atlas of soil microbial communities"
+nofo: NSF 26-512            # a planning proposal under it: PAPPG 24-1 II.F.1
+years: 2
+style: american-chemical-society
+
+mechanism:
+  code: AI Datasets
+  name: Unlocking Dataset Value for AI-Enabled Scientific Discovery (NSF 26-512)
+  prefix: "AIDatasets:Planning:"
+  budget_rule: >-
+    Up to $200,000 (NSF 26-512), at most $100,000 a year for up to two years
+    (PAPPG II.F.1), indirect costs included. No cost sharing. Internal review
+    only; a declined planning proposal cannot be reconsidered.
+  cap: { award: 200000, annual: 100000 }
+  modular: false
+  months: { senior: 2 }   # NSF pays senior personnel at most 2 months a year, across all NSF awards
+
+limits: { description: 8 }   # pages (PAPPG II.F.1), Results from Prior NSF Support within them
+
+institution:
+  name: University of Central Florida
+  department: Department of Computer Science
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+
+# The first is the PI. prior: the most closely related NSF award of the past five years, if any.
+investigators:
+  - name: Ada Lovelace
+    degrees: PhD
+    title: Associate Professor
+    role: PI
+    email: ada.lovelace@example.edu
+
+# The existing datasets this will enhance: the concept outline and section 1 tabulate them.
+datasets:
+  - { name: Example Soil Survey, holds: 16S and metagenome samples with site metadata, size: "40 TB, 120,000 samples", community: soil and microbial ecologists }
+  - { name: Example Climate Reanalysis, holds: gridded hourly weather since 1950, size: 2 PB, community: Earth system scientists }
+
+# The Project Summary's and the concept outline's last line: 2 to 5 keywords,
+# most important first, naming the directorates or communities that benefit most.
+keywords: [Biological Sciences, Geosciences, microbial ecology, soil carbon]
+
+program:
+  name: AI Datasets
+  contact: aidatasets@nsf.gov
+  due: November 4, 2026
+  units: [BIO/DEB, GEO/EAR, CISE/OAC]   # the NSF units the idea touches (PAPPG I.D.1)
+  # Filled in from the program officer's reply; main.typ names them.
+  concurrence: { officer: "[the program officer]", date: "[date of the concurrence email]" }
+  # NSF 26-512's measures of success: advance one or more
+  measures:
+    - Datasets expanded or established
+    - New technologies or techniques for leveraged AI or AI-guided exploration established
+    - Undergraduates and graduate students trained in AI use of scientific datasets
+    - New built infrastructure that leverages existing datasets
+    - Research facility usage
+
+# The planning activities, each an aim of section 2, Research plan.
+aims:
+  - title: Census the data
+    summary: Every source scored for size, metadata completeness, join keys and licence.
+  - title: Run a pilot slice end to end
+    summary: One region's samples harmonized and joined to weather, to find where it breaks.
+  - title: Agree on it together
+    summary: Workshops with the datasets' users, a shared schema and a governance charter.
+
+# Unfunded collaborators: each gets NSF's one-sentence letter (letters.typ).
+collaborators:
+  - { name: Mary Somerville, title: Data Manager, organization: Example Soil Survey }

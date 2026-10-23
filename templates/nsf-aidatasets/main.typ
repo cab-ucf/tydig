@@ -39,6 +39,13 @@
     = 5. Flagship Justification
     #todo[A concise summary of the challenges that need more resources than an Impact award.]
   ]
+  #if track == "Planning" [
+    #let c = P.at("concurrence", default: (:))
+    = 5. Why a planning proposal
+    #todo[Why the work suits a planning proposal, and how its funds will develop a sound approach to a
+    future Impact or Flagship proposal (PAPPG II.F.1). Concurred by #c.at("officer", default: [the
+    program officer]) (#c.at("date", default: [date])).]
+  ]
 
   = Broader Impacts
   #todo[Benefit to society: the people trained in AI use of scientific data, the communities served,

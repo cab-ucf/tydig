@@ -46,6 +46,7 @@
   ..if sum(requested) > cap.at("total", default: calc.inf) { ([the #money(sum(requested)) total is over the #G.mechanism.code limit of #money(cap.total)],) } else { () },
   // NSF's limits are on the award: direct and indirect costs together
   ..if sum(direct) + sum(fa) > cap.at("award", default: calc.inf) { ([the award, #money(sum(direct) + sum(fa)) with indirect costs, is over the #G.mechanism.code limit of #money(cap.award)],) } else { () },
+  ..yrs.filter(y => direct.at(y) + fa.at(y) > cap.at("annual", default: calc.inf)).map(y => [year #(y + 1), #money(direct.at(y) + fa.at(y)) with indirect costs, is over the limit of #money(cap.annual) a year]),
   ..if "pi" in months { who.filter(p => p.name == G.investigators.first().name).map(p => yrs.filter(y => p.months.at(y) < months.pi).map(y =>
     [#p.name gives #p.months.at(y) months in year #(y + 1); the #G.mechanism.code asks at least #months.pi])).flatten() },
   // GOALI: a small business's subaward at most this share of the whole budget

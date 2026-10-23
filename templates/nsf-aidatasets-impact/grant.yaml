@@ -3,7 +3,7 @@
 # NSF 26-512, Unlocking Dataset Value for AI-Enabled Scientific Discovery:
 # existing scientific datasets made ready for AI. Due the first Wednesday of
 # November (November 4, 2026), 5 p.m. local time. Questions, and Flagships
-# early: aidatasets@nsf.gov.
+# early: aidatasets@nsf.gov. Planning is its own template.
 title: "AIDatasets:Impact: One harmonized atlas of soil microbial communities, ready for AI"
 nofo: NSF 26-512
 years: 3
@@ -12,9 +12,9 @@ style: american-chemical-society
 mechanism:
   code: AI Datasets
   name: Unlocking Dataset Value for AI-Enabled Scientific Discovery (NSF 26-512)
-  # The track is the prefix's middle: AIDatasets:Impact: (up to $2,000,000),
-  # AIDatasets:Flagship: ($5,000,000) or AIDatasets:Planning: ($200,000);
-  # set cap: to match. A Flagship adds section 5, Flagship Justification.
+  # The track is the prefix's middle: AIDatasets:Impact: (up to $2,000,000)
+  # or AIDatasets:Flagship: ($5,000,000); set cap: to match. A Flagship adds
+  # section 5, Flagship Justification.
   prefix: "AIDatasets:Impact:"
   budget_rule: >-
     Impact up to $2,000,000, Flagship up to $5,000,000, both up to three
