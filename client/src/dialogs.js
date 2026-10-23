@@ -2,7 +2,7 @@
 // agents) and the git remote.
 import { authClient } from './auth.js'
 import { plain } from './link.js'
-import { $, api, post, del, esc, el, toast, projName, P, choose } from './util.js'
+import { $, api, post, del, esc, el, toast, projName, P, choose, me } from './util.js'
 
 const go = n => location.search = `?proj=${n}`
 const modal = id => $(id).open || $(id).showModal()
@@ -22,14 +22,32 @@ export async function unpackInto(n, f, dir = '') {
 }
 
 export async function renderProjects() {
-  $('projects-list').replaceChildren(...(await api('/projects')).map(({ name: n }) => el('a', {
-    href: `?proj=${n}${location.hash}`, className: 'pnode' + (n === projName ? ' active' : ''), textContent: n })))
+  $('projects-list').replaceChildren(...(await api('/projects')).filter(p => !p.archived || p.name === projName)
+    .map(({ name: n, archived: a }) => el('a', { href: `?proj=${n}${location.hash}`,
+      className: 'pnode' + (n === projName ? ' active' : '') + (a ? ' archived' : ''), textContent: n })))
+}
+
+// archived: done, out of the side list and locked in the picker; a click unlocks it
+export async function archive(n = projName) {
+  const a = (await api('/projects')).find(p => p.name === n)?.archived
+  await api(`/p/${n}/archived`, { method: a ? 'DELETE' : 'PUT' })
+  renderProjects(); $('picker').open && openPicker()
+}
+
+export async function deleteProject() {
+  if (prompt(`Delete ${projName} for everyone: its files, history and members? This cannot be undone ` +
+    '(a git remote is untouched). Type its name to confirm:') !== projName) return
+  const r = await del(P(''))
+  r.error ? alert(r.error) : location.search = ''
 }
 
 export async function openPicker() {
   const [list, { templates, brands, featured }] = await Promise.all([api('/projects'), api('/templates')])
-  $('proj-list').replaceChildren(...list.map(({ name: n, role }) => el('a', { href: `?proj=${n}${location.hash}`,
-    className: n === projName ? 'current' : '', textContent: role === 'owner' ? `${n} (owner)` : n })))
+  $('proj-list').replaceChildren(...list.sort((x, y) => x.archived - y.archived).map(({ name: n, role, archived: a }) =>
+    el('div', { className: a ? 'archived' : '' }, el('a', { href: `?proj=${n}${location.hash}`,
+      className: n === projName ? 'current' : '', textContent: role === 'owner' ? `${n} (owner)` : n }),
+    el('button', { textContent: a ? '\u{1F512}' : '\u{1F513}', title: a ? 'archived: unlock' : 'archive: done',
+      onclick: () => archive(n) }))))
   // tydig's own, then Typst Universe's (server/packages.mjs): the featured, or any, searched for
   const group = (label, opts) => el('optgroup', { label }, ...opts)
   const universe = (kind, label) => group(label, featured.filter(f => f.kind === kind).map(f => new Option(f.label, f.spec)))
@@ -86,10 +104,11 @@ export async function showShare() {
   // the hub's address: this page on the site's own hub (cxn.pub), else its link
   const site = plain || !share.link ? location.origin + location.pathname : share.link
   const siteWith = q => Object.assign(new URL(site), { search: q }).href
-  const row = (who, role, act, id, label = act) => `<div class="share-row"><span>${esc(who)}</span>` +
-    `<em>${esc(role)}</em>${owner && role !== 'owner' ? `<button data-${act}="${esc(id)}">${label}</button>` : ''}` +
+  const row = (who, role, act, id, label = act, may = owner && role !== 'owner') =>
+    `<div class="share-row"><span>${esc(who)}</span><em>${esc(role)}</em>${may ? `<button data-${act}="${esc(id)}">${label}</button>` : ''}` +
     '</div>'
-  const member = m => row(m.user?.email || m.user?.name || m.userId, m.role, 'remove', m.id)
+  const member = m => row(m.user?.email || m.user?.name || m.userId, m.role,
+    ...m.userId === me.id ? ['leave', m.id, 'leave', m.role !== 'owner'] : ['remove', m.id])
   const invited = i => row(i.email, 'invited', 'cancel', i.id) + (!owner ? '' : '<div class="share-row">' +
     `<input readonly value="${esc(siteWith('invite=' + i.id))}" title="their invite link"></div>`)
   const code = c => row(c.code.replaceAll('-', ' '), `until ${new Date(c.expires).toLocaleDateString()}`,
@@ -118,6 +137,8 @@ export async function showShare() {
   const then = r => r?.error ? alert(r.error) : showShare()
   on('remove', async id => confirm('Remove this collaborator? They lose access at once.') &&
     then(await del(P('/members/' + id))))
+  on('leave', async id => confirm(`Leave ${projName}? A member must add you again.`) &&
+    (r => r.error ? alert(r.error) : location.search = '')(await del(P('/members/' + id))))
   on('cancel', id => authClient.organization.cancelInvitation({ invitationId: id }).then(showShare))
   on('uncode', async c => then(await del(P('/join/' + c))))
   on('agent', async a => confirm(`Remove @${a}? Its token stops working at once.`) &&

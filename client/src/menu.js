@@ -13,7 +13,7 @@ import { newFile, uploadTo, quickOpen, grep, tagMenu } from './tree.js'
 import { tags } from './doc.js'
 import { mode, openSidebar, toggleSide, checkpoint, cite, citeFromBib } from './panels.js'
 import { toggleComment } from '@codemirror/commands'
-import { openPicker, showShare, showGitRemote } from './dialogs.js'
+import { openPicker, showShare, showGitRemote, archive, deleteProject } from './dialogs.js'
 
 const flip = k => () => { settings[k] = !settings[k]; applyLayout() }
 const show = v => () => { settings.view = v; applyLayout() }
@@ -43,6 +43,7 @@ export const actions = {
   ghost: toggleGhost, scope: toggleScope, 'scope-next': () => scopeBy(),
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,
+  archive: () => archive(), 'delete-project': deleteProject,
   signout: signOut, name: changeName, password: changePassword, 'delete-account': deleteAccount,
   palette: () => choose([...document.querySelectorAll('#menubar [data-act]')].map(b => ({
     label: b.firstChild.textContent.trim(), hint: b.querySelector('kbd')?.textContent,

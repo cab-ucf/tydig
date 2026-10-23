@@ -177,6 +177,7 @@ body.no-tree #tree-pane { display: none; }
 #projects-list { max-height: 30vh; padding: .25rem 0; }
 .pnode { display: block; font: .82rem var(--sans); color: var(--fg); text-decoration: none; padding: .3rem 1rem; }
 .pnode:hover { background: var(--ink-2); }
+.pnode.archived, #proj-list .archived a { opacity: .45; }
 .pnode.active { color: var(--hi); background: var(--ink-3); box-shadow: inset 2px 0 var(--teal); }
 
 #tree { padding: .3rem 0; font-size: .82rem; }
@@ -439,8 +440,10 @@ dialog h3 { margin: 0 0 .9rem; font: 600 1rem var(--sans); color: var(--hi); }
 }
 #picker { min-width: 320px; }
 #proj-list { display: flex; flex-direction: column; gap: .3rem; margin-bottom: 1rem; }
+#proj-list div { display: flex; gap: .3rem; }
+#proj-list button { background: none; border: 0; cursor: pointer; }
 #proj-list a {
-  color: var(--fg); font-family: var(--sans); text-decoration: none; padding: .35rem .6rem;
+  flex: 1; color: var(--fg); font-family: var(--sans); text-decoration: none; padding: .35rem .6rem;
   background: var(--ink-2); border: 1px solid var(--ink-3); border-radius: 5px;
 }
 #proj-list a:hover { border-color: var(--teal); }
