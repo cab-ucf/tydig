@@ -413,11 +413,19 @@ textarea.say {
 }
 .review-file-head button:hover { border-color: var(--teal); color: var(--hi); }
 .review-file-head .revert:hover { border-color: var(--red); }
-.review-diff { font: .72rem/1.45 var(--mono); max-height: 240px; overflow: auto; }
-.dl { padding: 0 .55rem; white-space: pre-wrap; }
-.dl.add { background: var(--good-bg); color: var(--good-fg); }
+#side:has([data-pane="review"]) { width: clamp(360px, 50vw, 960px); }
+.review-diff { font: .72rem/1.45 var(--mono); max-height: 50vh; overflow: auto; }
+.sbs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1px; background: var(--ink-3); }
+.sbs .dh { position: sticky; top: 0; padding: .1rem .55rem; background: var(--ink-2); color: var(--fg-dim); }
+.dsep { grid-column: 1 / -1; text-align: center; color: var(--fg-dim); background: var(--ink-2); }
+.dl { min-width: 0; background: var(--ink); padding: 0 .55rem 0 3.4em; text-indent: -2.8em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dl::before { content: attr(data-n); display: inline-block; width: 2.4em; margin-right: .4em; text-indent: 0; text-align: right; opacity: .5; }
+.dl.ins { background: var(--good-bg); color: var(--good-fg); }
 .dl.del { background: var(--bad-bg); color: var(--bad-fg); }
+.dl :is(ins, del) { text-decoration: none; border-radius: 2px; background: color-mix(in srgb, currentColor 25%, transparent); }
 .dl.same { color: var(--fg-dim); }
+.dl.gap { background: var(--ink-2); }
+.review-file summary { padding: .25rem .55rem; font-size: .72rem; color: var(--fg-dim); cursor: pointer; border-top: 1px solid var(--ink-3); }
 
 /* ---- dialogs ---- */
 dialog { background: var(--ink); color: var(--fg); border: 1px solid var(--ink-3); border-radius: 12px; padding: 1.3rem 1.5rem;
