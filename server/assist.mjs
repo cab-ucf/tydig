@@ -60,7 +60,7 @@ router.post('/surprise', express.text({ limit: '1mb' }), async (req, res) => {
         else if (j.type === 'heat' && !ai) ok(pick(j, ['words', 'sents', 'ppl', 'bpt', 'ntok']))
         else if (j.type === 'heat' && (!detector || !j.sents.length)) ok({ ai: null })
         else if (j.type === 'heat') at = j.sents
-        else if (j.type === 'ai') ok({ ai: j.sents ? { ...pick(j, ['score', 'tail', 'words', 'calibrated', 'family', 'task']),
+        else if (j.type === 'ai') ok({ ai: j.sents ? { ...pick(j, ['score', 'tail', 'words', 'calibrated', 'family', 'task', 'isms']),
           sents: j.sents.map((x, i) => ({ ...x, s: at?.[i]?.s, e: at?.[i]?.e })) } : null })
       })
     }))

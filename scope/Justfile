@@ -15,3 +15,7 @@ image tag="perplexiscope":
 # MELD's thresholds for sentences, from human writing: just calib human/*.txt
 calib +files:
     {{run}}calib {{files}}
+
+# the AI-isms profile, fitted again from its sources (isms.py)
+isms *cats:
+    {{run}}isms {{cats}}

@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse
 from watchfiles import awatch
 from .detect import Detector
 from .engine import Engine
+from .isms import Isms
 
 log = logging.getLogger("uvicorn.error")
 
@@ -36,6 +37,7 @@ def read(p):  # a watched file's text; a PDF's lines unwrapped, a short line end
 def app(model, detector, watch, dtype, max_chars, **_):
     E = Engine(model, dtype=dtype and getattr(torch, dtype))
     D = detector and Detector(None if detector == "meld" else detector)  # a path: a local MELD
+    I = Isms()
     lock, dlock, clients = threading.Lock(), threading.Lock(), set()
     watch = watch and Path(watch).resolve()
     doc = read(watch) if watch else ""
@@ -61,8 +63,9 @@ def app(model, detector, watch, dtype, max_chars, **_):
     def heat(r):
         with lock: return E.heat(r["text"])
 
-    def detect(r, sents):
-        with dlock: return D(r["text"], [(z["s"], z["e"]) for z in sents])
+    def detect(r, sents):  # MELD's reading, and the AI-isms in the text
+        with dlock: a = D(r["text"], [(z["s"], z["e"]) for z in sents])
+        return a and {**a, "isms": I(r["text"])}
 
     def tree(r, then):  # another client may have scored a different text in between
         with lock:
