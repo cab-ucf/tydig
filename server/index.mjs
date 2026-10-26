@@ -130,9 +130,10 @@ app.use('/api/p/:proj', (req, res, next) => {
 }, p)
 for (const m of [files, build, history, remote, templates, agents, assist]) p.use(m.router)
 
-// sharing: an account joins at once; an address without one is invited
+// sharing: a verified account joins at once; any other address is invited,
+// so whoever signed up as it unverified needs the invite link too
 p.post('/members', admin, async (req, res) => {
-  const email = String(req.body?.email || '').trim(), u = userByEmail(email)
+  const email = String(req.body?.email || '').trim(), u = userByEmail(email)?.emailVerified && userByEmail(email)
   if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
   const inv = !u && await auth.api.createInvitation({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { email, role: 'member', organizationId: req.org.id } })

@@ -169,4 +169,4 @@ const one = db.prepare('SELECT o.id, o.slug AS name, m.role FROM member m ' +
   'JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? AND o.slug = ?')
 export const projectsOf = userId => mine.all(userId)
 export const access = (userId, slug) => one.get(userId, slug) || null
-export const userByEmail = email => db.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(email)
+export const userByEmail = email => db.prepare('SELECT id, emailVerified FROM user WHERE lower(email) = lower(?)').get(email)

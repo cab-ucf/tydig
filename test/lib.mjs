@@ -29,6 +29,12 @@ export async function person(name, { hub = HUB, invite, email } = {}) {
     get: p => json('GET', p), post: (p, b = {}) => json('POST', p, b), put: (p, b) => json('PUT', p, b),
     del: p => json('DELETE', p), doc: (proj, o) => doc(hub, proj, token, o) }
 }
+// sharing with an account here: an invitation it accepts, as its address
+// is not verified (password accounts never are)
+export async function share(proj, from, to) {
+  const { invite } = await from.post(`/p/${proj}/members`, { email: to.email })
+  return to.post('/auth/organization/accept-invitation', { invitationId: invite })
+}
 // a live document, synced; .files is its 'files' map
 export function doc(hub, name, token, o = {}) {
   const d = new Y.Doc()

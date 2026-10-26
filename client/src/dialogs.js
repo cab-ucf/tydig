@@ -122,8 +122,8 @@ export async function showShare() {
         Stop it once everyone is in; members stay.</p>
       <form id="share-add" class="row">
       <input type="email" id="share-email" placeholder="collaborator@email" required><button class="go">add</button></form>
-      <p class="hint">An address with no account here is invited: send them its invite link (below it), which
-        signs them up with the project waiting. The address alone cannot sign up.</p>`
+      <p class="hint">An address is invited unless its account here is verified: send them its invite link
+        (below it), which signs them up, or in, with the project waiting. The address alone gets nothing.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
     ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p>
       <input readonly value="${esc(site)}">` : ''}

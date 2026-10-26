@@ -47,7 +47,12 @@ check('a member cannot remove the owner',
   (await as(bob, `/p/paper/members/${org.members.find(m => m.role === 'owner').id}`, { method: 'DELETE' })).status >= 400)
 check('the owner removes a member', (await as(ann, `/p/paper/members/${bobId}`, { method: 'DELETE' })).ok)
 check('who then loses access', (await as(bob, '/p/paper/files')).status === 403)
-await as(ann, '/p/paper/members', { method: 'POST', body: JSON.stringify({ email: 'bob@example.com' }) })
+const re = await (await as(ann, '/p/paper/members', { method: 'POST', body: JSON.stringify({ email: 'bob@example.com' }) })).json()
+check('an account whose address is unverified is invited, not added: whoever signed up as it',
+  re.invited && (await as(bob, '/p/paper/files')).status === 403)
+const accept = c => as(c, '/auth/organization/accept-invitation', { method: 'POST', body: JSON.stringify({ invitationId: re.invite }) })
+check('nor can another account take its invitation', !(await accept(ann)).ok)
+check('it joins with its invite link', (await accept(bob)).ok && (await as(bob, '/p/paper/files')).ok)
 const again = (await (await as(ann, '/auth/organization/get-full-organization?organizationSlug=paper')).json())
   .members.find(m => m.user.email === 'bob@example.com')?.id
 check('a member may leave', again && (await as(bob, `/p/paper/members/${again}`, { method: 'DELETE' })).ok &&
