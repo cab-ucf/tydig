@@ -18,7 +18,8 @@ const PIN = process.env.TYDIG_LINK_RELAY
 const ALPN = [...Buffer.from('irweb/http/2')]
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
-const seed = PAGE && readFileSync(seedFile, 'utf8').trim(), secret = PAGE && [...derive(seed, 'irweb v1 endpoint identity')]
+const seed = PAGE && readFileSync(seedFile, 'utf8').trim()
+const secret = PAGE && [...derive(seed, 'irweb v1 endpoint identity')]
 const TOKEN = PAGE && Buffer.from(Buffer.from(derive(seed, 'irweb v2 access token')).toString('hex'))
 const iroh = PAGE && await import('@number0/iroh')
 export const LINK = PAGE && `${PAGE}#${seed}` + (PIN ? `;r=${PIN}` : '')
@@ -43,7 +44,7 @@ export async function start(server) {
   ;(async () => {
     for (let inc; (inc = await ep.acceptNext().catch(() => null));) (async () => {
       const conn = await (await inc.accept()).connect(), peer = conn.remoteId().toString()
-      for (;;) serve(server, await conn.acceptBi(), conn, peer).catch(() => conn.close(1n, []))
+      for (;;) serve(server, await conn.acceptBi(), conn, peer).catch(() => {})
     })().catch(() => {})
   })()
   const late = setTimeout(() => console.warn('link: no relay yet; the hub needs outbound HTTPS to its relay'), 20_000)
@@ -56,7 +57,7 @@ export async function start(server) {
 // never passed on, or Node's server would drop the reply.
 async function serve(server, { send, recv }, conn, peer) {
   let head = Buffer.alloc(0), c
-  const late = setTimeout(() => conn.close(1n, []), 30_000)
+  const late = setTimeout(() => recv.stop(0n).catch(() => {}), 30_000)
   while (head.indexOf('\r\n\r\n') < 0 && head.length < 64 << 10 && (c = await recv.read(64 << 10))?.length)
     head = Buffer.concat([head, Buffer.from(c)])
   clearTimeout(late)
