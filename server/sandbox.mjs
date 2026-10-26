@@ -4,7 +4,7 @@
 // a raw stdio pipe, else one JSON line {code, stdout, stderr}.
 import net from 'node:net'
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -47,6 +47,9 @@ const NONET = process.env.TYDIG_BUILD_NET === '0'
 const PROXY = NONET ? [] : ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy'].map(v => `${v}=http://egress:3128`)
 const ENV = [...PROXY, 'HOME=/tmp', 'MPLCONFIGDIR=/tmp/mpl', 'TYPST_ROOT=/work']
 const NET = ['--http-proxy=false', ...NONET ? ['--network=none'] : ['--network=tydig-build']]
+// a Containerfile's RUN steps: a build's memory and CPUs, and as podman build
+// has no --pids-limit, a process limit
+const LIMITS = ['--memory=2g', '--cpu-quota=200000', '--ulimit=nproc=2048:2048']
 // gVisor (runsc and sandbox/gvisor-run, in the build image): a build's command
 // runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
 // the host's; gVisor hides .git and .collab itself. Its one need of the
@@ -83,17 +86,20 @@ const args = (proj, secs, i, cmd, own) => {
 // does: made before each build (podman's cache makes that a moment), from the
 // project less .git and .collab. Its RUN steps are podman's, not gVisor's.
 // Then /root opened to all: under gVisor a build sees only files' "other" bits
-// (rustup, uv tool and pip --user install there).
+// (rustup, uv tool and pip --user install there). Its name is keyed by this
+// run's secret, so no project's FROM can name another's.
+const KEY = randomBytes(32), P = 'localhost/tydig-p-'
 const mine = async proj => {
-  const dir = path.join(DATA, proj), tag = `localhost/tydig-p-${proj.toLowerCase()}`, t = `/tmp/${proj}`
+  const dir = path.join(DATA, proj), t = `/tmp/${proj}`
+  const tag = P + createHmac('sha256', KEY).update(proj).digest('hex').slice(0, 32)
   if (!lstatSync(path.join(dir, 'Containerfile'), { throwIfNoEntry: false })?.isFile()) return
   const keep = ['.containerignore', '.dockerignore'].map(f => { try { return readFileSync(path.join(dir, f), 'utf8') } catch { return '' } })
   mkdirSync(t, { recursive: true }); writeFileSync(`${t}/ignore`, keep.join('\n') + '\n.git\n.collab\n')
   writeFileSync(`${t}/open`, `FROM ${tag}:src\nUSER 0\nRUN [ ! -d /root ] || chmod -R a+rX /root\n`)
-  const log = await said(['build', '-q', '--http-proxy=false', ...NONET ? ['--network=none'] : [],
+  const log = await said(['build', '-q', ...NET, ...LIMITS, ...PROXY.flatMap(e => ['--build-arg', e]),
     '--ignorefile', `${t}/ignore`, '-t', `${tag}:src`, '-f', path.join(dir, 'Containerfile'), dir], 1800)
   if (log.code) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
-  const image = (await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).code ? `${tag}:src` : tag
+  const image = (await said(['build', '-q', ...LIMITS, '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).code ? `${tag}:src` : tag
   return { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
 }
 const ok = r => /^[\w-]{1,64}$/.test(r?.proj) && Array.isArray(r.cmd) && r.cmd.length && r.cmd.length < 64 &&
@@ -150,6 +156,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (!AT.includes(':')) rmSync(AT, { force: true })
   IMAGE ||= named()
   await image()
+  // an earlier run's project images: names only, so their layers stay as cache
+  for (const t of (await said(['images', '--format', '{{.Repository}}:{{.Tag}}'])).out.split('\n'))
+    if (t.startsWith(P)) await podman(['untag', t, t])
   gvisor = process.env.TYDIG_RUNTIME !== 'none'
   if (gvisor && !/gvisor/.test((await said([...box(30), '--tmpfs=/work', IMAGE, ...under(['uname', '-r'])])).out))
     gvisor = false, console.warn('builds are NOT under gVisor: it would not start here')
