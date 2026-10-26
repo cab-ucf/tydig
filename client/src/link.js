@@ -1,9 +1,10 @@
 // Link mode: this page came from tydig's static site as <page>#<hub id>, not
 // from a hub; with no #, the site's own hub (VITE_HUB, set where it is built).
-// A 26-character code is an old link's seed. What the app sends to /api, and
-// the websockets it opens to /sync and /lsp, go to the hub over iroh instead,
-// through irp's wasm client (public/irweb, from github.com/cab-ucf/irp);
-// server/link.mjs is the far end.
+// The code is the hub's seed (26 characters; 52, an older link's public id),
+// which also gives the access token irweb/http/2 asks for. What the app sends
+// to /api, and the websockets it opens to /sync and /lsp, go to the hub over
+// iroh instead, through irp's wasm client (public/irweb, built from
+// github.com/cab-ucf/irp web/); server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
 import { RELAYS, relayUrl } from '../../server/relay.mjs'
 const HUB = import.meta.env.VITE_HUB

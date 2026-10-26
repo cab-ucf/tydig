@@ -1,7 +1,7 @@
 // Each suite against fresh hubs with data of their own:
-//   node test/run.mjs [suite...]   (default: all but ui, link, lsp, sandbox)
-// ui and link need puppeteer (installed into .uitest/), link an iroh-relay
-// on PATH, lsp tinymist, sandbox rootless podman.
+//   node test/run.mjs [suite...]   (default: all but ui, link, irweb, lsp, sandbox)
+// ui and link need puppeteer (installed into .uitest/), link and irweb an
+// iroh-relay on PATH, lsp tinymist, sandbox rootless podman.
 import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, openSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,8 +18,8 @@ const ENV = {
   auth: { TYDIG_MAX_PROJECTS: '4' },
   import: { TYDIG_QUOTA_MB: '5' },
   ui: { TYDIG_PACKAGES: 'http://localhost:3998' },
-  link: { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' },
 }
+ENV.irweb = ENV.link = { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' }
 const ALL = ['prose', 'egress', 'core', 'auth', 'signup', 'offline', 'prov', 'agent', 'template', 'import', 'assist', 'remote']
 const suites = process.argv.length > 2 ? process.argv.slice(2) : ALL
 const sh = c => execSync(c, { cwd: root, stdio: 'inherit' })
@@ -43,7 +43,7 @@ let failed = 0
 for (const s of suites) {
   const dir = mkdtempSync(path.join(tmpdir(), `tydig-${s}-`)), env = { ...ENV[s] }
   console.log(`--- ${s}`)
-  if (s === 'link') {
+  if (s === 'link' || s === 'irweb') {
     mkdirSync(path.join(dir, 'site')); symlinkSync(path.join(root, 'client/dist'), path.join(dir, 'site/app'))
     writeFileSync(path.join(dir, 'relay.toml'), 'enable_metrics = false\nhttp_bind_addr = "127.0.0.1:3340"\n')
     bg.push(spawn('iroh-relay', ['--dev', '--config-path', path.join(dir, 'relay.toml')], { stdio: 'ignore' }),

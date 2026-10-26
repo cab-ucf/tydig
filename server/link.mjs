@@ -1,11 +1,12 @@
-// The link collaborators open: <TYDIG_PAGE>#<id>, tydig's static page plus
-// the public id of a key only this hub holds. The page reaches the hub over
-// iroh (irp's wasm client, github.com/cab-ucf/irp): no domain, certificate
-// or open port. Each iroh stream is one HTTP/1.0 exchange, handed to the
+// The link collaborators open: <TYDIG_PAGE>#<seed>, tydig's static page plus
+// the seed this hub's iroh key and access token derive from. The page reaches
+// the hub over iroh (irp's wasm client, github.com/cab-ucf/irp): no domain,
+// certificate or open port. irweb/http/2: each iroh stream is one HTTP/1.0
+// exchange whose request carries the token (irweb-access), handed to the
 // hub's HTTP server as a connection; websockets ride the bridge below.
 import express from 'express'
 import { Duplex } from 'node:stream'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { WebSocket } from 'ws'
@@ -14,13 +15,13 @@ import { derive, newSeed, relayUrl, RELAYS } from './relay.mjs'
 
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/'
 const PIN = process.env.TYDIG_LINK_RELAY
-const ALPN = [...Buffer.from('irweb/http/1')]
+const ALPN = [...Buffer.from('irweb/http/2')]
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
-const secret = PAGE && [...derive(readFileSync(seedFile, 'utf8').trim(), 'irweb v1 endpoint identity')]
+const seed = PAGE && readFileSync(seedFile, 'utf8').trim(), secret = PAGE && [...derive(seed, 'irweb v1 endpoint identity')]
+const TOKEN = PAGE && Buffer.from(Buffer.from(derive(seed, 'irweb v2 access token')).toString('hex'))
 const iroh = PAGE && await import('@number0/iroh')
-export const LINK = PAGE && `${PAGE}#${newSeed(iroh.SecretKey.fromBytes(secret).public().toBytes())}` +
-  (PIN ? `;r=${PIN}` : '')
+export const LINK = PAGE && `${PAGE}#${seed}` + (PIN ? `;r=${PIN}` : '')
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 export let online = false
 
@@ -42,7 +43,7 @@ export async function start(server) {
   ;(async () => {
     for (let inc; (inc = await ep.acceptNext().catch(() => null));) (async () => {
       const conn = await (await inc.accept()).connect(), peer = conn.remoteId().toString()
-      for (;;) serve(server, await conn.acceptBi(), peer)
+      for (;;) serve(server, await conn.acceptBi(), conn, peer).catch(() => conn.close(1n, []))
     })().catch(() => {})
   })()
   const late = setTimeout(() => console.warn('link: no relay yet; the hub needs outbound HTTPS to its relay'), 20_000)
@@ -50,15 +51,29 @@ export async function start(server) {
   console.log(`link: online, ${LINK}`)
 }
 
-// The browser half-closes after its request; that end is never passed on,
-// or Node's server would drop the reply.
-function serve(server, { send, recv }, peer) {
+// The request's head is read first: without the token, 403 and the
+// connection closed. The browser half-closes after its request; that end is
+// never passed on, or Node's server would drop the reply.
+async function serve(server, { send, recv }, conn, peer) {
+  let head = Buffer.alloc(0), c
+  const late = setTimeout(() => conn.close(1n, []), 30_000)
+  while (head.indexOf('\r\n\r\n') < 0 && head.length < 64 << 10 && (c = await recv.read(64 << 10))?.length)
+    head = Buffer.concat([head, Buffer.from(c)])
+  clearTimeout(late)
+  const t = Buffer.from(/^irweb-access:[ \t]*(\S*)[ \t]*\r$/im
+    .exec(head.subarray(0, head.indexOf('\r\n\r\n') + 2))?.[1] ?? '')
+  if (t.length !== TOKEN.length || !timingSafeEqual(t, TOKEN)) {
+    await send.writeAll([...Buffer.from('HTTP/1.0 403 Forbidden\r\ncontent-length: 0\r\n\r\n')])
+    await send.finish(); await send.stopped()
+    return conn.close(0n, [...Buffer.from('forbidden')])
+  }
   const d = new Duplex({
     read() { recv.read(64 << 10).then(c => c?.length && this.push(Buffer.from(c)), e => this.destroy(e)) },
     write(c, _, cb) { send.writeAll([...c]).then(() => cb(), cb) },
     final(cb) { send.finish().finally(() => { cb(); this.destroy() }) },
     destroy(e, cb) { send.finish().catch(() => {}); cb(e) },
   })
+  d.push(head)
   d.link = true // only our page speaks on these: they count as the hub's origin
   // its own sign-in rate limit: a private IPv6 address per iroh id
   d.ip = (h => `fd${h.slice(0, 2)}:${h.slice(2, 14).match(/.{4}/g).join(':')}::1`)(
