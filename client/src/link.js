@@ -6,7 +6,8 @@
 // iroh instead, through irp's wasm client (public/irweb, built from
 // github.com/cab-ucf/irp web/); server/link.mjs is the far end.
 // Imported first, so everything after sees the patched fetch and WebSocket.
-import { RELAYS, relayUrl } from '../../server/relay.mjs'
+import { ed25519 } from '@noble/curves/ed25519.js'
+import { RELAYS, relayUrl, derive, newSeed } from '../../server/relay.mjs'
 const HUB = import.meta.env.VITE_HUB
 const code = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/
 // A site with its own hub opens that hub alone: on one origin every hub's
@@ -14,8 +15,11 @@ const code = /^#([a-z2-7]{26}|[a-z2-7]{52})(?:;r=(\S+))?$/
 const m = HUB ? code.exec('#' + HUB) : code.exec(location.hash)
 if (HUB && code.exec(location.hash)?.[1] !== m?.[1]) history.replaceState(null, '', location.pathname + location.search)
 const pin = m?.[2] && relayUrl(decodeURIComponent(m[2]))
-// id: the whole code, so no other hub can share this one's cookies or drafts
-export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: m[1] }
+// id: the hub's public id, a seed's as an older link's, so no other hub can
+// share this one's cookies or drafts, and the seed is never stored
+const idOf = c => c.length > 26 ? c
+  : newSeed(ed25519.getPublicKey(derive(c, 'irweb v1 endpoint identity')))
+export const link = m && { code: m[1], pin, relays: pin ? [pin] : RELAYS, id: idOf(m[1]) }
 // the site's own hub, at the bare address (cxn.pub): links to it need no code
 export const plain = !!HUB && !location.hash
 
