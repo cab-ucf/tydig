@@ -124,6 +124,13 @@ check('restore rolled back edit', !fB.get('main.typ').toString().includes('GARBA
 const c2 = A.getMap('comments').get('c2')
 check('restore keeps comments anchored outside the change', fA.get('main.typ').toString().slice(abs(c2.anchor), abs(c2.head)) === 'Pre-registration')
 check('CRDT path cannot write .git/config', !execSync('cat data/demo/.git/config').toString().includes('fsmonitor'))
+put('data/demo/.git/index.lock', '')
+const stuck = await me.post('/p/demo/checkpoint', { message: 'locked' }); await sleep(500)
+check('a commit that fails is said, to the saver and in every editor', /index\.lock/.test(stuck.error) &&
+  /index\.lock/.test(A.getMap('meta').get('commitError')))
+rmSync('data/demo/.git/index.lock')
+const unstuck = await me.post('/p/demo/checkpoint', { message: 'unlocked' }); await sleep(500)
+check('and cleared once one succeeds', unstuck.ok && A.getMap('meta').get('commitError') === null)
 check('out/ PDFs excluded from history', !(await api('/p/demo/history')).length === false &&
   !execSync(`git -C data/demo ls-tree -r --name-only ${cp.hash}`).toString().includes('out/'))
 

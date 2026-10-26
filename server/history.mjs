@@ -64,7 +64,8 @@ router.post('/checkpoint', async (req, res) => {
   const n = req.params.proj, doc = hocuspocus.documents.get(n)
   if (doc) await mirror(n, doc)
   edited(n, req.user, true)
-  await commit(n, `checkpoint: ${String(req.body?.message || 'unnamed').slice(0, 200)}`, '--allow-empty')
+  const failed = await commit(n, `checkpoint: ${String(req.body?.message || 'unnamed').slice(0, 200)}`, '--allow-empty')
+  if (failed) return res.status(500).json({ error: `git could not commit: ${failed}` })
   let prov = null
   const { payload, publicKey: pk, signature } = req.body || {}
   if (payload && pk && signature) {

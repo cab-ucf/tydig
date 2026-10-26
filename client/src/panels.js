@@ -8,7 +8,7 @@ import { parseBib } from '../../server/refs.mjs'
 import { prose, readAi, aiPct } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist } from './util.js'
-import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
+import { files, meta, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { typeset, aiMarks } from './preview.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -173,6 +173,13 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
     : `saved, but the push failed: ${esc(push.error || '')}`, !r.error && push?.ok !== false)
   redraw('history')
 }
+// the hub could not commit (meta.commitError): said once, until it can again
+let failed = null
+meta.observe(() => {
+  const e = meta.get('commitError')
+  if (e && e !== failed) toast(`edits are kept, but not committed: ${esc(e)}`, false, 0)
+  failed = e
+})
 const badge = v => !v ? '' : v.verified ? `<span class="prov ok" title="ML-DSA-65 signature by a key ` +
   `registered to ${esc(v.by ?? 'this account')}; file hashes match (key ${esc(v.keyId)})">signed by ` +
   `${esc(v.by ?? '?')} &#10003;</span>` : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'

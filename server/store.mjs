@@ -78,7 +78,9 @@ export function edited(n, u, first) {
 }
 const who = u => `${String(u.name || u.email).replace(/[<>\n]/g, '')} <${u.email}>`
 // each commit stores what changed whole, loose, until git packs it as deltas:
-// packed early, so an autosaving hub's .git stays the size of its history
+// packed early, so an autosaving hub's .git stays the size of its history.
+// A failure is logged and kept in meta.commitError, where editors show it;
+// it is also what the commit resolves to (else null).
 export function commit(n, msg, ...flags) {
   const [a, ...co] = editors.get(n)?.values() ?? []
   if (typeof msg === 'function') msg = msg([a, ...co].filter(Boolean).map(u => u.name || u.email))
@@ -86,7 +88,15 @@ export function commit(n, msg, ...flags) {
   if (a) flags.push(`--author=${who(a)}`)
   if (co.length) flags.push('-m', co.map(u => `Co-authored-by: ${who(u)}`).join('\n'))
   return git(n, 'add', '-A').then(() => git(n, 'commit', '-q', '-m', msg, ...flags))
-    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet')).catch(() => {})
+    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet').then(() => null, () => null),
+      e => /nothing (added )?to commit/.test(e.stdout) ? null
+        : String(e.stderr || e.message).trim().replaceAll(DATA, '…'))
+    .then(e => {
+      if (e) console.warn(`commit ${n}: ${e}`)
+      const meta = hocuspocus.documents.get(n)?.getMap('meta')
+      if (meta && (meta.get('commitError') ?? null) !== e) meta.set('commitError', e)
+      return e
+    })
 }
 export async function ensureRepo(n) {
   if (existsSync(inProj(n, '.git'))) return
