@@ -2,12 +2,14 @@
 // it, through a local relay: every request carries the link's access token.
 import { readFileSync } from 'node:fs'
 import { Endpoint, EndpointAddr, RelayMode, SecretKey } from '@number0/iroh'
-import { derive } from '../server/relay.mjs'
+import { derive, newSeed } from '../server/relay.mjs'
 import { check, done, until } from './lib.mjs'
 
-const [, seed, relay] = /#(\w{26});r=(.+)$/.exec(readFileSync(process.env.LINKFILE, 'utf8').trim())
+const [, pub, token, relay] = /#(\w{52});t=(\w{64});r=(.+)$/.exec(readFileSync(process.env.LINKFILE, 'utf8').trim())
+const seed = readFileSync(process.env.LINKFILE.replace(/link$/, 'link-seed'), 'utf8').trim()
 const id = SecretKey.fromBytes([...derive(seed, 'irweb v1 endpoint identity')]).public()
-const token = Buffer.from(derive(seed, 'irweb v2 access token')).toString('hex')
+check('the link names the hub without its seed', !readFileSync(process.env.LINKFILE, 'utf8').includes(seed) &&
+  newSeed(Buffer.from(id.toBytes())) === pub)
 const b = Endpoint.builder(); b.applyMinimal(); b.relayMode(RelayMode.customFromUrls([relay]))
 const ep = await b.bind()
 const dial = () => ep.connect(new EndpointAddr(id, relay), [...Buffer.from('irweb/http/2')])

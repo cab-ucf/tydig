@@ -1,12 +1,13 @@
-// The link collaborators open: <TYDIG_PAGE>#<seed>, tydig's static page plus
-// the seed this hub's iroh key and access token derive from. The page reaches
+// The link collaborators open: <TYDIG_PAGE>#<id>;t=<token>, tydig's static
+// page plus this hub's public id and access token, both from a seed that
+// stays here (it is the hub's iroh key). The page reaches
 // the hub over iroh (irp's wasm client, github.com/cab-ucf/irp): no domain,
 // certificate or open port. irweb/http/2: each iroh stream is one HTTP/1.0
 // exchange whose request carries the token (irweb-access), handed to the
 // hub's HTTP server as a connection; websockets ride the bridge below.
 import express from 'express'
 import { Duplex } from 'node:stream'
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, createPrivateKey, createPublicKey, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { WebSocket } from 'ws'
@@ -22,7 +23,10 @@ const seed = PAGE && readFileSync(seedFile, 'utf8').trim()
 const secret = PAGE && [...derive(seed, 'irweb v1 endpoint identity')]
 const TOKEN = PAGE && Buffer.from(Buffer.from(derive(seed, 'irweb v2 access token')).toString('hex'))
 const iroh = PAGE && await import('@number0/iroh')
-export const LINK = PAGE && `${PAGE}#${seed}` + (PIN ? `;r=${PIN}` : '')
+const pkcs8 = Buffer.from('302e020100300506032b657004220420', 'hex')
+const id = PAGE && newSeed(createPublicKey(createPrivateKey({ key: Buffer.concat([pkcs8, Buffer.from(secret)]),
+  format: 'der', type: 'pkcs8' })).export({ format: 'der', type: 'spki' }).subarray(12))
+export const LINK = PAGE && `${PAGE}#${id};t=${TOKEN}` + (PIN ? `;r=${PIN}` : '')
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 export let online = false
 
