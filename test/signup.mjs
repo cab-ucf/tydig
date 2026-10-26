@@ -84,6 +84,11 @@ const dee = jar(await joinUp('dee@example.com', code.toUpperCase().replaceAll('-
 check('the code as said aloud signs up', !!dee)
 const joined = await (await as(dee, '/join', { method: 'POST', body: JSON.stringify({ code }) })).json()
 check('and joins its project', joined.project === 'paper' && (await as(dee, '/p/paper/files')).ok)
+await as(cat, '/projects/secret', { method: 'POST' })
+await as(cat, '/p/secret/members', { method: 'POST', body: JSON.stringify({ email: 'hal@example.com' }) })
+const hal = jar(await joinUp('hal@example.com', code))
+check('a code signs up an invited address, but its invitations stay unclaimed', !!hal &&
+  !(await (await as(hal, '/projects')).json()).some(p => p.name === 'secret'))
 check('the owner sees the code', (await (await as(cat, '/p/paper/join')).json()).some(c => c.code === code))
 check('a member cannot make one', (await as(dee, '/p/paper/join', { method: 'POST' })).status === 403)
 await as(cat, `/p/paper/join/${code}`, { method: 'DELETE' })
