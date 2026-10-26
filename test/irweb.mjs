@@ -29,5 +29,10 @@ for (const [what, h] of [['without the token', ''], ['with another', `\r\nirweb-
   check(`${what}, 403 and the connection closed`, /^HTTP\/1\.0 403/.test(r) && await Promise.race([c.closed().then(() => true),
     new Promise(ok => setTimeout(ok, 5000, false))]))
 }
+const tries = []
+for (let i = 0; i < 301; i++) tries.push(await ask(await dial(), `POST /api/auth/sign-up/email HTTP/1.0\r\n${access}` +
+  '\r\ncontent-type: application/json', JSON.stringify({ email: `x${i}@example.com`, password: 'password123' })))
+check('sign-ups and sign-ins over links share one hub-wide cap',
+  /^HTTP\/1\.1 400/.test(tries[0]) && /^HTTP\/1\.1 429/.test(tries[300]))
 await ep.close()
 done()

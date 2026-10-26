@@ -54,6 +54,7 @@ app.all('/api/auth/*splat', (req, res, next) => {
   if (!originOk(req.headers.origin)) return res.status(403).json({ code: 'INVALID_ORIGIN',
     message: `This hub does not trust ${req.headers.origin}: open it at the address it was set up with (TYDIG_URL).` })
   req.headers['x-tydig-ip'] = req.socket.ip || req.ip
+  req.headers['x-tydig-link'] = req.socket.link ? '1' : ''
   next()
 }, toNodeHandler(auth))
 app.get('/api/auth-config', (req, res) => res.json({

@@ -52,6 +52,14 @@ const tooMany = email => {
   tries.set(k, [...t, now])
   return t.length >= 10
 }
+// over the link an address is an iroh id, free to change: sign-ins and
+// sign-ups that come that way share one hub-wide cap
+let linked = []
+const tooManyLinked = () => {
+  const now = Date.now(), t = linked.filter(x => now - x < 15 * 60_000)
+  linked = [...t, now]
+  return t.length >= 300
+}
 
 // Join codes: three spoken words (cxn.pub, "tidy ruby otter") that let
 // whoever holds them sign up and join one project for a week. They can only
@@ -88,6 +96,8 @@ const no = (code, message) => { throw new APIError(code, { message }) }
 const gate = createAuthMiddleware(async ctx => {
   if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))
     no('FORBIDDEN', 'projects are created and removed through tydig')
+  if (/^\/sign-(in|up)\/email$/.test(ctx.path) && ctx.headers?.get?.('x-tydig-link') && tooManyLinked())
+    no('TOO_MANY_REQUESTS', 'Too many sign-ins through links lately; try again in 15 minutes.')
   if (ctx.path === '/sign-in/email' && tooMany(ctx.body?.email))
     no('TOO_MANY_REQUESTS', 'Too many sign-in attempts for this account; try again in 15 minutes.')
   if ((ctx.path === '/sign-up/email' || ctx.path === '/update-user' && 'name' in (ctx.body || {})) && !String(ctx.body?.name || '').trim())
