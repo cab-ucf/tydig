@@ -37,6 +37,8 @@ check('the hub\'s own folder is never served as a project', (await as(ann, '/p/.
 check('a member cannot point the project at a remote',
   (await as(bob, '/p/paper/gitremote', { method: 'POST', body: JSON.stringify({ url: 'https://example.com/x.git' }) })).status === 403)
 const { statSync, existsSync } = await import('node:fs')
+await as(ann, '/projects/known_hosts', { method: 'POST' })
+check('a project named like a hub file leaves the hub\'s alone', existsSync('data/.hub/.known_hosts'))
 check('auth.db (hashes, sessions) is readable by the hub user alone', (statSync('data/auth.db').mode & 0o077) === 0 && (statSync('data').mode & 0o077) === 0)
 
 const org = await (await as(ann, '/auth/organization/get-full-organization?organizationSlug=paper')).json()

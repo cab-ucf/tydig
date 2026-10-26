@@ -47,7 +47,7 @@ export const textOf = b => {
 // git, one call at a time per project; never prompts, never runs a build's
 // fsmonitor nor follows a redirect (to a host never checked); ssh with the
 // project's deploy key only
-const KNOWN = path.join(HUB, 'known_hosts')
+const KNOWN = path.join(HUB, '.known_hosts') // a dot: no project's name
 if (!existsSync(KNOWN)) await fs.writeFile(KNOWN, 'github.com ssh-ed25519 ' +
   'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n')
 const ssh = n => `ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=accept-new` +
