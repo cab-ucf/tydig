@@ -133,9 +133,9 @@ const serve = sock => {
       const out = { stdout: '', stderr: note }
       p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
       p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
-      // gVisor failed before the command ran: run it once more, plain
+      // gVisor did not start (gvisor-run's 120, never a build's): once more, plain
       p.on('close', code => {
-        if (!code || !g(o) || !/cannot create sandbox/.test(out.stderr)) return live--, sock.end(JSON.stringify({ code, ...out }) + '\n')
+        if (code !== 120 || !g(o)) return live--, sock.end(JSON.stringify({ code, ...out }) + '\n')
         sock.off('close', bye); o = { ...o, plain: true }
         go(args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o), 'gVisor would not start for this build, so it ran in a plain ' +
           `container: ${out.stderr.trim().split('\n').pop()}\n`)

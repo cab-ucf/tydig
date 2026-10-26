@@ -18,4 +18,9 @@ print(json.dumps({"ociVersion": "1.0.0", "root": {"path": os.environ.get("TYDIG_
     hide("/work/.git"), hide("/work/.collab")],
   "linux": {"namespaces": [{"type": t} for t in ("pid", "ipc", "uts", "mount")]}}))
 PY
-exec runsc --rootless --ignore-cgroups --root=$b/state --network=$net run --bundle=$b tydig
+# 120: gVisor did not start (server/sandbox.mjs runs the build again, plain);
+# a build's own 120 is reported as 1
+r="runsc --rootless --ignore-cgroups --root=$b/state --network=$net"
+$r run --detach --bundle=$b tydig || exit 120
+s=$($r wait tydig | sed -n 's/.*"exitStatus":\([0-9]*\).*/\1/p')
+exit $(( ${s:-1} == 120 ? 1 : ${s:-1} ))
