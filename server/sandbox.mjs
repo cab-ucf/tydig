@@ -54,10 +54,11 @@ const LIMITS = ['--memory=2g', '--cpu-quota=200000', '--ulimit=nproc=2048:2048']
 // runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
 // the host's; gVisor hides .git and .collab itself. Its one need of the
 // container is CAP_SYS_CHROOT, to set up its root; the build gets nothing.
-// Probed at start; a build it will not start for runs again in a plain
-// container (plain); TYDIG_RUNTIME=none: plain containers.
+// Probed at start; a build it will not start for fails, never runs outside
+// it (a project's image could make it fail on purpose); TYDIG_RUNTIME=none:
+// plain containers.
 let gvisor = false
-const g = own => gvisor && !own?.plain
+const g = () => gvisor
 const under = (cmd, own) => g(own) ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
 // as 1000, or in a project's image as its root (the hub's user): no capabilities
 const box = (secs, own) => ['run', '--rm', ...NET, `--timeout=${secs}`, '--log-driver=none',
@@ -139,12 +140,10 @@ const serve = sock => {
       const out = { stdout: '', stderr: note }
       p.stdout.on('data', d => out.stdout.length < 8e6 && (out.stdout += d))
       p.stderr.on('data', d => out.stderr.length < 8e6 && (out.stderr += d))
-      // gVisor did not start (gvisor-run's 120, never a build's): once more, plain
+      // gVisor did not start (gvisor-run's 120, never a build's)
       p.on('close', code => {
-        if (code !== 120 || !g(o)) return live--, sock.end(JSON.stringify({ code, ...out }) + '\n')
-        sock.off('close', bye); o = { ...o, plain: true }
-        go(args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o), 'gVisor would not start for this build, so it ran in a plain ' +
-          `container: ${out.stderr.trim().split('\n').pop()}\n`)
+        if (code === 120 && g()) out.stderr += '\ngVisor would not start this build (its image?), and builds run nowhere else\n'
+        live--, sock.end(JSON.stringify({ code, ...out }) + '\n')
       })
     }
     go(a)
