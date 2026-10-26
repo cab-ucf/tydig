@@ -11,8 +11,8 @@ import { unpack } from './unpack.mjs'
 import { proj, inProj, okPath, walk, safe, openIn, writeIn, git, live, mirror,
   putFile, fileNow, building, commit, bad, hubFile, writeAtomic } from './store.mjs'
 
-const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
-const used = async n => {
+export const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
+export const used = async n => {
   let b = 0
   for await (const rel of walk(proj(n))) b += (await lstat(inProj(n, rel)).catch(() => ({ size: 0 }))).size
   return b

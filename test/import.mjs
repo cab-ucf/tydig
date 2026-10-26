@@ -48,6 +48,9 @@ with tarfile.open('${t}/evil.tgz', 'w:gz') as z:
 const r3 = await imp('corona', readFileSync(path.join(t, 'evil.tgz')), 'evil.tgz')
 check('a path out of the project is skipped, the rest lands', r3.skipped.length === 2 && r3.added.join() === 'fine.txt' &&
   !existsSync('data/escape.txt') && !existsSync('escape2.txt'))
+writeFileSync('data/corona/Makefile', 'fill:\n\thead -c 6000000 /dev/zero > big.bin\n'); await sleep(1000)
+const fill = await ann.res('/p/corona/build/fill', { method: 'POST' })
+check('a build is held to the project\'s quota, as uploads are', fill.status === 413 && /limit/.test((await fill.json()).output))
 check('a file that is not an archive is refused', /not an archive/.test((await imp('corona', Buffer.from('hello'), 'x.zip')).error || ''))
 
 done()

@@ -157,6 +157,10 @@ check('no answer names the data folder on this machine', /…\/demo/.test(where.
 ;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nnope:\n\tno-such-tool fig.py\n'); await sleep(300)
 check('a command the sandbox lacks is named, with the way out',
   /`no-such-tool` is not in this hub's build sandbox.*just up/s.test((await api('/p/demo/build/nope', { method: 'POST' })).output))
+;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nslow:\n\tsleep 2\n'); await sleep(300)
+const slow = api('/p/demo/build/slow', { method: 'POST' }); await sleep(300)
+check('one build at a time per person', /you have a build running/.test((await api('/p/nih-r21/build/full', { method: 'POST' })).output))
+await slow
 const filesAfter = await api('/p/demo/files')
 check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.json'))
 check('builds leave no nested repo or symlink behind', !ex('data/demo/nest/.git') && !(await import('node:fs')).existsSync('data/demo/escape'))

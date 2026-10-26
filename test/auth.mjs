@@ -100,6 +100,10 @@ const badOriginDiag = await fetch(`${B}/api/auth-config`, { headers: { origin: '
 check('auth-config flags an untrusted origin before any sign-in attempt',
   badOriginDiag.originOk === false)
 
+for (let i = 0; i < 4; i++) await post(ann, `/projects/cap${i}${Date.now().toString(36)}`, {})
+check('a person owns at most TYDIG_MAX_PROJECTS projects',
+  (await (await as(ann, '/projects')).json()).filter(p => p.role === 'owner').length === 4)
+
 const badEmail = await signUpFrom(B, 'ada@localhost')
 check('bare-host email rejected by validation', badEmail.code === 'VALIDATION_ERROR')
 

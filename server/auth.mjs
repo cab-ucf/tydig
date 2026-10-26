@@ -81,7 +81,7 @@ export const joins = {
 
 // After the first account, signing up takes a join code, or an invitation
 // (sharing a project with an address makes one) and its id from the invite link.
-const OPEN = env.TYDIG_SIGNUP === 'open'
+const OPEN = env.TYDIG_SIGNUP === 'open', MAX_PROJECTS = Number(env.TYDIG_MAX_PROJECTS || 50)
 const invitesFor = email => db.prepare("SELECT * FROM invitation WHERE lower(email) = lower(?) " +
   "AND status = 'pending'").all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
 const no = (code, message) => { throw new APIError(code, { message }) }
@@ -142,7 +142,8 @@ export const auth = betterAuth({
       clientId: env.TYDIG_SSO_CLIENT_ID, clientSecret: env.TYDIG_SSO_CLIENT_SECRET,
       scopes: ['openid', 'profile', 'email'],
     }] })] : [],
-    organization({ allowUserToCreateOrganization: true, organizationLimit: 1000, creatorRole: 'owner' }),
+    organization({ allowUserToCreateOrganization: true, creatorRole: 'owner', organizationLimit: u => // owned
+      db.prepare("SELECT count(*) n FROM member WHERE userId = ? AND role = 'owner'").get(u.id).n >= MAX_PROJECTS }),
   ],
 })
 await (await getMigrations(auth.options)).runMigrations()
