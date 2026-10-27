@@ -9,7 +9,7 @@ const b64u = bytes => btoa(String.fromCharCode(...bytes))
 const unb64u = s => Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/')), c => c.charCodeAt(0))
 const utf8 = s => new TextEncoder().encode(s)
 
-// Deterministic JSON, identical to server/prov.mjs.
+// Deterministic JSON, identical to server/history.mjs.
 const canon = v => Array.isArray(v) ? `[${v.map(canon)}]` : !v || typeof v !== 'object' ? JSON.stringify(v)
   : `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k]))}}`
 const sha256hex = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', utf8(text)))]

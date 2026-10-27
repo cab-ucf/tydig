@@ -11,7 +11,7 @@ import { prose } from './surprise.js'
 import { Decoration, EditorView, ViewPlugin, showTooltip } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 
-export const DICT = '.harper-dictionary.txt'
+const DICT = '.harper-dictionary.txt'
 let harper, words, terms
 // sound English (or a house style), prose cut around code, or what Typst
 // typesets itself (-- is an en dash) or means (..spread), that these misread

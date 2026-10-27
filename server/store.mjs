@@ -145,7 +145,7 @@ export async function mergeFile(base, ours, theirs, ...flags) {
 }
 // an outside edit (agent, shell, git) into the live text; the live text
 // wins where both changed the same lines
-export const merge3 = async (base, ours, theirs) =>
+const merge3 = async (base, ours, theirs) =>
   theirs === base || theirs === ours ? ours : ours === base ? theirs
     : (await mergeFile(base, ours, theirs, '--ours')).text
 // theirs (an outside edit of base; null: deleted) into the live text at p,

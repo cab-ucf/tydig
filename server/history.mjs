@@ -11,10 +11,10 @@ import { git, commit, live, mirror, editable, textOf, walk, proj, inProj, putTex
 import { db } from './auth.mjs'
 import * as remote from './remote.mjs'
 
-export const ALG = 'ml-dsa-65'
+const ALG = 'ml-dsa-65'
 const sha256 = d => createHash('sha256').update(d).digest('hex')
 const bytes = s => new Uint8Array(Buffer.from(s, 'base64url'))
-export const keyIdOf = pk => sha256(bytes(pk)).slice(0, 16)
+const keyIdOf = pk => sha256(bytes(pk)).slice(0, 16)
 // deterministic JSON: keys sorted, as the client does
 export const canon = v => Array.isArray(v) ? `[${v.map(canon).join(',')}]`
   : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',')}}`

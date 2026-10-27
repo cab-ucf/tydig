@@ -4,7 +4,7 @@
 // never typed or generated; the check compares each entry with that record
 // (or, without a DOI, the best Crossref match) and offers the fix.
 import * as Y from 'yjs'
-// searching and checking: shared with agent members (server/agent-mcp.mjs)
+// searching and checking: shared with agent members (server/agents.mjs)
 import { SEARCH, parseBib, keyFor, bibtex, check, lookFor, terms } from '../../server/refs.mjs'
 import { el } from './util.js'
 

@@ -15,7 +15,7 @@ export const SPEC = /^@preview\/([a-z0-9][a-z0-9-]*):(\d+\.\d+\.\d+)$/
 const fail = (status, message) => Object.assign(new Error(message), { status })
 
 // a package's .tar.gz (immutable, as Universe publishes them: a version never changes)
-export async function tarball(f) {
+async function tarball(f) {
   if (!FILE.test(f)) throw fail(400, 'not a package')
   const at = path.join(DIR, f)
   if (existsSync(at)) return readFile(at)
