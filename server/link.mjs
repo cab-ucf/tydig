@@ -1,12 +1,15 @@
 // The link collaborators open: <TYDIG_PAGE>#<id>, tydig's static page plus
 // the public id of a key only this hub holds. The page reaches the hub over
 // iroh (irp's wasm client, github.com/cab-ucf/irp): no domain, certificate
-// or open port. Each iroh stream is one HTTP/1.0 exchange, handed to the
-// hub's HTTP server as a connection; websockets ride the bridge below.
+// or open port. tydig-link (link/, Rust) holds the key and hands each iroh
+// stream, one HTTP/1.0 exchange, to the hub's HTTP server through a socket
+// of the hub's own; websockets ride the bridge below.
 import express from 'express'
-import { Duplex } from 'node:stream'
-import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import net from 'node:net'
+import { spawn } from 'node:child_process'
+import { createHash, createPrivateKey, createPublicKey, randomBytes } from 'node:crypto'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createInterface } from 'node:readline'
 import path from 'node:path'
 import { WebSocket } from 'ws'
 import { DATA } from './store.mjs'
@@ -14,56 +17,39 @@ import { derive, newSeed, relayUrl, RELAYS } from './relay.mjs'
 
 const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'https://cxn.pub/'
 const PIN = process.env.TYDIG_LINK_RELAY
-const ALPN = [...Buffer.from('irweb/http/1')]
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
-const secret = PAGE && [...derive(readFileSync(seedFile, 'utf8').trim(), 'irweb v1 endpoint identity')]
-const iroh = PAGE && await import('@number0/iroh')
-export const LINK = PAGE && `${PAGE}#${newSeed(iroh.SecretKey.fromBytes(secret).public().toBytes())}` +
-  (PIN ? `;r=${PIN}` : '')
+const secret = PAGE && derive(readFileSync(seedFile, 'utf8').trim(), 'irweb v1 endpoint identity')
+// its public half, as iroh makes it: Ed25519 from the 32 bytes as a seed
+const id = secret && createPublicKey(createPrivateKey({ format: 'der', type: 'pkcs8',
+  key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), secret]) }))
+  .export({ type: 'spki', format: 'der' }).subarray(-32)
+export const LINK = PAGE && `${PAGE}#${newSeed(id)}` + (PIN ? `;r=${PIN}` : '')
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 export let online = false
 
 export async function start(server) {
   if (!LINK) return
-  // Relays in order, not the nearest: the dedicated one pings slower but moves
-  // more. The page dials them all, so wherever the hub lands it is found.
-  const rs = PIN ? [relayUrl(PIN)] : RELAYS
-  let ep
-  for (const [i, r] of rs.entries()) {
-    const b = iroh.Endpoint.builder()
-    b.applyMinimal(); b.secretKey(secret); b.alpns([ALPN])
-    b.relayMode(iroh.RelayMode.customFromUrls([r]))
-    ep = await b.bind()
-    if (i === rs.length - 1 || await Promise.race([ep.online().then(() => true),
-      new Promise(ok => setTimeout(ok, 10_000, false))])) break
-    await ep.close()
-  }
-  ;(async () => {
-    for (let inc; (inc = await ep.acceptNext().catch(() => null));) (async () => {
-      const conn = await (await inc.accept()).connect(), peer = conn.remoteId().toString()
-      for (;;) serve(server, await conn.acceptBi(), peer)
-    })().catch(() => {})
-  })()
+  // each stream: the peer's id, a nod back once it is read, then its exchange
+  const sock = path.join(DATA, 'link.sock')
+  rmSync(sock, { force: true })
+  await new Promise((ok, no) => net.createServer(s => s.on('error', () => {}).once('readable', function peer() {
+    const b = s.read(32)
+    if (!b) return s.once('readable', peer)
+    s.link = true // only our page speaks on these: they count as the hub's origin
+    // its own sign-in rate limit: a private IPv6 address per iroh id
+    s.ip = (h => `fd${h.slice(0, 2)}:${h.slice(2, 14).match(/.{4}/g).join(':')}::1`)(
+      createHash('sha256').update(b.toString('hex')).digest('hex'))
+    s.write('\0'); server.emit('connection', s)
+  })).on('error', no).listen(sock, ok))
+  const p = spawn('tydig-link', [sock, ...PIN ? [relayUrl(PIN)] : RELAYS], { stdio: ['pipe', 'pipe', 'inherit'] })
+  p.stdin.on('error', () => {}).write(secret) // and held open: it leaves with the hub
   const late = setTimeout(() => console.warn('link: no relay yet; the hub needs outbound HTTPS to its relay'), 20_000)
-  await ep.online(); clearTimeout(late); online = true
-  console.log(`link: online, ${LINK}`)
-}
-
-// The browser half-closes after its request; that end is never passed on,
-// or Node's server would drop the reply.
-function serve(server, { send, recv }, peer) {
-  const d = new Duplex({
-    read() { recv.read(64 << 10).then(c => c?.length && this.push(Buffer.from(c)), e => this.destroy(e)) },
-    write(c, _, cb) { send.writeAll([...c]).then(() => cb(), cb) },
-    final(cb) { send.finish().finally(() => { cb(); this.destroy() }) },
-    destroy(e, cb) { send.finish().catch(() => {}); cb(e) },
+  createInterface({ input: p.stdout }).on('line', l => {
+    if (l === 'online') { clearTimeout(late); online = true; console.log(`link: online, ${LINK}`) }
   })
-  d.link = true // only our page speaks on these: they count as the hub's origin
-  // its own sign-in rate limit: a private IPv6 address per iroh id
-  d.ip = (h => `fd${h.slice(0, 2)}:${h.slice(2, 14).match(/.{4}/g).join(':')}::1`)(
-    createHash('sha256').update(peer).digest('hex'))
-  server.emit('connection', d)
+  p.on('error', e => console.warn(`link: ${e.message} (the image has tydig-link; elsewhere, cargo install --path link)`))
+    .on('exit', c => { clearTimeout(late); online = false; c == null || console.warn(`link: tydig-link stopped (${c})`) })
 }
 
 // Websockets for link visitors: a GET opens one to /sync or /lsp and streams

@@ -4,3 +4,4 @@ dist/
 .env
 .uitest/
 .claude/worktrees/
+target/

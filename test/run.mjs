@@ -1,7 +1,7 @@
 // Each suite against fresh hubs with data of their own:
 //   node test/run.mjs [suite...]   (default: all but ui, link, lsp, sandbox)
-// ui and link need puppeteer (installed into .uitest/), link an iroh-relay
-// on PATH, lsp tinymist, sandbox rootless podman.
+// ui and link need puppeteer (installed into .uitest/), link cargo and an
+// iroh-relay on PATH, lsp tinymist, sandbox rootless podman.
 import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, openSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,6 +42,8 @@ for (const s of suites) {
   const dir = mkdtempSync(path.join(tmpdir(), `tydig-${s}-`)), env = { ...ENV[s] }
   console.log(`--- ${s}`)
   if (s === 'link') {
+    sh('cargo build -q --manifest-path link/Cargo.toml')
+    process.env.PATH = `${root}/link/target/debug:${process.env.PATH}`
     mkdirSync(path.join(dir, 'site')); symlinkSync(path.join(root, 'client/dist'), path.join(dir, 'site/app'))
     writeFileSync(path.join(dir, 'relay.toml'), 'enable_metrics = false\nhttp_bind_addr = "127.0.0.1:3340"\n')
     bg.push(spawn('iroh-relay', ['--dev', '--config-path', path.join(dir, 'relay.toml')], { stdio: 'ignore' }),
