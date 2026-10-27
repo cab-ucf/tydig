@@ -148,10 +148,9 @@ export const auth = betterAuth({
 })
 await (await getMigrations(auth.options)).runMigrations()
 
-// the session behind a cookie (or a bare token), or null
-export const session = (cookie, token) => auth.api.getSession({ headers: new Headers({
-  cookie: cookie || (token ? `better-auth.session_token=${token}` : ''),
-}) }).catch(() => null)
+// the session behind a cookie, or null
+export const session = cookie => auth.api.getSession({ headers: new Headers({ cookie: cookie || '' }) })
+  .catch(() => null)
 
 const mine = db.prepare('SELECT o.id, o.slug AS name, m.role FROM member m ' +
   'JOIN organization o ON o.id = m.organizationId WHERE m.userId = ?')

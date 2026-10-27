@@ -14,7 +14,7 @@ import { typst } from 'codemirror-lang-typst'
 import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { spellcheck } from './spell.js'
 import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asText } from './util.js'
-import { files, provider, token, ws, isImg, okPath, GEN, tags, onTags, TAGS } from './doc.js'
+import { files, provider, ws, isImg, okPath, GEN, tags, onTags, TAGS } from './doc.js'
 import { ghost } from './ghost.js'
 import { commentExt } from './comments.js'
 import { renderTree } from './tree.js'
@@ -82,7 +82,7 @@ async function lspExt(p) {
     await import('codemirror-languageserver')
   class Socket extends WebSocketTransport { send(m) { this.connection.readyState === 1 && super.send(m) } }
   mine = tinymist ??= api(P('/info')).then(({ root }) => ({ root, client: new LanguageServerClient({
-    transport: new Socket(`${ws}/lsp?proj=${projName}&t=${encodeURIComponent(token())}`),
+    transport: new Socket(`${ws}/lsp?proj=${projName}`),
     rootUri: `file://${root}`, workspaceFolders: [{ name: projName, uri: `file://${root}` }],
     autoClose: false, onError: gone, onClose: gone,
   }) }))

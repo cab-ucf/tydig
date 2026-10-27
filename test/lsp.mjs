@@ -5,7 +5,7 @@ import { HUB, person, check, done } from './lib.mjs'
 const me = await person('Lsp')
 await me.post('/projects/demo-lsp')
 const root = `file://${(await me.get('/p/demo-lsp/info')).root}`
-const ws = new WebSocket(`${HUB.replace('http', 'ws')}/lsp?proj=demo-lsp&t=${me.token}`, { headers: { origin: HUB } })
+const ws = new WebSocket(`${HUB.replace('http', 'ws')}/lsp?proj=demo-lsp`, { headers: { origin: HUB, cookie: me.cookie } })
 const send = (id, method, params) => ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
 const note = (method, params) => ws.send(JSON.stringify({ jsonrpc: '2.0', method, params }))
 setTimeout(() => { check('answered in time', false); done() }, 30000)

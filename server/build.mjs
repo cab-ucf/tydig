@@ -97,7 +97,7 @@ router.post('/docx', async (req, res) => {
 
 // LSP over a websocket: JSON messages <-> tinymist's Content-Length frames.
 // At most TYDIG_MAX_LSP at once, two per person.
-const wss = new WebSocketServer({ noServer: true })
+const wss = new WebSocketServer({ noServer: true, maxPayload: 16 << 20 })
 const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8), per = new Map()
 export const lspOpen = new Map() // proj -> sockets, closed when a member is removed
 export function lsp(req, sock, head, n, user) {

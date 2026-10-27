@@ -194,15 +194,15 @@ app.use((e, req, res, next) => {
   res.status(code).json({ error: code < 500 ? e.message : 'internal error' })
 })
 
-// websockets: /sync (the CRDT) and /lsp, signed in and a member
-const sync = new WebSocketServer({ noServer: true })
+// websockets: /sync (the CRDT) and /lsp, signed in at the upgrade (nothing
+// reaches either before), and a member of each project they open
+const sync = new WebSocketServer({ noServer: true, maxPayload: 16 << 20 })
 hocuspocus.configure({
-  async onAuthenticate({ token, requestHeaders: h, requestParameters: q, documentName: n }) {
-    const s = isProj(n) && originOk(h?.origin) && await session(h?.cookie, token)
-    if (!s?.user || !access(s.user.id, n)) throw new Error('forbidden')
+  async onAuthenticate({ request: { user: u }, requestParameters: q, documentName: n }) {
+    if (!isProj(n) || !access(u.id, n)) throw new Error('forbidden')
     // an offline copy of another lineage (store.mjs): the browser starts again (doc.js)
     if (q.get('epoch') && q.get('epoch') !== await epoch(n)) throw Object.assign(new Error('epoch'), { reason: 'epoch' })
-    return { user: { id: s.user.id, name: s.user.name, email: s.user.email } }
+    return { user: { id: u.id, name: u.name, email: u.email } }
   },
   onChange: ({ documentName: n, context: c }) => edited(n, c.user),
 })
@@ -213,13 +213,11 @@ const server = app.listen(PORT, () => {
 })
 server.on('upgrade', async (req, sock, head) => {
   sock.on('error', () => {})
-  const u = new URL(req.url, 'http://x')
-  if (/^\/sync(\/|$)/.test(u.pathname)) return sync.handleUpgrade(req, sock, head, ws => hocuspocus.handleConnection(ws, req))
-  const n = u.searchParams.get('proj')
-  if (u.pathname !== '/lsp' || !isProj(n) || !originOk(req.headers.origin)) return sock.destroy()
-  const s = await session(req.headers.cookie, u.searchParams.get('t'))
-  if (!s?.user || !access(s.user.id, n)) return sock.destroy()
-  build.lsp(req, sock, head, n, s.user.id)
+  const u = new URL(req.url, 'http://x'), n = u.searchParams.get('proj'), lsp = u.pathname === '/lsp'
+  if (!(lsp ? isProj(n) : /^\/sync(\/|$)/.test(u.pathname)) || !originOk(req.headers.origin)) return sock.destroy()
+  req.user = (await session(req.headers.cookie))?.user
+  if (!req.user || lsp && !access(req.user.id, n)) return sock.destroy()
+  lsp ? build.lsp(req, sock, head, n, req.user.id) : sync.handleUpgrade(req, sock, head, ws => hocuspocus.handleConnection(ws, req))
 })
 
 // leaving saves every open project and pushes it: the hub is disposable

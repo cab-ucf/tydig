@@ -20,7 +20,6 @@ export const local = new IndexeddbPersistence(`tydig:${link ? link.id + ':' : ''
 
 export const user = { id: me.id, name: me.name || me.email,
   color: localStorage.userColor ||= `hsl(${Math.floor(Math.random() * 360)} 70% 45%)` }
-export const token = () => /better-auth\.session_token=([^;]+)/.exec(document.cookie)?.[1] || ''
 export const ws = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
 // This copy's lineage goes with each connect, and the hub refuses another's
 // (server/store.mjs): the hub's document began anew. Then this copy's text is
@@ -34,8 +33,9 @@ async function anew() {
 }
 // connected by main.js, once every module listens and the offline copy is read
 const q = {} // the connect's parameters
+// signed in by its cookie (index.mjs); a provider with no token never asks
 export const provider = new HocuspocusProvider({
-  url: `${ws}/sync`, name: projName, document: ydoc, token, connect: false, parameters: q,
+  url: `${ws}/sync`, name: projName, document: ydoc, token: 'cookie', connect: false, parameters: q,
   onAuthenticationFailed: ({ reason }) => reason === 'epoch' ? anew()
     : (alert(`No access to ${projName}: ask a member to share it.`), location.search = ''),
 })

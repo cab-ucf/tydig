@@ -1,6 +1,6 @@
 // Shared by every suite: a hub at HUB, people signing up, live documents.
 import * as Y from 'yjs'
-import { HocuspocusProvider } from '@hocuspocus/provider'
+import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider'
 import WebSocket from 'ws'
 export { Y }
 
@@ -21,19 +21,19 @@ export async function person(name, { hub = HUB, invite, email } = {}) {
     headers: { 'content-type': 'application/json', origin: hub, ...invite && { 'x-tydig-invite': invite } },
     body: JSON.stringify({ email, password: 'password123', name }) })
   const cookie = r.headers.getSetCookie()[0]?.split(';')[0] || ''
-  const token = /session_token=([^;]+)/.exec(cookie)?.[1]
   const res = (p, o = {}) => fetch(hub + '/api' + p, { ...o, headers: { cookie, origin: hub, ...o.headers } })
   const json = (method, p, body) => res(p, { method, ...body !== undefined && {
     headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } }).then(r => r.json())
-  return { email, cookie, token, ok: r.ok, status: r.status, signup: r, res,
+  return { email, cookie, ok: r.ok, status: r.status, signup: r, res,
     get: p => json('GET', p), post: (p, b = {}) => json('POST', p, b), put: (p, b) => json('PUT', p, b),
-    del: p => json('DELETE', p), doc: (proj, o) => doc(hub, proj, token, o) }
+    del: p => json('DELETE', p), doc: (proj, o) => doc(hub, proj, cookie, o) }
 }
-// a live document, synced; .files is its 'files' map
-export function doc(hub, name, token, o = {}) {
-  const d = new Y.Doc()
-  d.provider = new HocuspocusProvider({ url: hub.replace(/^http/, 'ws') + '/sync', name, document: d,
-    token, WebSocketPolyfill: WebSocket, ...o })
+// a live document, synced, signed in by its cookie; .files is its 'files' map
+export function doc(hub, name, cookie, o = {}) {
+  const d = new Y.Doc(), url = hub.replace(/^http/, 'ws') + '/sync'
+  d.provider = new HocuspocusProvider({ name, document: d, token: 'cookie', ...o, websocketProvider: new HocuspocusProviderWebsocket({
+    url, parameters: o.parameters, connect: o.connect,
+    WebSocketPolyfill: class extends WebSocket { constructor(u, p) { super(u, p, { headers: { cookie } }) } } }) })
   d.files = d.getMap('files')
   return d
 }
