@@ -128,8 +128,11 @@ export const auth = betterAuth({
   session: { expiresIn: 30 * 86400, updateAge: 86400 },
   advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } }, // set by index.mjs
   hooks: { before: gate },
-  databaseHooks: { user: { create: { after: async u => {
-    for (const i of invitesFor(u.email)) {
+  // an invitation is taken with its link, or by an address its IdP vouches for:
+  // anyone may sign up as any address with a join code, or where signup is open
+  databaseHooks: { user: { create: { after: async (u, ctx) => {
+    const link = ctx?.headers?.get?.('x-tydig-invite')
+    for (const i of invitesFor(u.email).filter(i => u.emailVerified || i.id === link)) {
       await auth.api.addMember({ body: { userId: u.id, organizationId: i.organizationId, role: i.role || 'member' } })
       db.prepare("UPDATE invitation SET status = 'accepted' WHERE id = ?").run(i.id)
     }
