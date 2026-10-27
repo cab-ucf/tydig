@@ -7,7 +7,8 @@ import { renderCite, citeAt, bibOf } from './cite.js'
 import { parseBib } from '../../server/refs.mjs'
 import { prose, readAi, aiPct } from './surprise.js'
 import { renderSpelling } from './spell.js'
-import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist } from './util.js'
+import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist, focusOn }
+  from './util.js'
 import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { typeset, aiMarks } from './preview.js'
@@ -48,10 +49,14 @@ $('rail').addEventListener('click', e => {
 export function redraw(m) {
   if (mode !== m) return
   const b = $('side-body'), f = document.activeElement, k = b.contains(f) ? f.dataset.re : null, at = f?.selectionStart
+  const n = [...b.querySelectorAll(ENTRIES)].indexOf(f)
   b.dataset.pane = m; panes()[m](b)
   const t = k != null && b.querySelector(`textarea[data-re="${CSS.escape(k)}"]`)
   if (t) { t.focus(); t.setSelectionRange(at, at) }
+  else if (n >= 0) focusOn(b.querySelectorAll(ENTRIES)[n]) // gone through by keys (keys.js)
 }
+// a pane's entries, which keys go through
+export const ENTRIES = '.comment, .commit, .autos > summary, .recipe, .check, .ai-row, .review-file, .paper, .ref'
 export function toggleSide() {
   if (!settings.sideOpen) return openSidebar(mode || 'comments')
   settings.sideOpen = false; applyLayout(); tabs()

@@ -10,6 +10,11 @@ export const el = (tag, props, ...kids) => {
   e.append(...kids)
   return e
 }
+// the focus on any element, a row that takes none of itself too, in view
+export const focusOn = x => {
+  if (!x) return
+  x.tabIndex < 0 && x.setAttribute('tabindex', '-1'); x.focus(); x.scrollIntoView({ block: 'nearest' })
+}
 // a person's colour, as a dot (never trusted as CSS beyond a colour)
 export const color = c => CSS.supports('color', c) ? c : 'gray'
 export const dot = (c, title = '') => el('i', { className: 'dot', title, style: `background:${color(c)}` })

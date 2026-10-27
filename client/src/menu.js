@@ -1,7 +1,7 @@
 // What every button and key does (any element with data-act names an
 // action here; keys.js binds the keys), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
-import { $, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose }
+import { $, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose, focusOn }
   from './util.js'
 import { MODES } from './surprise.js'
 import { signOut, changeName, changePassword, deleteAccount } from './auth.js'
@@ -13,13 +13,14 @@ import { newFile, uploadTo, quickOpen, grep, tagMenu } from './tree.js'
 import { tags } from './doc.js'
 import { mode, openSidebar, toggleSide, checkpoint, cite, citeFromBib } from './panels.js'
 import { toggleComment } from '@codemirror/commands'
-import { openPicker, showShare, showGitRemote, archive, deleteProject } from './dialogs.js'
+import { openPicker, switchProject, showShare, showGitRemote, archive, deleteProject } from './dialogs.js'
 
 const flip = k => () => { settings[k] = !settings[k]; applyLayout() }
 const show = v => () => { settings.view = v; applyLayout() }
 const pane = m => () => openSidebar(m)
 export const actions = {
-  'new-file': () => newFile(), upload: () => uploadTo(), projects: openPicker, 'quick-open': quickOpen,
+  'new-file': p => newFile(p), upload: () => uploadTo(), projects: openPicker, 'quick-open': quickOpen,
+  'switch-project': switchProject,
   grep: () => grep(view?.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), // a selection, searched for as it is
   save: () => checkpoint('save'), checkpoint: () => checkpoint(), 'export-pdf': exportPdf, 'export-docx': exportDocx,
@@ -27,6 +28,11 @@ export const actions = {
   'download-all': () => download(`/api${P('/archive?all=1')}`, `${projName}.tar.gz`),
   undo: () => tags(path)['read-only'] || undo.get(path)?.undo(), redo: () => tags(path)['read-only'] || undo.get(path)?.redo(), comment: () => addComment(), cite: () => cite(),
   'toggle-tree': flip('treeOpen'), 'toggle-side': toggleSide,
+  tree: () => { // into the tree (shown, if it was not), or back out of it
+    if ($('tree-pane').contains(document.activeElement)) return view?.focus()
+    settings.treeOpen = true; if (phone()) settings.m = 'files'
+    applyLayout(); focusOn($('tree').querySelector('.active') ?? $('tree').firstElementChild)
+  },
   'to-preview': showInPreview,
   'view-editor': show('editor'), 'view-split': show('split'), 'view-preview': show('preview'),
   'toggle-preview': () => show(settings.view === 'split' ? 'editor' : 'split')(),

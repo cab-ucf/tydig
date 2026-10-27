@@ -2,21 +2,22 @@
 // the browser keeps); for vim, Space as leader (what can follow shows, as
 // which-key does), :w :e :q :vs :only :make, and :map that is remembered.
 // Esc is vim's: with vim keys, Space z, :q or the corner button leave focus.
-// ? lists them all.
-import { $, el, settings, saveSettings, MOD, projName } from './util.js'
+// The tree and the panels' lists go by j, k and Enter. ? lists them all.
+import { $, el, settings, saveSettings, MOD, projName, focusOn } from './util.js'
 import { view, path, prev, open, onVim } from './editor.js'
 import { files } from './doc.js'
 import { actions } from './menu.js'
 import { grep } from './tree.js'
+import { ENTRIES } from './panels.js'
 
 const KEYS = { 'mod+k': 'palette', 'mod+shift+p': 'palette', 'mod+p': 'quick-open', 'mod+shift+f': 'grep', 'mod+s': 'save',
-  'mod+alt+m': 'comment', 'mod+alt+j': 'to-preview', 'mod+backslash': 'toggle-preview', 'mod+j': 'toggle-side', 'mod+shift+e': 'toggle-tree' }
+  'mod+alt+m': 'comment', 'mod+alt+j': 'to-preview', 'mod+backslash': 'toggle-preview', 'mod+j': 'toggle-side', 'mod+shift+e': 'tree' }
 // after AstroNvim's leader: w save, q quit, n new, e explorer, / comment a
 // line, f find, g git, u UI; tydig's own: c comment, r references, views
-const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'toggle-tree', '/': 'line-comment',
+const LEADER = { ' ': 'quick-open', w: 'save', q: 'close', n: 'new-file', e: 'toggle-tree', o: 'tree', '/': 'line-comment',
   c: 'comment', C: 'comments', v: 'to-preview', d: 'chat', b: 'build', z: 'focus', p: 'toggle-preview', j: 'toggle-side',
   1: 'view-editor', 2: 'view-split', 3: 'view-preview', '?': 'shortcuts',
-  f: { name: 'Find', f: 'quick-open', w: 'grep', c: 'palette', k: 'shortcuts', p: 'projects', r: 'cite-bib', t: 'theme' },
+  f: { name: 'Find', f: 'quick-open', w: 'grep', c: 'palette', k: 'shortcuts', p: 'switch-project', r: 'cite-bib', t: 'theme' },
   r: { name: 'References', r: 'cite-bib', c: 'cite', a: 'cite-alone', s: 'spelling', i: 'aicheck' },
   g: { name: 'Git', c: 'history', s: 'checkpoint', r: 'gitremote', S: 'share' },
   u: { name: 'UI', r: 'reset-layout', f: 'fullscreen', t: 'theme', s: 'spell', g: 'ghost', l: 'lsp', o: 'scope', v: 'vim' } }
@@ -29,6 +30,10 @@ const EX = { ':w': 'save', ':e [file]': 'open a file', ':q': 'close the panel, o
   ':imap jk <Esc>': 'any :map, :nmap, :inoremap…, kept until :mapclear',
   'gf': 'open the file, citation (its .bib entry), DOI or link under the cursor', 'Ctrl-^': 'the file before',
   'mA, `A': 'mark a place in any file (A to Z), go back to it', 'y': 'also copies to the clipboard' }
+const LIST = { 'j, k, ↓, ↑': 'the next, the one before (g, G: first, last)', 'Enter, l, →': 'open it (a folder: unfold)',
+  'h, ←': 'fold the folder, or to the one it is in', Esc: 'back to the editor', r: 'rename it, or reply to the comment',
+  'a, d, t': 'a new file here, delete, tags', m: 'mark it (d deletes the marked)', u: 'upload into the folder',
+  Space: 'with vim keys, the leader' }
 
 const label = a => document.querySelector(`#menubar [data-act="${a}"]`)?.firstChild.textContent.trim() ||
   { 'toggle-preview': 'Show or hide the preview', close: 'Close the panel, or leave focus',
@@ -60,16 +65,52 @@ document.addEventListener('keydown', e => {
   if (node) {
     if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return
     const a = node[e.key]; stop(e)
-    return a?.name ? lead(a) : (lead(null), a && actions[a]())
+    return a?.name ? lead(a) : (lead(null), a && run(a))
   }
   if (e.ctrlKey || e.metaKey) {
     const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : e.code.replace(/^(Key|Digit)/, '').toLowerCase()
     const act = KEYS[`mod+${e.altKey ? 'alt+' : ''}${e.shiftKey ? 'shift+' : ''}${k}`]
-    if (act) { stop(e); actions[act]() }
+    if (act) { stop(e); run(act) }
   } else if (e.key === ' ' && normal(e)) { stop(e); lead(LEADER) }
   else if (e.key === '?' && !typing(e)) { stop(e); actions.shortcuts() }
 }, true)
 addEventListener('mousedown', () => node && lead(null))
+// a panel opened by a key takes the focus, to go through by keys
+const PANES = new Set(['comments', 'chat', 'history', 'build', 'checklist', 'review', 'spelling', 'aicheck',
+  'template', 'cite', 'cite-alone', 'toggle-side'])
+const run = a => {
+  actions[a]()
+  if (!PANES.has(a)) return
+  if (!settings.sideOpen) return view?.focus()
+  const b = $('side-body'), xs = b.querySelectorAll(ENTRIES)
+  xs.length ? to(xs, 0) : (b.querySelector('textarea, .cite-q') ?? b).focus()
+}
+
+// Lists: the tree's rows, the projects, a panel's entries, each or the list
+// itself focused (a button in one keeps its keys). In the tree, keys press a
+// row's own buttons.
+const LISTS = { tree: '.tnode', 'projects-list': '.pnode', 'side-body': ENTRIES }
+const to = (xs, i) => i >= 0 && focusOn(xs[Math.min(xs.length - 1, i)])
+document.addEventListener('keydown', e => {
+  const [id, sel] = !e.ctrlKey && !e.metaKey && !e.altKey && Object.entries(LISTS).find(([id]) => $(id).contains(e.target)) || []
+  const at = id && e.target.closest(sel)
+  if (!id || e.target !== at && e.target !== $(id)) return
+  const xs = [...$(id).querySelectorAll(sel)], i = xs.indexOf(at), row = at?.matches('.tnode') ? at : null
+  const dir = row?.classList.contains('dir'), unfolded = dir && row.querySelector('.tw').textContent === '▾'
+  const press = b => row.querySelector(b)?.click()
+  const go = () => !at ? to(xs, 0) : !row ? (at.querySelector(':scope > .meta, button') ?? at).click()
+    : dir ? row.click() : open(row.title).then(() => view?.focus())
+  const k = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'l', ArrowLeft: 'h', Home: 'g', End: 'G', Enter: 'o',
+    Delete: 'd', F2: 'r', Escape: 'esc' }[e.key] ?? e.key
+  const act = { j: () => to(xs, i + 1), k: () => to(xs, Math.max(0, i - 1)), g: () => to(xs, 0), G: () => to(xs, xs.length - 1),
+    o: go, l: () => unfolded ? to(xs, i + 1) : go(), esc: () => view?.focus(), ...settings.vim && { ' ': () => lead(LEADER) },
+    r: () => row ? press('.rn') : at?.querySelector('textarea')?.focus(),
+    ...row && { h: () => unfolded ? row.click() : to(xs, xs.findIndex(x => x.title === row.title.replace(/\/?[^/]*$/, ''))),
+      a: () => dir ? press('.addf') : actions['new-file'](row.title.replace(/[^/]*$/, '')), d: () => press('.del'),
+      t: () => press('.tg'), u: () => press('.upd'),
+      m: () => row.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true })) } }[k]
+  if (act) { e.preventDefault(); act() }
+})
 // Esc leaves focus, unless the editor wanted it (a suggestion), or vim has it
 document.addEventListener('keydown', e => e.key === 'Escape' && !e.defaultPrevented && !settings.vim &&
   settings.focus && actions.focus())
@@ -81,7 +122,8 @@ actions.shortcuts = () => {
   $('keys-body').replaceChildren(
     el('section', {}, ...table('Anywhere', Object.fromEntries(Object.entries(KEYS).map(([k, a]) => [name(k), label(a)]))),
       ...table('Editing', Object.fromEntries(Object.entries(EDITING).map(([k, v]) => [k.replaceAll('Mod', MOD), v])))),
-    el('section', {}, ...table('Vim: Space, then', Object.fromEntries(flat(LEADER, ''))), ...table('Vim: commands', EX)))
+    el('section', {}, ...table('Vim: Space, then', Object.fromEntries(flat(LEADER, ''))), ...table('Vim: commands', EX)),
+    el('section', {}, ...table('The file tree and the panels', LIST)))
   $('keys').showModal()
 }
 
