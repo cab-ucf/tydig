@@ -5,6 +5,7 @@
 import argparse, asyncio, json, logging, re, sys, threading, unicodedata
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 import torch, uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -77,10 +78,14 @@ def app(model, detector, watch, dtype, max_chars, **_):
 
     @a.websocket("/ws")
     async def ws(ws: WebSocket):
-        await ws.accept(); clients.add(ws); box, wake = [None], asyncio.Event()
+        # any site's page may score text (tydig's overlay does); the watched file
+        # is read only by pages of this machine, never a site's, nor one rebound here
+        o = ws.headers.get("origin")
+        own = not o or urlsplit(o).hostname in ("localhost", "127.0.0.1", "::1")
+        await ws.accept(); own and clients.add(ws); box, wake = [None], asyncio.Event()
         await say(ws, type="hello", model=model, detector=detector or None,
-                  watching=watch and str(watch) or None)
-        if doc: await say(ws, type="doc", text=doc)
+                  watching=own and watch and str(watch) or None)
+        if own and doc: await say(ws, type="doc", text=doc)
 
         async def guard(r, job):  # a bad or oversized request is answered, never a dead socket
             try:
