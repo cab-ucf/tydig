@@ -19,6 +19,7 @@ import * as agents from './agents.mjs'
 import * as assist from './assist.mjs'
 import * as link from './link.mjs'
 import * as packages from './packages.mjs'
+import * as irch from './irch.mjs'
 
 const PORT = Number(process.env.PORT || 3000)
 const app = express().disable('x-powered-by')
@@ -128,7 +129,7 @@ app.use('/api/p/:proj', (req, res, next) => {
   req.org = access(req.user.id, req.params.proj)
   req.org ? next() : res.status(403).json({ error: 'you do not have access to this project' })
 }, p)
-for (const m of [files, build, history, remote, templates, agents, assist]) p.use(m.router)
+for (const m of [files, build, history, remote, templates, agents, assist, irch]) p.use(m.router)
 
 // sharing: a verified account joins at once; any other address is invited,
 // so whoever signed up as it unverified needs the invite link too

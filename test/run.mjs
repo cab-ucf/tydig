@@ -1,7 +1,8 @@
 // Each suite against fresh hubs with data of their own:
-//   node test/run.mjs [suite...]   (default: all but ui, link, irweb, lsp, sandbox)
+//   node test/run.mjs [suite...]   (default: all but ui, link, irweb, lsp, sandbox, irch)
 // ui and link need puppeteer (installed into .uitest/), link and irweb an
-// iroh-relay on PATH, lsp tinymist, sandbox rootless podman.
+// iroh-relay on PATH, lsp tinymist, sandbox rootless podman, irch irch
+// (or TYDIG_IRCH).
 import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, openSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,6 +19,7 @@ const ENV = {
   auth: { TYDIG_MAX_PROJECTS: '4' },
   import: { TYDIG_QUOTA_MB: '5' },
   ui: { TYDIG_PACKAGES: 'http://localhost:3998' },
+  irch: { TYDIG_IRCH: process.env.TYDIG_IRCH || 'irch' },
 }
 ENV.irweb = ENV.link = { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' }
 const ALL = ['prose', 'egress', 'core', 'auth', 'signup', 'offline', 'prov', 'agent', 'template', 'import', 'assist', 'remote']

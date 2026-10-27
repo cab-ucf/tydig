@@ -291,10 +291,12 @@ export async function save(n, doc, now) {
   due.set(n, Object.assign(d, { timer: setTimeout(go, 12e4) }))
 }
 
+export const opened = new Set() // f(project, doc) for each one opened
 export const hocuspocus = Server.configure({
   debounce: 2000,
   onLoadDocument: async ({ documentName: n, document: doc }) => {
     if (isProj(n) && !doc.getMap('files').size) await load(n, doc)
+    if (isProj(n)) opened.forEach(f => f(n, doc))
     return doc
   },
   afterUnloadDocument: async ({ documentName: n }) => {
