@@ -10,7 +10,7 @@ import path from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { proj, inProj, walk, live, mirror, commit, putFile, fileNow, textOf, mergeFile,
-  mergeInto, collab, writeIn, okPath } from './store.mjs'
+  mergeInto, collab, writeIn } from './store.mjs'
 import { FEATURED, SPEC, template as universe } from './packages.mjs'
 
 const DIR = path.resolve(process.env.TYDIG_TEMPLATES || new URL('../templates', import.meta.url).pathname)
@@ -42,7 +42,7 @@ const record = async (n, template, brand, files) => {
 export async function scaffold(n, template, brand) {
   if (SPEC.test(template)) { // a Typst Universe template: its files, as `typst init` gives them
     const files = await universe(template)
-    for (const [p, data] of files) if (okPath(p)) await writeIn(n, p, data)
+    for (const [p, data] of files) await writeIn(n, p, data)
     return record(n, template, null, files)
   }
   const t = NAMES.includes(template) ? template : 'report'
