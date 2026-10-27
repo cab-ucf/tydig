@@ -5,7 +5,7 @@
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { constants, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 // The build image is this hub's own: named by a hash of sandbox/ and fonts/,
@@ -83,17 +83,23 @@ const args = (proj, secs, i, cmd, own) => {
 // does: made before each build (podman's cache makes that a moment), from the
 // project less .git and .collab. Its RUN steps are podman's, not gVisor's.
 // Then /root opened to all: under gVisor a build sees only files' "other" bits
-// (rustup, uv tool and pip --user install there).
+// (rustup, uv tool and pip --user install there). Run by its ID: Paper and
+// paper share a tag, which the other's build may move at any moment. Its
+// ignore files are read where they are, never through a link.
+const ID = /\b([0-9a-f]{64})\s*$/
 const mine = async proj => {
   const dir = path.join(DATA, proj), tag = `localhost/tydig-p-${proj.toLowerCase()}`, t = `/tmp/${proj}`
   if (!lstatSync(path.join(dir, 'Containerfile'), { throwIfNoEntry: false })?.isFile()) return
-  const keep = ['.containerignore', '.dockerignore'].map(f => { try { return readFileSync(path.join(dir, f), 'utf8') } catch { return '' } })
+  const keep = ['.containerignore', '.dockerignore'].map(f => {
+    try { return readFileSync(path.join(dir, f), { encoding: 'utf8', flag: constants.O_NOFOLLOW }) } catch { return '' }
+  })
   mkdirSync(t, { recursive: true }); writeFileSync(`${t}/ignore`, keep.join('\n') + '\n.git\n.collab\n')
-  writeFileSync(`${t}/open`, `FROM ${tag}:src\nUSER 0\nRUN [ ! -d /root ] || chmod -R a+rX /root\n`)
   const log = await said(['build', '-q', '--http-proxy=false', ...NONET ? ['--network=none'] : [],
     '--ignorefile', `${t}/ignore`, '-t', `${tag}:src`, '-f', path.join(dir, 'Containerfile'), dir], 1800)
-  if (log.code) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
-  const image = (await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).code ? `${tag}:src` : tag
+  const src = ID.exec(log.out)?.[1]
+  if (log.code || !src) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
+  writeFileSync(`${t}/open`, `FROM ${src}\nUSER 0\nRUN [ ! -d /root ] || chmod -R a+rX /root\n`)
+  const image = ID.exec((await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).out)?.[1] ?? src
   return { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
 }
 const ok = r => /^[\w-]{1,64}$/.test(r?.proj) && Array.isArray(r.cmd) && r.cmd.length && r.cmd.length < 64 &&
