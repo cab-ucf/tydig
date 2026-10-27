@@ -198,11 +198,13 @@ app.use((e, req, res, next) => {
 // reaches either before), and a member of each project they open
 const sync = new WebSocketServer({ noServer: true, maxPayload: 16 << 20 })
 hocuspocus.configure({
-  async onAuthenticate({ request: { user: u }, requestParameters: q, documentName: n }) {
-    if (!isProj(n) || !access(u.id, n)) throw new Error('forbidden')
+  async onAuthenticate({ request: r, requestParameters: q, documentName: n }) {
+    // refused, the socket goes once it is told: hocuspocus would keep all that came for n after
+    const no = (e = new Error('forbidden')) => { setTimeout(() => r.socket.destroy(), 1000).unref(); throw e }
+    if (!isProj(n) || !access(r.user.id, n)) no()
     // an offline copy of another lineage (store.mjs): the browser starts again (doc.js)
-    if (q.get('epoch') && q.get('epoch') !== await epoch(n)) throw Object.assign(new Error('epoch'), { reason: 'epoch' })
-    return { user: { id: u.id, name: u.name, email: u.email } }
+    if (q.get('epoch') && q.get('epoch') !== await epoch(n)) no(Object.assign(new Error('epoch'), { reason: 'epoch' }))
+    return { user: { id: r.user.id, name: r.user.name, email: r.user.email } }
   },
   onChange: ({ documentName: n, context: c }) => edited(n, c.user),
 })

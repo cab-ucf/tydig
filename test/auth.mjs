@@ -1,5 +1,5 @@
 // Accounts and sharing over HTTP, and the guards around them.
-import { HUB as B, check, done } from './lib.mjs'
+import { HUB as B, check, done, doc } from './lib.mjs'
 const O = B
 const signup = async (email, name) => {
   const r = await fetch(`${B}/api/auth/sign-up/email`, {
@@ -36,6 +36,12 @@ check('Bob does NOT see Ann project', !bobList.some(p => p.name === proj))
 
 // Bob is blocked from Ann's project files
 check('Bob blocked from project files (403)', (await as(bob, `/p/${proj}/files`)).status === 403)
+// nor sync it: told so, and the socket goes (hocuspocus would hold what came after)
+{ const d = doc(B, proj, bob.cookie), why = new Promise(ok => d.provider.on('authenticationFailed', ok))
+  const shut = new Promise(ok => d.provider.configuration.websocketProvider.on('disconnect', ok))
+  check('Bob refused the project over the websocket, then let go', await Promise.race([Promise.all([why, shut])
+    .then(() => true), new Promise(ok => setTimeout(ok, 5000, false))]) && !d.getMap('files').size)
+  d.provider.destroy() }
 // Ann can read her files
 check('Ann reads her project files', (await as(ann, `/p/${proj}/files`)).ok)
 
