@@ -74,6 +74,15 @@ check('adopting a local path refused (would read other projects)',
 await post(bob, '/projects/inj' + Date.now().toString(36), { gitUrl: 'https://example.com/x.git', branch: '--upload-pack=touch data/PWNED' })
 await post(ann, `/p/${proj}/gitremote`, { url: 'https://example.com/x.git', branch: '--receive-pack=touch data/PWNED' })
 check('branch cannot inject git options', !existsSync('data/PWNED'))
+check('a host is a name, never a command for ssh\'s shell', /not a git URL/.test((await (await post(ann, `/p/${proj}/gitremote`,
+  { url: 'git@x$(touch${IFS}data/PWNED).example.com:r.git' })).json()).error))
+const eve = await signup(`eve${Date.now()}@t.co`, 'Eve'), ev = 'ev' + Date.now().toString(36)
+await post(eve, `/projects/${ev}`, { empty: true })
+await as(eve, `/p/${ev}/raw/git@x/a`, { method: 'PUT', body: 'a folder named as a host' })
+await post(eve, `/p/${ev}/gitremote`, { url: `git@x/../../${proj}`, branch: 'main' })
+await post(eve, `/p/${ev}/gitremote/sync`)
+check('nor is a remote another project, by a path that reads as git@host',
+  !(await (await as(eve, `/p/${ev}/files`)).json()).some(f => f.path === 'main.typ'))
 check('.git unreachable through raw files',
   (await as(ann, `/p/${proj}/raw/.git/config`, { method: 'PUT', body: '[core]' })).status === 400)
 check('untrusted origin cannot POST', (await fetch(`${B}/api/projects/x${Date.now()}`, { method: 'POST', headers: { cookie: ann.cookie, origin: 'http://evil.example.net' } })).status === 403)
