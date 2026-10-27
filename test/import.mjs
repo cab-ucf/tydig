@@ -48,6 +48,10 @@ with tarfile.open('${t}/evil.tgz', 'w:gz') as z:
 const r3 = await imp('corona', readFileSync(path.join(t, 'evil.tgz')), 'evil.tgz')
 check('a path out of the project is skipped, the rest lands', r3.skipped.length === 2 && r3.added.join() === 'fine.txt' &&
   !existsSync('data/escape.txt') && !existsSync('escape2.txt'))
+sh('python3', ['-c', `import zipfile
+with zipfile.ZipFile('${t}/empty.zip', 'w', zipfile.ZIP_DEFLATED) as z: z.writestr('empty.txt', ''); z.writestr('one.txt', 'x')`])
+check('a .zip with an empty file in it (deflated, as Python makes them)',
+  (await imp('corona', readFileSync(path.join(t, 'empty.zip')), 'empty.zip')).added?.join() === 'empty.txt,one.txt')
 check('a file that is not an archive is refused', /not an archive/.test((await imp('corona', Buffer.from('hello'), 'x.zip')).error || ''))
 
 done()
