@@ -3,6 +3,7 @@
 // registered to the account. A checkpoint is signed over the sha256 of every
 // text file, so who made it can be checked offline from the git repo alone.
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js'
+import { link } from './link.js'
 
 const b64u = bytes => btoa(String.fromCharCode(...bytes))
   .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
@@ -15,9 +16,11 @@ const canon = v => Array.isArray(v) ? `[${v.map(canon)}]` : !v || typeof v !== '
 const sha256hex = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', utf8(text)))]
   .map(b => b.toString(16).padStart(2, '0')).join('')
 
-// one key per account: two accounts in one browser must not share one
+// one key per account and hub: two accounts in one browser must not share
+// one, nor hubs opened by link (one origin): a hub that gave another's
+// account id would have that key sign whatever it serves
 function deviceKey(user) {
-  const at = `tydig.devicekey:${user}`
+  const at = `tydig.devicekey:${link ? link.id + ':' : ''}${user}`
   let k = null
   try { k = JSON.parse(localStorage[at]) } catch {}
   if (!k?.publicKey || !k?.secretKey) {
