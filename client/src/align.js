@@ -86,22 +86,20 @@ export function toSource(r) {
 }
 
 // where in the preview each of a file's [from, to) spans is: Ranges for
-// each, one a stretch of the preview
+// each, one a stretch of the preview. The file's letters by where they were
+// written, each span found in them by halves (not every letter against every span)
 export function toPreview(file, spans) {
-  const { s, at, to } = align(), f = s.spans.findIndex(([p]) => p === file), out = spans.map(() => [])
-  if (f < 0) return out
-  const a = s.spans[f][1], b = s.spans[f + 1]?.[1] ?? Infinity
-  for (let q = 0; q < to.length; q++) {
-    const g = to[q], p = s.at[g]
-    if (g < a || g >= b) continue
-    spans.forEach(([from, t], j) => p >= from && p < t && out[j].push(q))
-  }
-  return out.map(qs => {
-    const rs = []
-    for (let i = 0; i < qs.length; i++) {
+  const { s, at, to } = align(), f = s.spans.findIndex(([p]) => p === file)
+  if (f < 0) return spans.map(() => [])
+  const a = s.spans[f][1], b = s.spans[f + 1]?.[1] ?? Infinity, p = q => s.at[to[q]]
+  const qs = [...to.keys()].filter(q => to[q] >= a && to[q] < b).sort((x, y) => p(x) - p(y))
+  const first = v => { let lo = 0, hi = qs.length; while (lo < hi) { const m = lo + hi >> 1; p(qs[m]) < v ? lo = m + 1 : hi = m } return lo }
+  return spans.map(([from, t]) => {
+    const hit = qs.slice(first(from), first(t)).sort((x, y) => x - y), rs = []
+    for (let i = 0; i < hit.length; i++) {
       let e = i
-      while (qs[e + 1] - qs[e] < 40) e++
-      const r = document.createRange(), [n0, o0] = at[qs[i]], [n1, o1] = at[qs[e]]
+      while (hit[e + 1] - hit[e] < 40) e++
+      const r = document.createRange(), [n0, o0] = at[hit[i]], [n1, o1] = at[hit[e]]
       r.setStart(n0, o0); r.setEnd(n1, o1 + 1); rs.push(r); i = e
     }
     return rs
