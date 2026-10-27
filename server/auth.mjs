@@ -47,8 +47,9 @@ const password = {
 // sign-in attempts per account, whatever address they come from
 const tries = new Map()
 const tooMany = email => {
-  const k = String(email).toLowerCase(), now = Date.now()
-  const t = (tries.get(k) || []).filter(x => now - x < 15 * 60_000)
+  const k = String(email).toLowerCase(), now = Date.now(), old = x => now - x >= 15 * 60_000
+  const t = (tries.get(k) || []).filter(x => !old(x))
+  if (tries.size > 1e5) for (const [k, t] of tries) old(t.at(-1)) && tries.delete(k) // addresses tried once, long ago
   tries.set(k, [...t, now])
   return t.length >= 10
 }

@@ -182,11 +182,11 @@ const LIST = Object.entries(TOOLS).map(([name, t]) => ({ name, description: t.ab
 
 // /api/agent/<project>/mcp, the token as a Bearer
 export const mcp = express.Router({ mergeParams: true })
-mcp.use(express.json({ limit: '4mb' }), (req, res, next) => { // a whole file, escaped
+mcp.use((req, res, next) => {
   const t = /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1], n = req.params.proj
   req.agent = t && isProj(n) && agentsOf(n).find(a => a.hash === hash(t))?.name
   req.agent ? next() : res.status(401).json({ error: 'not an agent token for this project' })
-})
+}, express.json({ limit: '4mb' })) // a whole file, escaped; read once the token is good
 mcp.get('/mcp', (req, res) => res.status(405).end()) // no server-sent stream
 mcp.post('/mcp', async (req, res) => {
   const { id: rid, method, params = {} } = req.body || {}
