@@ -136,7 +136,7 @@ export function cite(alone) {
 export function citeFromBib() {
   if (!view || !path?.endsWith('.typ')) return toast('open the .typ file to cite in, and select where')
   const s = view.state.selection.main, entries = parseBib(files.get(bibOf(files))?.toString() || '')
-  if (!entries.length) return toast(`no references in ${bibOf(files)} yet: find papers instead`)
+  if (!entries.length) return toast(`no references in ${esc(bibOf(files))} yet: find papers instead`)
   choose(entries.map(e => ({ label: `${e.fields.title || e.key} · ${(e.fields.author || '').split(/,| and /)[0]} ${
     e.fields.year || ''}`, hint: `@${e.key}`, run: () => { citeAt(view, e.key, s?.to); view.focus() } })),
   `cite from ${bibOf(files)}: a title, author, year or key`)

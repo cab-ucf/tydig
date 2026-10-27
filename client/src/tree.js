@@ -1,7 +1,7 @@
 // The file tree: shared text and files on disk, who has which open; upload,
 // archive import, new file, rename, delete; and quick open (Ctrl-P).
 import * as Y from 'yjs'
-import { $, el, dot, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose, me }
+import { $, el, dot, color, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose, me }
   from './util.js'
 import { ydoc, files, comments, meta, provider, okPath, GEN, setText, tags, tag, TAGS } from './doc.js'
 import { path, open, openFile, reveal } from './editor.js'
@@ -42,7 +42,7 @@ function sync() {
   if (w === where) return
   where = w; renderTree()
   $('people').replaceChildren(...ps.filter(p => p.id !== me.id).map(p => el('button', {
-    className: `av${Date.now() - p.active > 5 * 6e4 ? ' idle' : ''}`, style: `--c:${p.color}`, textContent: initials(p.name),
+    className: `av${Date.now() - p.active > 5 * 6e4 ? ' idle' : ''}`, style: `--c:${color(p.color)}`, textContent: initials(p.name),
     title: `${p.name}: ${p.file ?? 'no file open'}, ${ago(p.active)}`, onclick: () => p.file && openFile(p.file) })))
 }
 provider.awareness.on('change', sync)

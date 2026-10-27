@@ -83,7 +83,8 @@ const DOCS = 'docs/'
 const hubBox = `<form class="auth-hub"><input name="hub" required
   placeholder="a hub's link or code"><button class="go">open</button></form>`
 const foot = `<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">What is tydig?</a></p>`
-const wire = root => {
+const wire = root => { // (no inline handlers: the CSP runs none)
+  root.querySelector('.auth-retry')?.addEventListener('click', () => location.reload())
   const f = root.querySelector('.auth-hub')
   if (f) f.onsubmit = e => {
     e.preventDefault()
@@ -101,7 +102,7 @@ async function loginScreen() {
       <p><b>Ty</b>pst, <b>d</b>ecentralized collaboration with <b>i</b>roh, saved in <b>g</b>it:
       papers written together in the browser, computed by a hub you run.</p>
       ${plain ? `<p>The hub is not answering: it may be off or restarting. Try again in a minute.</p>
-      <button class="go" onclick="location.reload()">try again</button>` : `
+      <button class="go auth-retry">try again</button>` : `
       <p>${link ? 'That hub did not answer. Another one:' : "Open a hub with the link its owner sent you:"}</p>
       ${hubBox}`}<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">Docs</a> ·
       <a href="https://github.com/cab-ucf/tydig" target="_blank" rel="noopener">run your own hub</a></p></div>`

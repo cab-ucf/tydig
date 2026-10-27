@@ -115,7 +115,7 @@ onVim.push(Vim => {
   for (const k of ['<C-6>', '<C-^>', '<C-S-^>']) act(k, 'alternate', () => prev && open(prev).then(() => view?.focus()))
   // gf on a link or a DOI: it, in a new tab; in a .bib entry: its DOI or url; on a citation
   // (@key, <key>): its entry in the .bib that has it; else the file named, as Typst reads it
-  const web = u => window.open(u, '_blank', 'noopener')
+  const web = u => /^https?:\/\//i.test(u) && window.open(u, '_blank', 'noopener')
   act('gf', 'gofile', cm => {
     const { line, ch } = cm.getCursor(), here = re => [...cm.getLine(line).matchAll(re)]
       .find(m => m.index <= ch && ch <= m.index + m[0].length)?.[0]

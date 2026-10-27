@@ -11,8 +11,8 @@ export const el = (tag, props, ...kids) => {
   return e
 }
 // a person's colour, as a dot (never trusted as CSS beyond a colour)
-export const dot = (color, title = '') =>
-  el('i', { className: 'dot', title, style: `background:${CSS.supports('color', color) ? color : 'gray'}` })
+export const color = c => CSS.supports('color', c) ? c : 'gray'
+export const dot = (c, title = '') => el('i', { className: 'dot', title, style: `background:${color(c)}` })
 // a few line icons, 16 px, in the text's colour
 const ICONS = { comment: '<path d="M2.5 3h11v7.5h-6L4.5 13v-2.5h-2z"/>',
   cite: '<path d="M7 4.5C4.8 5.3 3.5 7 3.5 9.5v2h3.5V8.5H5.3c.1-1.3.9-2.3 2.2-2.8zM13 4.5c-2.2.8-3.5 2.5-3.5 5v2H13V8.5h-1.7c.1-1.3.9-2.3 2.2-2.8z"/>',
