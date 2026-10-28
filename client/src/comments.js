@@ -179,7 +179,8 @@ const head = (m, pre = '', post = '') => el('div', { className: 'meta' }, pre, d
 const message = m => {
   const on = m.re && comments.get(m.re)
   return el('div', { className: 'msg' },
-    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : ''), el('p', {}, ...mentions(m.text)))
+    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : m.irch ? el('em', { textContent: 'irch' }) : ''),
+    el('p', {}, ...mentions(m.text)))
 }
 // Enter sends; Shift-Enter is a new line
 // what is typed outlives the pane redrawing around it (panels.js keeps focus)

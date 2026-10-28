@@ -1,5 +1,5 @@
 // Dialogs: projects (pick, create, import), sharing (members, invites,
-// agents) and the git remote.
+// agents, irch) and the git remote.
 import { authClient } from './auth.js'
 import { plain } from './link.js'
 import { $, api, post, del, esc, el, toast, projName, P, choose, me } from './util.js'
@@ -105,8 +105,9 @@ export async function showShare() {
   body.innerHTML = '<p class="empty">loading...</p>'
   modal('share')
   const org = authClient.organization.getFullOrganization({ query: { organizationSlug: projName } })
-  const [share, orgs, full, agents, codes] = await Promise.all([api('/link'), api('/projects'),
-    org.then(r => r.data, () => null), api(P('/agents')).catch(() => []), api(P('/join')).catch(() => [])])
+  const [share, orgs, full, agents, codes, irch] = await Promise.all([api('/link'), api('/projects'),
+    org.then(r => r.data, () => null), api(P('/agents')).catch(() => []), api(P('/join')).catch(() => []),
+    api(P('/irch')).catch(() => ({}))])
   const owner = ['owner', 'admin'].includes(orgs.find(o => o.name === projName)?.role)
   // the hub's address: this page on the site's own hub (cxn.pub), else its link
   const site = plain || !share.link ? location.origin + location.pathname : share.link
@@ -129,8 +130,8 @@ export async function showShare() {
         Stop it once everyone is in; members stay.</p>
       <form id="share-add" class="row">
       <input type="email" id="share-email" placeholder="collaborator@email" required><button class="go">add</button></form>
-      <p class="hint">An address with no account here is invited: send them its invite link (below it), which
-        signs them up with the project waiting. The address alone cannot sign up.</p>`
+      <p class="hint">An address is invited unless its account here is verified: send them its invite link
+        (below it), which signs them up, or in, with the project waiting. The address alone gets nothing.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
     ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p>
       <input readonly value="${esc(site)}">` : ''}
@@ -139,7 +140,13 @@ export async function showShare() {
     ${owner ? `<form id="agent-add" class="row">
       <input id="agent-name" placeholder="agent name, e.g. claude" required><button class="go">add</button></form>
       <p class="hint">An agent works on this project only: reads and edits its text, and answers where it is
-        @mentioned, in comments and the Discussion. Run it where Claude Code is installed.</p>` : ''}`
+        @mentioned, in comments and the Discussion. Run it where Claude Code is installed.</p>` : ''}
+    ${irch.on ? `<h4>irch</h4>${irch.where ? `<div class="share-list">${row(irch.where, 'mirrors the Discussion',
+      'unirch', 1, 'stop', owner)}</div>` : owner ? `<form id="irch-add" class="row">
+      <input id="irch-code" placeholder="an irch invite code" required><button class="go">link</button></form>
+      <p class="hint">The Discussion and a channel of an irch space then carry each other's messages, so
+        they reach everyone's phone. In irch: the space's <i>Invite</i>. The channel is #${esc(projName)},
+        made if this hub may, else the space's first.</p>` : ''}` : ''}`
   const on = (act, f) => { for (const b of body.querySelectorAll(`[data-${act}]`)) b.onclick = () => f(b.dataset[act]) }
   const then = r => r?.error ? alert(r.error) : showShare()
   on('remove', async id => confirm('Remove this collaborator? They lose access at once.') &&
@@ -150,7 +157,11 @@ export async function showShare() {
   on('uncode', async c => then(await del(P('/join/' + c))))
   on('agent', async a => confirm(`Remove @${a}? Its token stops working at once.`) &&
     then(await del(P('/agents/' + a))))
+  on('unirch', async () => then(await del(P('/irch'))))
   if (!owner) return
+  if ($('irch-add')) $('irch-add').onsubmit = async e => {
+    e.preventDefault(); then(await post(P('/irch'), { code: $('irch-code').value }))
+  }
   $('code-add').onclick = async () => then(await post(P('/join')))
   $('share-add').onsubmit = async e => {
     e.preventDefault(); then(await post(P('/members'), { email: $('share-email').value }))

@@ -318,9 +318,9 @@ engine.close()
 
 // someone else writes: the bar counts it, a note says it, a click shows it
 await page.evaluate(() => document.getElementById('side-close').click())
-await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST', headers: { 'content-type': 'application/json' },
-  body: '{"email":"bea@example.com"}' }))
-const bea = await person('Bea', { hub: B, email: 'bea@example.com' }), beaDoc = bea.doc('demo'); await sleep(2000)
+const { invite } = await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST',
+  headers: { 'content-type': 'application/json' }, body: '{"email":"bea@example.com"}' }).then(r => r.json()))
+const bea = await person('Bea', { hub: B, email: 'bea@example.com', invite }), beaDoc = bea.doc('demo'); await sleep(2000)
 beaDoc.getArray('chat').push([{ id: 'b1', author: 'Bea', text: '@Ada look at the intro', ts: Date.now() }]); await sleep(1500)
 check('a message from someone else is counted on the bar and said in a note', await page.evaluate(() =>
   document.querySelector('#rail [data-pane=chat] .badge').textContent === '1' && /Bea.*mentioned you.*look at the intro/.test(document.getElementById('toast')?.textContent)))

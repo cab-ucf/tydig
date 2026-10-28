@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { execSync } from 'node:child_process'
 import { canon } from '../server/history.mjs'
-import { person, check, done } from './lib.mjs'
+import { person, share, check, done } from './lib.mjs'
 
 const b64u = b => Buffer.from(b).toString('base64url')
 const sign = (x, k) => b64u(ml_dsa65.sign(new TextEncoder().encode(canon(x)), k))
@@ -44,7 +44,7 @@ check('history says what changed', hist.some(h => h.files.some(f => f.path === '
 check('autosaves carry none', hist.some(h => !h.provenance))
 // live edits: whoever typed is the autosave's author, the next a co-author
 const bob = await person('Bob'), sleep = ms => new Promise(r => setTimeout(r, ms))
-await ann.post(`/p/${P}/members`, { email: bob.email })
+await share(P, ann, bob)
 const A = ann.doc(P), B = bob.doc(P)
 await sleep(1500)
 A.files.get('main.typ').insert(0, 'ann ')

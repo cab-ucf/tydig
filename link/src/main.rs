@@ -1,14 +1,16 @@
 //! The hub's end of its link (server/link.mjs): each iroh stream a page
 //! opens goes onto the hub's socket as it is, after the peer's 32-byte id,
-//! its bytes never through JavaScript.
+//! its bytes never through JavaScript. The hub checks each request's access
+//! token; one it refuses it hangs up on unanswered, and the page is told 403
+//! and its connection closed.
 //!   tydig-link SOCKET RELAY...   stdin: the 32-byte secret key, then held
 //!   open (the hub gone, so is this)
 
 use std::{future::pending, io::Read, sync::Arc, time::Duration};
 
 use iroh::{
-    Endpoint, EndpointId, RelayMode, RelayUrl, SecretKey,
-    endpoint::{Incoming, QuicTransportConfig, RecvStream, SendStream, presets},
+    Endpoint, RelayMode, RelayUrl, SecretKey,
+    endpoint::{Connection, Incoming, QuicTransportConfig, RecvStream, SendStream, presets},
 };
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
@@ -16,7 +18,7 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
 };
 
-const ALPN: &[u8] = b"irweb/http/1";
+const ALPN: &[u8] = b"irweb/http/2";
 /// Streams in flight, from everyone: anyone with the link may open them.
 const MAX: usize = 256;
 
@@ -78,12 +80,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn connection(inc: Incoming, sock: Arc<str>, cap: Arc<Semaphore>) {
     let Ok(conn) = inc.await else { return };
-    let peer = conn.remote_id();
     while let Ok((send, recv)) = conn.accept_bi().await {
         let Ok(permit) = cap.clone().acquire_owned().await else {
             return;
         };
-        tokio::spawn(stream(send, recv, sock.clone(), peer, permit));
+        tokio::spawn(stream(send, recv, sock.clone(), conn.clone(), permit));
     }
 }
 
@@ -91,7 +92,7 @@ async fn stream(
     mut send: SendStream,
     mut recv: RecvStream,
     sock: Arc<str>,
-    peer: EndpointId,
+    conn: Connection,
     _permit: OwnedSemaphorePermit,
 ) {
     let Ok(hub) = UnixStream::connect(&*sock).await else {
@@ -101,7 +102,9 @@ async fn stream(
     // The hub nods once it has the id, so nothing else waits in its buffers
     // when it hands the socket to its HTTP server.
     let mut nod = [0];
-    if w.write_all(peer.as_bytes()).await.is_err() || r.read_exact(&mut nod).await.is_err() {
+    if w.write_all(conn.remote_id().as_bytes()).await.is_err()
+        || r.read_exact(&mut nod).await.is_err()
+    {
         return;
     }
     // The page half-closes after its request: that end is never passed on,
@@ -111,9 +114,17 @@ async fn stream(
             pending::<()>().await
         }
     };
-    let down = async {
-        let _ = io::copy(&mut r, &mut send).await;
-        let _ = send.finish();
+    let refused = tokio::select! {
+        () = up => false,
+        n = io::copy(&mut r, &mut send) => matches!(n, Ok(0)),
     };
-    tokio::select! { () = up => {}, () = down => {} }
+    if refused {
+        let _ = send
+            .write_all(b"HTTP/1.0 403 Forbidden\r\ncontent-length: 0\r\n\r\n")
+            .await;
+        let _ = send.finish();
+        let _ = tokio::time::timeout(Duration::from_secs(10), send.stopped()).await;
+        return conn.close(403u32.into(), b"forbidden");
+    }
+    let _ = send.finish();
 }

@@ -7,14 +7,14 @@ x-locked: &locked
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges]
-  restart: unless-stopped
+  restart: always # back at boot (podman-restart.service)
 
 services:
   app:
     <<: *locked
     build: { context: ., args: { TYDIG_BRAND: "${TYDIG_BRAND:-tydig}" } }
     image: localhost/tydig
-    ports: ["${TYDIG_PORT:-8080}:3000"]
+    ports: ["${TYDIG_BIND:-127.0.0.1}:${TYDIG_PORT:-8080}:3000"] # TYDIG_BIND=0.0.0.0: all
     env_file: .env
     environment:
       TYDIG_URL: ${TYDIG_URL:-http://localhost:8080}

@@ -47,7 +47,7 @@ export const textOf = b => {
 // git, one call at a time per project; never prompts, never runs a build's
 // fsmonitor nor follows a redirect (to a host never checked); ssh with the
 // project's deploy key only
-const KNOWN = path.join(HUB, 'known_hosts')
+const KNOWN = path.join(HUB, '.known_hosts') // a dot: no project's name
 if (!existsSync(KNOWN)) await fs.writeFile(KNOWN, 'github.com ssh-ed25519 ' +
   'AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n')
 const ssh = n => `ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=accept-new` +
@@ -78,7 +78,9 @@ export function edited(n, u, first) {
 }
 const who = u => `${String(u.name || u.email).replace(/[<>\n]/g, '')} <${u.email}>`
 // each commit stores what changed whole, loose, until git packs it as deltas:
-// packed early, so an autosaving hub's .git stays the size of its history
+// packed early, so an autosaving hub's .git stays the size of its history.
+// A failure is logged and kept in meta.commitError, where editors show it;
+// it is also what the commit resolves to (else null).
 export function commit(n, msg, ...flags) {
   const [a, ...co] = editors.get(n)?.values() ?? []
   if (typeof msg === 'function') msg = msg([a, ...co].filter(Boolean).map(u => u.name || u.email))
@@ -86,7 +88,15 @@ export function commit(n, msg, ...flags) {
   if (a) flags.push(`--author=${who(a)}`)
   if (co.length) flags.push('-m', co.map(u => `Co-authored-by: ${who(u)}`).join('\n'))
   return git(n, 'add', '-A').then(() => git(n, 'commit', '-q', '-m', msg, ...flags))
-    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet')).catch(() => {})
+    .then(() => git(n, '-c', 'gc.auto=256', 'gc', '--auto', '--quiet').then(() => null, () => null),
+      e => /nothing (added )?to commit/.test(e.stdout) ? null
+        : String(e.stderr || e.message).trim().replaceAll(DATA, '…'))
+    .then(e => {
+      if (e) console.warn(`commit ${n}: ${e}`)
+      const meta = hocuspocus.documents.get(n)?.getMap('meta')
+      if (meta && (meta.get('commitError') ?? null) !== e) meta.set('commitError', e)
+      return e
+    })
 }
 export async function ensureRepo(n) {
   if (existsSync(inProj(n, '.git'))) return
@@ -281,10 +291,12 @@ export async function save(n, doc, now) {
   due.set(n, Object.assign(d, { timer: setTimeout(go, 12e4) }))
 }
 
+export const opened = new Set() // f(project, doc) for each one opened
 export const hocuspocus = Server.configure({
   debounce: 2000,
   onLoadDocument: async ({ documentName: n, document: doc }) => {
     if (isProj(n) && !doc.getMap('files').size) await load(n, doc)
+    if (isProj(n)) opened.forEach(f => f(n, doc))
     return doc
   },
   afterUnloadDocument: async ({ documentName: n }) => {

@@ -53,6 +53,15 @@ const tooMany = email => {
   tries.set(k, [...t, now])
   return t.length >= 10
 }
+// over the link an address is an iroh id, free to change: sign-ins and
+// sign-ups that come that way share one hub-wide cap (refused ones uncounted,
+// so it holds 300 at most)
+let linked = []
+const tooManyLinked = () => {
+  const now = Date.now()
+  linked = linked.filter(x => now - x < 15 * 60_000)
+  return linked.length >= 300 || !linked.push(now)
+}
 
 // Join codes: three spoken words (cxn.pub, "tidy ruby otter") that let
 // whoever holds them sign up and join one project for a week. They can only
@@ -82,13 +91,15 @@ export const joins = {
 
 // After the first account, signing up takes a join code, or an invitation
 // (sharing a project with an address makes one) and its id from the invite link.
-const OPEN = env.TYDIG_SIGNUP === 'open'
+const OPEN = env.TYDIG_SIGNUP === 'open', MAX_PROJECTS = Number(env.TYDIG_MAX_PROJECTS || 50)
 const invitesFor = email => db.prepare("SELECT * FROM invitation WHERE lower(email) = lower(?) " +
   "AND status = 'pending'").all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
 const no = (code, message) => { throw new APIError(code, { message }) }
 const gate = createAuthMiddleware(async ctx => {
   if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))
     no('FORBIDDEN', 'projects are created and removed through tydig')
+  if (/^\/sign-(in|up)\/email$/.test(ctx.path) && ctx.headers?.get?.('x-tydig-link') && tooManyLinked())
+    no('TOO_MANY_REQUESTS', 'Too many sign-ins through links lately; try again in 15 minutes.')
   if (ctx.path === '/sign-in/email' && tooMany(ctx.body?.email))
     no('TOO_MANY_REQUESTS', 'Too many sign-in attempts for this account; try again in 15 minutes.')
   if ((ctx.path === '/sign-up/email' || ctx.path === '/update-user' && 'name' in (ctx.body || {})) && !String(ctx.body?.name || '').trim())
@@ -144,7 +155,8 @@ export const auth = betterAuth({
       clientId: env.TYDIG_SSO_CLIENT_ID, clientSecret: env.TYDIG_SSO_CLIENT_SECRET,
       scopes: ['openid', 'profile', 'email'],
     }] })] : [],
-    organization({ allowUserToCreateOrganization: true, organizationLimit: 1000, creatorRole: 'owner' }),
+    organization({ allowUserToCreateOrganization: true, creatorRole: 'owner', organizationLimit: u => // owned
+      db.prepare("SELECT count(*) n FROM member WHERE userId = ? AND role = 'owner'").get(u.id).n >= MAX_PROJECTS }),
   ],
 })
 await (await getMigrations(auth.options)).runMigrations()
@@ -159,4 +171,4 @@ const one = db.prepare('SELECT o.id, o.slug AS name, m.role FROM member m ' +
   'JOIN organization o ON o.id = m.organizationId WHERE m.userId = ? AND o.slug = ?')
 export const projectsOf = userId => mine.all(userId)
 export const access = (userId, slug) => one.get(userId, slug) || null
-export const userByEmail = email => db.prepare('SELECT id FROM user WHERE lower(email) = lower(?)').get(email)
+export const userByEmail = email => db.prepare('SELECT id, emailVerified FROM user WHERE lower(email) = lower(?)').get(email)

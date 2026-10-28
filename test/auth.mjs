@@ -50,7 +50,8 @@ const bobEmail = (await (await as(bob, '/me')).json()).email
 const post = (jar, p, body) => as(jar, p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 check('Bob cannot add himself', (await post(bob, `/p/${proj}/members`, { email: bobEmail })).status === 403)
 check('unknown email invited', (await (await post(ann, `/p/${proj}/members`, { email: 'nobody@t.co' })).json()).invited === true)
-check('Ann adds Bob', (await (await post(ann, `/p/${proj}/members`, { email: bobEmail })).json()).ok === true)
+const { invite } = await (await post(ann, `/p/${proj}/members`, { email: bobEmail })).json()
+check('Ann adds Bob, who accepts', (await post(bob, '/auth/organization/accept-invitation', { invitationId: invite })).ok)
 check('Bob now sees and reads the project', (await (await as(bob, '/projects')).json()).some(p => p.name === proj) &&
   (await as(bob, `/p/${proj}/files`)).ok)
 
@@ -114,6 +115,10 @@ check('auth-config gives a stranger the origin verdict and nothing of the hub\'s
 const badOriginDiag = await fetch(`${B}/api/auth-config`, { headers: { origin: 'http://nope.example.net' } }).then(r => r.json())
 check('auth-config flags an untrusted origin before any sign-in attempt',
   badOriginDiag.originOk === false)
+
+for (let i = 0; i < 4; i++) await post(ann, `/projects/cap${i}${Date.now().toString(36)}`, {})
+check('a person owns at most TYDIG_MAX_PROJECTS projects',
+  (await (await as(ann, '/projects')).json()).filter(p => p.role === 'owner').length === 4)
 
 const badEmail = await signUpFrom(B, 'ada@localhost')
 check('bare-host email rejected by validation', badEmail.code === 'VALIDATION_ERROR')

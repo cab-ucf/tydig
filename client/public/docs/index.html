@@ -25,9 +25,9 @@ table{border-collapse:collapse;width:100%;font-size:.92em}td{padding:.25rem .5re
 <ul>
 <li>The link (<code>https://cxn.pub/#…</code>) opens the editor in any browser; after <code>just publish</code>, plain <code>cxn.pub</code> does too (sign-in and invitations still decide who gets in). It reaches the hub over iroh, end to end encrypted, through NAT: no domain, certificate or open port.</li>
 <li>Invite-only: the first account is free. Settings › Share › <b>new code</b> gives three words; say "cxn.pub, code tidy ruby otter" or send its link, and they make an account and land in the project. A code lasts a week, wrong guesses are capped hub-wide, and <b>stop</b> ends one. Adding an address works too.</li>
-<li>The link names a key only the hub holds (<code>data/link-seed</code>; delete it for a new link).</li>
+<li>The link names the hub's public id and an access token, both from a key only the hub holds (<code>data/link-seed</code>; delete it for a new link): a request without the token is refused, and its connection closed.</li>
 <li>Firefox: n0's relays refuse its ECH GREASE. Set <code>security.tls.ech.grease_probability</code> to 0, or use another browser.</li>
-<li>Your own static site: fork, set the repo variables <code>TYDIG_HUB</code> (the id after <code>#</code>) and <code>TYDIG_BRAND</code>, and give it a domain of its own. Whoever serves the page can read what visitors type.</li>
+<li>Your own static site: fork, set the repo variables <code>TYDIG_HUB</code> (what follows <code>#</code>) and <code>TYDIG_BRAND</code>, and give it a domain of its own. Whoever serves the page can read what visitors type.</li>
 </ul>
 
 <h2>Write</h2>
@@ -67,6 +67,12 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <li><code>TYDIG_AGENT_TOKEN=tyd_... just agent PROJECT</code> answers each <code>@name</code> mention with Claude Code.</li>
 <li>Ghost text: <code>TYDIG_OLLAMA</code> + <code>TYDIG_GHOST_MODEL</code> (e.g. <code>qwen2.5-coder:1.5b</code>), or each person's own Ollama with <code>OLLAMA_ORIGINS</code> set to the page.</li>
 <li>Surprise overlay: <code>TYDIG_SCOPE=1</code> runs Perplexiscope (<code>scope/</code>): word surprise, flatness, and AI-likeness by MELD: sentences tinted from 8%, blocked out from 70% (0% reads like half of human writing, 100% like 1 in 1,000). <b>AI check</b> (Edit menu, or the bar) reads the document as typeset, what a reviewer reads, and lists its AI-isms (turns of phrase AI text uses many times more than people, learned from text: "delves into the intricate interplay", "not merely a …, but a …") and its most AI-like sentences, each a click from its source. A flag is evidence to discuss, never a verdict.</li>
+</ul>
+
+<h2>irch</h2>
+<ul>
+<li>Settings › Share › irch takes an invite code from an <a href="https://github.com/cab-ucf/irch">irch</a> space: the hub joins it as <i>tydig</i>, and the Discussion and the space's <code>#project</code> channel (else its first) carry each other's messages, end-to-end encrypted, to everyone's phone. An <code>@name</code> from irch asks an agent too.</li>
+<li>The container ships irch; elsewhere set <code>TYDIG_IRCH</code> to its path.</li>
 </ul>
 
 <h2>Settings (<code>.env</code>)</h2>

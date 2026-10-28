@@ -1,0 +1,20 @@
+# The default test suites (node test/run.mjs) and npm audit, on every push
+# and pull request. Third-party code pinned: actions by commit, typst by hash.
+name: test
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci && npm audit --audit-level=high
+      - run: |
+          curl -fsSL -o /tmp/typst.txz https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz
+          echo "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c  /tmp/typst.txz" | sha256sum -c -
+          sudo tar -xJf /tmp/typst.txz -C /usr/local/bin --strip-components=1 typst-x86_64-unknown-linux-musl/typst
+          python3 -m pip install --user --break-system-packages ruamel.yaml openpyxl pypdf
+          git config --global user.name ci && git config --global user.email ci@localhost
+      - run: node test/run.mjs

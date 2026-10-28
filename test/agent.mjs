@@ -4,11 +4,11 @@
 // The hub runs with TYDIG_CROSSREF/PUBMED/OPENALEX at :3999 (run.mjs).
 import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { HUB, Y, person, check, done, sleep, until } from './lib.mjs'
+import { HUB, Y, person, share, check, done, sleep, until } from './lib.mjs'
 
 const ann = await person('Ann'), bob = await person('Bob')
 await ann.post('/projects/paper'); await ann.post('/projects/other')
-await ann.post('/p/paper/members', { email: bob.email })
+await share('paper', ann, bob)
 check('a member cannot add an agent', (await bob.post('/p/paper/agents', { name: 'claude' })).error)
 const { token } = await ann.post('/p/paper/agents', { name: 'claude' })
 check('the owner adds one and sees its token once', /^tyd_/.test(token) && !JSON.stringify(await ann.get('/p/paper/agents')).includes(token))

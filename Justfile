@@ -14,9 +14,9 @@ compose := as + "podman compose -f " + src + "/compose.yml " + scope
 # build and start the hub, then print its link
 up:
     #!/usr/bin/env bash
-    [ "{{sys}}" = y ] && { {{as}}git -C {{src}} pull -q --ff-only; exec {{as}}just -f {{src}}/Justfile up; }
+    [ "{{sys}}" = y ] && exec {{as}}just -f {{src}}/Justfile up # the deployed tag (nixos.nix)
     mkdir -p "$TYDIG_DATA" && touch .env || exit
-    systemctl --user enable --now podman.socket 2>/dev/null
+    systemctl --user enable --now podman.socket podman-restart.service 2>/dev/null
     {{compose}} down 2>/dev/null
     ! ss -ltnH "sport = :$TYDIG_PORT" 2>/dev/null | grep -q . ||
         { echo "port $TYDIG_PORT is taken (ss -ltnp): stop it, or set TYDIG_PORT=8090 in .env"; exit 1; }

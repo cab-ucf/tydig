@@ -18,7 +18,7 @@ export async function requireUser() {
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
-    if (data?.user) return me = data.user, join ? joined(me) : me
+    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : me
     await loginScreen()
   }
 }
@@ -76,6 +76,16 @@ async function joined(user) {
   if (r.error) { alert(r.error); history.replaceState(null, '', location.pathname); return user }
   location.replace(`${location.pathname}?proj=${encodeURIComponent(r.project)}${location.hash}`)
   return new Promise(() => {})
+}
+// an invite link opened signed in: its address's account takes it
+async function accepted(user) {
+  const { data, error } = await authClient.organization.acceptInvitation({ invitationId: invite })
+  history.replaceState(null, '', location.href.replace(/[?&]invite=[^&#]*/, ''))
+  if (error) return alert(error.message || 'This invite link is for another address, or has expired.'), user
+  const slug = data?.invitation?.organizationId && (await authClient.organization.list()).data
+    ?.find(o => o.id === data.invitation.organizationId)?.slug
+  if (slug) location.replace(`${location.pathname}?proj=${encodeURIComponent(slug)}${location.hash}`)
+  return slug ? new Promise(() => {}) : user
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'docs/'
