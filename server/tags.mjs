@@ -27,7 +27,7 @@ export function tagsOf(text, path) {
   const out = {}
   for (const { pattern, names } of lines(text)) if (pattern && regex(pattern).test(path))
     for (const n of names) { const off = n.startsWith('-') || n.startsWith('!'), k = off ? n.slice(1) : n
-      if (k in TAGS) off ? delete out[k] : out[k] = true }
+      if (Object.hasOwn(TAGS, k)) off ? delete out[k] : out[k] = true }
   return out
 }
 

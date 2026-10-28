@@ -32,7 +32,7 @@ function zip(b, max) {
     o += 46 + nl + b.readUInt16LE(o + 30) + b.readUInt16LE(o + 32)
     if (name.endsWith('/') || (mode & 0o170000) === 0o120000 || (total += size) > max) continue
     const start = at + 30 + b.readUInt16LE(at + 26) + b.readUInt16LE(at + 28), raw = b.subarray(start, start + csize)
-    out.push({ path: name, data: method === 0 ? raw : zlib.inflateRawSync(raw, { maxOutputLength: size }) })
+    out.push({ path: name, data: method === 0 ? raw : zlib.inflateRawSync(raw, { maxOutputLength: size || 1 }) })
   }
   return out
 }

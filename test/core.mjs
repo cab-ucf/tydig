@@ -130,10 +130,10 @@ check('out/ PDFs excluded from history', !(await api('/p/demo/history')).length 
 // auth guards
 const noauth = await fetch(`${HUB}/api/projects`)
 check('REST rejects missing session', noauth.status === 401)
-let authFailed = false
-const badDoc = doc(HUB, 'demo', 'not-a-real-session', { onAuthenticationFailed: () => { authFailed = true } })
+const badDoc = doc(HUB, 'demo', 'better-auth.session_token=not-a-real-session')
 await sleep(1200)
-check('websocket rejects invalid session', authFailed && badDoc.getMap('files').size === 0)
+check('websocket rejects invalid session', !badDoc.provider.isSynced && badDoc.getMap('files').size === 0)
+badDoc.provider.destroy()
 
 // recipes: discovered by parsing the Makefile, run in the sandbox (UNSAFE
 // host mode in this CI)

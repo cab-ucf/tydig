@@ -12,6 +12,13 @@ COPY server/relay.mjs server/refs.mjs server/tags.mjs server/text.mjs server/
 ARG TYDIG_BRAND=tydig
 RUN npm run build && node client/brotli.mjs
 
+# the link's iroh end (link/): Rust, so no byte of a link passes through JavaScript;
+# bookworm's glibc, the older, so it runs on whichever Debian node:22-slim is
+FROM docker.io/library/rust:1.91-slim-bookworm AS link
+WORKDIR /link
+COPY link/ .
+RUN cargo build --release --locked
+
 FROM docker.io/library/node:22-slim
 # podman-remote, for the sandbox service: static, pinned, checksummed
 ARG PODMAN=5.8.0
@@ -38,6 +45,7 @@ COPY templates/ templates/
 COPY sandbox/ buildctx/sandbox/
 COPY fonts/ buildctx/fonts/
 COPY --from=client /app/client/dist/ client/dist/
+COPY --from=link /link/target/release/tydig-link /usr/local/bin/
 ENV NODE_ENV=production PORT=3000
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s CMD curl -fs localhost:3000/api/auth-config >/dev/null

@@ -86,6 +86,11 @@ const joined = await (await as(dee, '/join', { method: 'POST', body: JSON.string
 check('and joins its project', joined.project === 'paper' && (await as(dee, '/p/paper/files')).ok)
 check('the owner sees the code', (await (await as(cat, '/p/paper/join')).json()).some(c => c.code === code))
 check('a member cannot make one', (await as(dee, '/p/paper/join', { method: 'POST' })).status === 403)
+await as(cat, '/projects/inner', { method: 'POST' })
+await as(cat, '/p/inner/members', { method: 'POST', body: JSON.stringify({ email: 'ivy@example.com' }) })
+const ivy = jar(await joinUp('ivy@example.com', code))
+check('a code signs up any address, but takes no invitation meant for it',
+  !(await (await as(ivy, '/projects')).json()).some(p => p.name === 'inner'))
 await as(cat, `/p/paper/join/${code}`, { method: 'DELETE' })
 check('a stopped code signs no one up', (await joinUp('fay@example.com', code)).status === 403)
 check('and its members stay', (await as(dee, '/p/paper/files')).ok)

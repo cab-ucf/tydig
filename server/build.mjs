@@ -97,7 +97,7 @@ router.post('/docx', async (req, res) => {
 
 // LSP over a websocket: JSON messages <-> tinymist's Content-Length frames.
 // At most TYDIG_MAX_LSP at once, two per person.
-const wss = new WebSocketServer({ noServer: true })
+const wss = new WebSocketServer({ noServer: true, maxPayload: 16 << 20 })
 const MAX_LSP = Number(process.env.TYDIG_MAX_LSP || 8), per = new Map()
 export const lspOpen = new Map() // proj -> sockets, closed when a member is removed
 export function lsp(req, sock, head, n, user) {
@@ -115,12 +115,15 @@ export function lsp(req, sock, head, n, user) {
     ws.on('message', m => {
       if (p.stdin.writable) p.stdin.write(Buffer.concat([Buffer.from(`Content-Length: ${m.length}\r\n\r\n`), m]))
     })
-    let buf = Buffer.alloc(0)
+    // a frame's parts are joined once it is whole, not as each arrives
+    let buf = Buffer.alloc(0), more = [], need = 0
     p.stdout.on('data', d => {
-      buf = Buffer.concat([buf, d])
+      more.push(d)
+      if ((need -= d.length) > 0) return
+      buf = Buffer.concat([buf, ...more]); more = []
       for (let sep; (sep = buf.indexOf('\r\n\r\n')) >= 0;) {
         const len = +(/content-length: *(\d+)/i.exec(buf.subarray(0, sep))?.[1] ?? 0), end = sep + 4 + len
-        if (buf.length < end) return
+        if (buf.length < end) return need = end - buf.length
         ws.send(buf.subarray(sep + 4, end).toString()); buf = buf.subarray(end)
       }
     })

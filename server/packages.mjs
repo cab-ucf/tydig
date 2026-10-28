@@ -5,7 +5,7 @@ import express from 'express'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
-import { HUB, writeAtomic } from './store.mjs'
+import { HUB, okPath, writeAtomic } from './store.mjs'
 import { unpack } from './unpack.mjs'
 
 const U = (process.env.TYDIG_PACKAGES || 'https://packages.typst.org').replace(/\/$/, '')
@@ -15,7 +15,7 @@ export const SPEC = /^@preview\/([a-z0-9][a-z0-9-]*):(\d+\.\d+\.\d+)$/
 const fail = (status, message) => Object.assign(new Error(message), { status })
 
 // a package's .tar.gz (immutable, as Universe publishes them: a version never changes)
-export async function tarball(f) {
+async function tarball(f) {
   if (!FILE.test(f)) throw fail(400, 'not a package')
   const at = path.join(DIR, f)
   if (existsSync(at)) return readFile(at)
@@ -49,7 +49,8 @@ export async function template(spec) {
   const toml = files.find(f => f.path === 'typst.toml')?.data.toString() ?? ''
   const dir = /\[template\][^[]*?\bpath\s*=\s*"([^"]+)"/.exec(toml)?.[1].replace(/^\.\/|\/$/g, '')
   if (!dir) throw fail(400, `${spec} is a package, not a template`)
-  const out = new Map(files.filter(f => f.path.startsWith(dir + '/')).map(f => [f.path.slice(dir.length + 1), f.data]))
+  const out = new Map(files.filter(f => f.path.startsWith(dir + '/')).map(f => [f.path.slice(dir.length + 1), f.data])
+    .filter(([p]) => okPath(p))) // within the project, as a name may be written
   const entry = /\[template\][^[]*?\bentrypoint\s*=\s*"([^"]+)"/.exec(toml)?.[1]
   if (entry && out.has(entry) && !out.has('main.typ')) out.set('main.typ', out.get(entry)).delete(entry)
   return out

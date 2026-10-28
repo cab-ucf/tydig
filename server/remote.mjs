@@ -28,16 +28,20 @@ export const sshUrl = u => /^(git@|ssh:\/\/)/.test(String(u))
 
 // URL and branch reach git as arguments: no options, no local paths (they
 // would read other projects) unless TYDIG_GIT_LOCAL=1, no host on the hub's
-// own network unless TYDIG_GIT_PRIVATE=1
+// own network unless TYDIG_GIT_PRIVATE=1. git@host:path with a / before the
+// colon is a local path to git; a host is a name or an address alone (ssh's
+// command line is a shell's, store.mjs).
 const LOCAL = process.env.TYDIG_GIT_LOCAL === '1'
 async function check(url, branch, n) {
-  if (!(LOCAL ? /^(https?:\/\/|git@|ssh:\/\/|file:\/\/|\/)\S+$/ : /^(https?:\/\/|git@|ssh:\/\/)\S+$/).test(String(url || '')))
+  url = String(url || '')
+  if (!(/^(https?|ssh):\/\/\S+$|^git@[\w.-]+:\S+$/.test(url) || LOCAL && /^(file:\/\/|\/)\S+$/.test(url)))
     throw new Error(`not a git URL${LOCAL ? '' : ' (local paths need TYDIG_GIT_LOCAL=1)'}`)
   if (!/^(?!-)(?!.*\.\.)[\w./-]{1,100}$/.test(String(branch))) throw new Error('bad branch name')
   // the host as URL reads it (as curl will); nothing a parser could read two ways
   if (/[\\\x00-\x20\x7f]/.test(url)) throw new Error('not a git URL')
-  const u = /^\w+:\/\//.test(url) ? new URL(url) : { hostname: /^[\w.-]+@([^:/]+):/.exec(url)?.[1] }
+  const u = /^\w+:\/\//.test(url) ? new URL(url) : { hostname: /^git@([^:]+):/.exec(url)?.[1] }
   const h = u.hostname?.replace(/^\[|\]$/g, '')
+  if (/[^\w.:-]/.test(h)) throw new Error('not a git URL')
   if (!h || process.env.TYDIG_GIT_PRIVATE === '1') return n && gitPin.delete(n)
   const [{ address }] = await publicOnly(h)
     .catch(e => { throw new Error(`${e.message}; TYDIG_GIT_PRIVATE=1 allows it`) })

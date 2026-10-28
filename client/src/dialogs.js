@@ -27,6 +27,13 @@ export async function renderProjects() {
       className: 'pnode' + (n === projName ? ' active' : '') + (a ? ' archived' : ''), textContent: n })))
 }
 
+// another project, by a few of its letters; the picker for a new or archived one
+export async function switchProject() {
+  const list = (await api('/projects')).filter(p => !p.archived)
+  choose([...list.map(p => ({ label: p.name, hint: p.name === projName ? 'open' : p.role, run: () => go(p.name) })),
+    { label: 'New project, or an archived one…', run: openPicker }], 'switch to a project...')
+}
+
 // archived: done, out of the side list and locked in the picker; a click unlocks it
 export async function archive(n = projName) {
   const a = (await api('/projects')).find(p => p.name === n)?.archived

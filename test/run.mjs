@@ -1,7 +1,7 @@
 // Each suite against fresh hubs with data of their own:
 //   node test/run.mjs [suite...]   (default: all but ui, link, lsp, sandbox)
-// ui and link need puppeteer (installed into .uitest/), link an iroh-relay
-// on PATH, lsp tinymist, sandbox rootless podman.
+// ui and link need puppeteer (installed into .uitest/), link cargo and an
+// iroh-relay on PATH, lsp tinymist, sandbox rootless podman.
 import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, openSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,6 +42,8 @@ for (const s of suites) {
   const dir = mkdtempSync(path.join(tmpdir(), `tydig-${s}-`)), env = { ...ENV[s] }
   console.log(`--- ${s}`)
   if (s === 'link') {
+    sh('cargo build -q --manifest-path link/Cargo.toml')
+    process.env.PATH = `${root}/link/target/debug:${process.env.PATH}`
     mkdirSync(path.join(dir, 'site')); symlinkSync(path.join(root, 'client/dist'), path.join(dir, 'site/app'))
     writeFileSync(path.join(dir, 'relay.toml'), 'enable_metrics = false\nhttp_bind_addr = "127.0.0.1:3340"\n')
     bg.push(spawn('iroh-relay', ['--dev', '--config-path', path.join(dir, 'relay.toml')], { stdio: 'ignore' }),
@@ -56,7 +58,7 @@ for (const s of suites) {
   const code = await new Promise(ok => spawn(process.execPath, [path.join(root, `test/${s}.mjs`)],
     { cwd: HUBLESS.includes(s) ? root : dir, stdio: 'inherit', env: { ...process.env, ...env } }).on('close', ok))
   await Promise.all(bg.splice(0).map(p => new Promise(ok => p.exitCode !== null || p.signalCode !== null ? ok() : (p.on('exit', ok), p.kill()))))
-  if (code) { failed++; console.log(`FAILED: ${s} (hub log in ${dir})`) } else rmSync(dir, { recursive: true, force: true })
+  if (code) { failed++; console.log(`FAILED: ${s} (hub log in ${dir})`) } else rmSync(dir, { recursive: true, force: true, maxRetries: 10 })
 }
 console.log(failed ? `\n${failed} suite(s) failed` : '\nall suites passed')
 process.exit(failed ? 1 : 0)

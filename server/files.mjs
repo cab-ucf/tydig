@@ -5,19 +5,17 @@ import express from 'express'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { lstat, mkdir, rm, stat } from 'node:fs/promises'
+import { lstat, mkdir, rm } from 'node:fs/promises'
 import { pipeline } from 'node:stream'
 import { unpack } from './unpack.mjs'
 import { proj, inProj, okPath, walk, safe, openIn, writeIn, git, live, mirror,
   putFile, fileNow, building, commit, bad, hubFile, writeAtomic } from './store.mjs'
 
 const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
-const used = async n => {
-  let b = 0
-  for await (const rel of walk(proj(n))) b += (await lstat(inProj(n, rel)).catch(() => ({ size: 0 }))).size
-  return b
-}
-const over = async (n, more) => await used(n) + more > QUOTA &&
+// every file but .git, .collab and links, at once; one gone meanwhile is left out
+const listing = async n => (await Promise.all((await Array.fromAsync(walk(proj(n)))).map(p =>
+  lstat(inProj(n, p)).then(s => ({ path: p, size: s.size, mtime: s.mtimeMs }), () => null)))).filter(Boolean)
+const over = async (n, more) => (await listing(n)).reduce((b, f) => b + f.size, more) > QUOTA &&
   `this would pass the project's ${QUOTA / 2 ** 20} MB limit (TYDIG_QUOTA_MB)`
 const rel = req => {
   const p = req.params.rel.join('/')
@@ -30,14 +28,7 @@ const idle = (req, res, next) => building.has(req.params.proj)
 const raw = express.raw({ type: () => true, limit: '50mb' })
 
 export const router = express.Router({ mergeParams: true })
-router.get('/files', async (req, res) => {
-  const n = req.params.proj, out = []
-  for await (const p of walk(proj(n))) {
-    const s = await stat(inProj(n, p))
-    out.push({ path: p, size: s.size, mtime: s.mtimeMs })
-  }
-  res.json(out)
-})
+router.get('/files', async (req, res) => res.json(await listing(req.params.proj)))
 // served sandboxed, and typed only as an image or PDF: anything else is bytes,
 // so an uploaded .js, .html or .svg never runs as script in the app
 router.get('/raw/*rel', async (req, res) => {

@@ -47,8 +47,9 @@ const password = {
 // sign-in attempts per account, whatever address they come from
 const tries = new Map()
 const tooMany = email => {
-  const k = String(email).toLowerCase(), now = Date.now()
-  const t = (tries.get(k) || []).filter(x => now - x < 15 * 60_000)
+  const k = String(email).toLowerCase(), now = Date.now(), old = x => now - x >= 15 * 60_000
+  const t = (tries.get(k) || []).filter(x => !old(x))
+  if (tries.size > 1e5) for (const [k, t] of tries) old(t.at(-1)) && tries.delete(k) // addresses tried once, long ago
   tries.set(k, [...t, now])
   return t.length >= 10
 }
@@ -128,8 +129,11 @@ export const auth = betterAuth({
   session: { expiresIn: 30 * 86400, updateAge: 86400 },
   advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } }, // set by index.mjs
   hooks: { before: gate },
-  databaseHooks: { user: { create: { after: async u => {
-    for (const i of invitesFor(u.email)) {
+  // an invitation is taken with its link, or by an address its IdP vouches for:
+  // anyone may sign up as any address with a join code, or where signup is open
+  databaseHooks: { user: { create: { after: async (u, ctx) => {
+    const link = ctx?.headers?.get?.('x-tydig-invite')
+    for (const i of invitesFor(u.email).filter(i => u.emailVerified || i.id === link)) {
       await auth.api.addMember({ body: { userId: u.id, organizationId: i.organizationId, role: i.role || 'member' } })
       db.prepare("UPDATE invitation SET status = 'accepted' WHERE id = ?").run(i.id)
     }
@@ -145,10 +149,9 @@ export const auth = betterAuth({
 })
 await (await getMigrations(auth.options)).runMigrations()
 
-// the session behind a cookie (or a bare token), or null
-export const session = (cookie, token) => auth.api.getSession({ headers: new Headers({
-  cookie: cookie || (token ? `better-auth.session_token=${token}` : ''),
-}) }).catch(() => null)
+// the session behind a cookie, or null
+export const session = cookie => auth.api.getSession({ headers: new Headers({ cookie: cookie || '' }) })
+  .catch(() => null)
 
 const mine = db.prepare('SELECT o.id, o.slug AS name, m.role FROM member m ' +
   'JOIN organization o ON o.id = m.organizationId WHERE m.userId = ?')

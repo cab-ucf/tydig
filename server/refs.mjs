@@ -12,7 +12,7 @@ const untag = s => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&lt;/g, '<'
   .replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim()
 
 // ---- searching: each index ranks, and covers, differently ----
-export const fromCrossref = w => ({ title: untag(w.title?.[0]) || '(untitled)', authors: (w.author || []).map(a => a.family || a.name).filter(Boolean),
+const fromCrossref = w => ({ title: untag(w.title?.[0]) || '(untitled)', authors: (w.author || []).map(a => a.family || a.name).filter(Boolean),
   year: w.issued?.['date-parts']?.[0]?.[0], venue: w['container-title']?.[0], doi: w.DOI, cites: w['is-referenced-by-count'],
   abstract: untag(w.abstract), url: `https://doi.org/${w.DOI}`, from: 'crossref' })
 // (not a paper's supplementary files, which Crossref also registers)

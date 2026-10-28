@@ -63,7 +63,7 @@ if (!pv.diagHidden) console.log('  diag:', pv.diag)
 // each reach it (a file deleted must not compile from its old copy)
 {
   const { doc, Y } = await import('./lib.mjs')
-  const d = doc(B, 'demo', (await page.cookies()).find(c => c.name.endsWith('session_token')).value)
+  const d = doc(B, 'demo', (({ name, value }) => `${name}=${value}`)((await page.cookies()).find(c => c.name.endsWith('session_token'))))
   await sleep(2000)
   const shows = () => page.evaluate(() => ({ text: document.getElementById('page').textContent,
     diag: !document.getElementById('diag').hidden && document.getElementById('diag').textContent }))
@@ -417,7 +417,7 @@ check('Word export makes the citations EndNote fields, the bibliography its list
   await page.setViewport({ width: 1400, height: 900 })
   await page.goto(`${B}/?proj=demo`, { waitUntil: 'networkidle2', timeout: 60000 }); await sleep(4000)
   const { doc, Y } = await import('./lib.mjs')
-  const d = doc(B, 'demo', (await page.cookies()).find(c => c.name.endsWith('session_token')).value); await sleep(2000)
+  const d = doc(B, 'demo', (({ name, value }) => `${name}=${value}`)((await page.cookies()).find(c => c.name.endsWith('session_token')))); await sleep(2000)
   const sv = Y.encodeStateVector(d); d.provider.disconnect()
   d.transact(() => { d.getMap('meta').set('epoch', 'another'); d.files.get('main.typ').insert(0, 'OFFLINE-ONLY\n') })
   const u = [...Y.encodeStateAsUpdate(d, sv)]; d.provider.destroy()

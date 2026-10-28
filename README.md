@@ -28,6 +28,7 @@ The water was #if R.T1 > R.T2 [cooling] else [heating].
 | where | what |
 |---|---|
 | `server/` | the hub, a module per feature; `index.mjs` wires them |
+| `link/` | the hub's iroh end (Rust): what a link carries |
 | `client/` | the editor |
 | `templates/` | new projects: report, NIH, NSF, branding |
 | `sandbox/` | the build image |

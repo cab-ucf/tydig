@@ -23,6 +23,7 @@
         <button data-act="grep">Search every file<kbd>Mod-Shift-F</kbd></button>
         <button data-act="new-file">New file</button>
         <button data-act="upload">Upload files or an archive</button>
+        <button data-act="switch-project">Switch project</button>
         <button data-act="projects">Projects</button>
         <hr/>
         <button data-act="save">Save: commit, sign, push<kbd>Mod-S</kbd></button>
@@ -58,7 +59,8 @@
         <hr/>
         <button data-act="toggle-preview">Show or hide the preview<kbd>Mod-\</kbd></button>
         <button data-act="to-preview">Show the cursor's text in the preview<kbd>Mod-Alt-J</kbd></button>
-        <button data-act="toggle-tree" data-check="treeOpen">File tree<kbd>Mod-Shift-E</kbd></button>
+        <button data-act="tree">Go to the file tree, and back<kbd>Mod-Shift-E</kbd></button>
+        <button data-act="toggle-tree" data-check="treeOpen">File tree</button>
         <button data-act="toggle-side" data-check="sideOpen">Side panel<kbd>Mod-J</kbd></button>
         <button data-act="reset-layout">Reset layout</button>
         <hr/>
@@ -105,7 +107,7 @@
   </header>
   <main id="layout">
     <nav id="rail" aria-label="panels">
-      <button data-act="toggle-tree" data-check="treeOpen" title="Files (Mod-Shift-E)"><svg viewBox="0 0 16 16">
+      <button data-act="toggle-tree" data-check="treeOpen" title="Files"><svg viewBox="0 0 16 16">
         <path d="M2 4.5V12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8L6.5 3.5H3A1 1 0 0 0 2 4.5z"/></svg></button>
       <button data-pane="comments" title="Comments"><svg viewBox="0 0 16 16"><path d="M2.5 3h11v7.5h-6L4.5 13v-2.5h-2z"/></svg><b class="badge" hidden></b></button>
       <button data-pane="chat" title="Discussion"><svg viewBox="0 0 16 16"><path d="M2 3h8.5v6H6l-2.5 2V9H2z"/><path d="M12.5 6H14v6h-1.5V14l-2.5-2H6.5"/></svg><b class="badge" hidden></b></button>
@@ -157,7 +159,7 @@
     <aside id="side" hidden>
       <div id="side-head"><span id="side-title"></span>
         <button id="side-close" title="close the panel">&times;</button></div>
-      <div id="side-body"></div>
+      <div id="side-body" tabindex="-1"></div>
     </aside>
   </main>
   <nav id="mtabs">
