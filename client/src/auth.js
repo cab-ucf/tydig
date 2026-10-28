@@ -3,14 +3,14 @@
 // the account's own actions.
 import { link, plain } from './link.js'
 import { createAuthClient } from 'better-auth/client'
-import { organizationClient, genericOAuthClient } from 'better-auth/client/plugins'
+import { organizationClient } from 'better-auth/client/plugins'
 
 // the hub's name, from its brand.css
 document.title = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().slice(1, -1)
 
 export const authClient = createAuthClient({
   baseURL: location.origin,
-  plugins: [organizationClient(), genericOAuthClient()],
+  plugins: [organizationClient()],
 })
 
 export async function requireUser() {
@@ -148,7 +148,7 @@ async function loginScreen() {
   const submit = root.querySelector('.auth-submit'), tabs = root.querySelectorAll('.auth-tabs button')
   if (cfg.sso) {
     root.querySelector('.auth-sso').onclick = () =>
-      authClient.signIn.oauth2({ providerId: cfg.sso.providerId, callbackURL: location.href })
+      authClient.signIn.social({ provider: cfg.sso.providerId, callbackURL: location.href })
     if (cfg.sso.only) form.hidden = root.querySelector('.auth-tabs').hidden = true
   }
   let up = false

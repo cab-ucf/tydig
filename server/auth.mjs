@@ -130,10 +130,11 @@ async function handOver(u) {
   }
 }
 
+const BASE = env.TYDIG_URL || 'http://localhost:3000'
 export const auth = betterAuth({
   database: db,
   secret: env.TYDIG_SECRET || readFileSync(secretFile, 'utf8').trim(),
-  baseURL: env.TYDIG_URL || 'http://localhost:3000',
+  baseURL: BASE,
   trustedOrigins: TRUSTED,
   emailAndPassword: { enabled: !sso?.only, autoSignIn: true, password },
   user: { deleteUser: { enabled: true, beforeDelete: handOver } },
@@ -154,6 +155,7 @@ export const auth = betterAuth({
       providerId: 'sso', discoveryUrl: env.TYDIG_SSO_DISCOVERY, pkce: true,
       clientId: env.TYDIG_SSO_CLIENT_ID, clientSecret: env.TYDIG_SSO_CLIENT_SECRET,
       scopes: ['openid', 'profile', 'email'],
+      redirectURI: `${BASE}/api/auth/oauth2/callback/sso`, // as IdPs know it (index.mjs)
     }] })] : [],
     organization({ allowUserToCreateOrganization: true, creatorRole: 'owner', organizationLimit: u => // owned
       db.prepare("SELECT count(*) n FROM member WHERE userId = ? AND role = 'owner'").get(u.id).n >= MAX_PROJECTS }),

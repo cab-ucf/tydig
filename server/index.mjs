@@ -58,6 +58,7 @@ app.all('/api/auth/*splat', (req, res, next) => {
     message: `This hub does not trust ${req.headers.origin}: open it at the address it was set up with (TYDIG_URL).` })
   req.headers['x-tydig-ip'] = req.socket.ip || req.ip
   req.headers['x-tydig-link'] = req.socket.link ? '1' : ''
+  req.url = req.url.replace('/api/auth/oauth2/callback/', '/api/auth/callback/') // an IdP's, from better-auth 1.6
   next()
 }, toNodeHandler(auth))
 app.get('/api/auth-config', (req, res) => res.json({
