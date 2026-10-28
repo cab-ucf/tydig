@@ -174,12 +174,23 @@ export function showInPreview() {
 // @names stand out: an agent member answers to its own
 const mentions = text => text.split(/(@[\w-]+)/)
   .map((t, i) => i % 2 ? el('b', { className: 'at', textContent: t }) : t)
-const head = (m, pre = '', post = '') => el('div', { className: 'meta' }, pre, dot(m.color || 'var(--fg-dim)'),
-  el('b', { textContent: m.author }), el('time', { textContent: new Date(m.ts).toLocaleString() }), post)
+const head = (m, pre = '', ...post) => el('div', { className: 'meta' }, pre, dot(m.color || 'var(--fg-dim)'),
+  el('b', { textContent: m.author }), el('time', { textContent: new Date(m.ts).toLocaleString() }), ...post)
+// Into your notes: loroh shows it and asks first (loroh://add); copied too,
+// for any other notes app, or none
+const noted = (m, where = '') => el('button', { className: 'to-notes', title: 'Add to notes (loroh)',
+  textContent: '📝', onclick: e => {
+    e.stopPropagation()
+    const url = `${location.origin}${location.pathname}?proj=${projName}`
+    const md = `- **${m.author}**${where}: ${m.text.trim().replace(/\n/g, '\n  ')} ([${projName}](${url}))`
+    navigator.clipboard?.writeText(md).catch(() => {})
+    location.href = 'loroh://add?' + new URLSearchParams({ file: 'Inbox.md', text: md })
+    toast('Opening loroh (and copied as Markdown)')
+  } })
 const message = m => {
   const on = m.re && comments.get(m.re)
   return el('div', { className: 'msg' },
-    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : ''), el('p', {}, ...mentions(m.text)))
+    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : '', noted(m)), el('p', {}, ...mentions(m.text)))
 }
 // Enter sends; Shift-Enter is a new line
 // what is typed outlives the pane redrawing around it (panels.js keeps focus)
@@ -201,7 +212,7 @@ const composer = (re, hint) => {
 export function renderComments(body) {
   const cs = numbered()
   body.replaceChildren(...cs.map(c => {
-    const pin = el('span', { className: 'pin-n', textContent: c.n }), meta = head(c, pin)
+    const pin = el('span', { className: 'pin-n', textContent: c.n }), meta = head(c, pin, noted(c, ` on ${c.file}`))
     if (!pinSafe(c.file, c.from))
       Object.assign(pin, { className: 'pin-n no-pin', title: 'no preview pin: anchor is inside code/raw/math' })
     meta.onclick = () => { // where it is now
