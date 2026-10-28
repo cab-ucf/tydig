@@ -124,6 +124,13 @@ check('restore rolled back edit', !fB.get('main.typ').toString().includes('GARBA
 const c2 = A.getMap('comments').get('c2')
 check('restore keeps comments anchored outside the change', fA.get('main.typ').toString().slice(abs(c2.anchor), abs(c2.head)) === 'Pre-registration')
 check('CRDT path cannot write .git/config', !execSync('cat data/demo/.git/config').toString().includes('fsmonitor'))
+put('data/demo/.git/index.lock', '')
+const stuck = await me.post('/p/demo/checkpoint', { message: 'locked' }); await sleep(500)
+check('a commit that fails is said, to the saver and in every editor', /index\.lock/.test(stuck.error) &&
+  /index\.lock/.test(A.getMap('meta').get('commitError')))
+rmSync('data/demo/.git/index.lock')
+const unstuck = await me.post('/p/demo/checkpoint', { message: 'unlocked' }); await sleep(500)
+check('and cleared once one succeeds', unstuck.ok && A.getMap('meta').get('commitError') === null)
 check('out/ PDFs excluded from history', !(await api('/p/demo/history')).length === false &&
   !execSync(`git -C data/demo ls-tree -r --name-only ${cp.hash}`).toString().includes('out/'))
 
@@ -157,6 +164,10 @@ check('no answer names the data folder on this machine', /…\/demo/.test(where.
 ;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nnope:\n\tno-such-tool fig.py\n'); await sleep(300)
 check('a command the sandbox lacks is named, with the way out',
   /`no-such-tool` is not in this hub's build sandbox.*just up/s.test((await api('/p/demo/build/nope', { method: 'POST' })).output))
+;(await import('node:fs')).appendFileSync('data/demo/Makefile', '\nslow:\n\tsleep 2\n'); await sleep(300)
+const slow = api('/p/demo/build/slow', { method: 'POST' }); await sleep(300)
+check('one build at a time per person', /you have a build running/.test((await api('/p/nih-r21/build/full', { method: 'POST' })).output))
+await slow
 const filesAfter = await api('/p/demo/files')
 check('analysis output on disk', filesAfter.some(f => f.path === 'build/results.json'))
 check('builds leave no nested repo or symlink behind', !ex('data/demo/nest/.git') && !(await import('node:fs')).existsSync('data/demo/escape'))

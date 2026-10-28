@@ -284,6 +284,9 @@ body.dark-preview #page { filter: invert(1) hue-rotate(180deg); box-shadow: 0 0 
 :is(.scope-ai, .ai-chip):is(.ai-mid, .ai-top) { color: var(--ai-ink) !important; box-shadow: inset 0 -2px var(--ai-line); }
 :is(.scope-ai, .ai-chip).ai-top { background: var(--ai-top); font-weight: 700; box-shadow: 0 0 0 1px var(--ai-ring); }
 .scope-ai:is(.ai-mid, .ai-top) * { color: inherit !important; }
+/* an AI-ism: a turn of phrase AI text uses far more than people do */
+:is(.scope-ism, mark.ism) { background: none; color: inherit; text-decoration: underline wavy var(--ai-top) 1.5px; text-underline-offset: 3px; }
+.ai-chip.ism { background: var(--ai-top); color: var(--ai-ink); }
 /* a reading awaited: the marks fade, a bar sweeps the header, the bar's button pulses */
 #editor .pane-head { position: relative; }
 #editor.scope-busy .pane-head::after {

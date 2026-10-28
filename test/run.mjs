@@ -1,7 +1,8 @@
 // Each suite against fresh hubs with data of their own:
-//   node test/run.mjs [suite...]   (default: all but ui, link, lsp, sandbox)
-// ui and link need puppeteer (installed into .uitest/), link cargo and an
-// iroh-relay on PATH, lsp tinymist, sandbox rootless podman.
+//   node test/run.mjs [suite...]   (default: all but ui, link, irweb, lsp, sandbox, irch)
+// ui and link need puppeteer, irweb iroh's Node binding (both installed into
+// .uitest/), link and irweb cargo and an iroh-relay on PATH, lsp tinymist,
+// sandbox rootless podman, irch irch (or TYDIG_IRCH).
 import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdtempSync, openSync, rmSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -15,9 +16,12 @@ const ENV = {
     TYDIG_OPENALEX: 'http://localhost:3999/oa', OPENALEX_API_KEY: 'k' },
   assist: { TYDIG_OLLAMA: 'http://127.0.0.1:11500', TYDIG_GHOST_MODEL: 'fake', TYDIG_PERPLEXISCOPE: 'http://127.0.0.1:8766' },
   remote: { TYDIG_GIT_LOCAL: '1' },
+  auth: { TYDIG_MAX_PROJECTS: '4' },
+  import: { TYDIG_QUOTA_MB: '5' },
   ui: { TYDIG_PACKAGES: 'http://localhost:3998' },
-  link: { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' },
+  irch: { TYDIG_IRCH: process.env.TYDIG_IRCH || 'irch' },
 }
+ENV.irweb = ENV.link = { TYDIG_LINK: '1', TYDIG_PAGE: 'http://localhost:8099/app/', TYDIG_LINK_RELAY: 'http://localhost:3340' }
 const ALL = ['prose', 'egress', 'core', 'auth', 'signup', 'offline', 'prov', 'agent', 'template', 'import', 'assist', 'remote']
 const suites = process.argv.length > 2 ? process.argv.slice(2) : ALL
 const sh = c => execSync(c, { cwd: root, stdio: 'inherit' })
@@ -37,11 +41,13 @@ async function hub(dir, port, env) {
 if (suites.some(s => !HUBLESS.includes(s))) execSync('npm run build', { cwd: root, stdio: 'pipe' })
 if (suites.some(s => ['ui', 'link'].includes(s)) && !existsSync(path.join(root, '.uitest/node_modules/puppeteer')))
   sh('npm i --prefix .uitest --no-audit --no-fund puppeteer')
+if (suites.includes('irweb') && !existsSync(path.join(root, '.uitest/node_modules/@number0/iroh')))
+  sh('npm i --prefix .uitest --no-audit --no-fund @number0/iroh@1.2.0')
 let failed = 0
 for (const s of suites) {
   const dir = mkdtempSync(path.join(tmpdir(), `tydig-${s}-`)), env = { ...ENV[s] }
   console.log(`--- ${s}`)
-  if (s === 'link') {
+  if (s === 'link' || s === 'irweb') {
     sh('cargo build -q --manifest-path link/Cargo.toml')
     process.env.PATH = `${root}/link/target/debug:${process.env.PATH}`
     mkdirSync(path.join(dir, 'site')); symlinkSync(path.join(root, 'client/dist'), path.join(dir, 'site/app'))

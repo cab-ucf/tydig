@@ -275,7 +275,7 @@ engine.on('connection', ws => { ws.send(JSON.stringify({ type: 'hello', model: '
   ws.send(JSON.stringify({ type: 'heat', seq: r.seq, words, sents: [{ s: 0, e: r.text.trimEnd().length, w: words.length, n: words.length, bits: words.length * 6 }],
     ppl: 42, bpt: 5.4, ntok: words.length }))
   ws.send(JSON.stringify({ type: 'ai', seq: r.seq, score: 3, tail: 0.004, words: words.length, calibrated: false, family: 'gpt', task: 'write',
-    sents: [{ score: 3, tail: 0.004 }] }))
+    sents: [{ score: 3, tail: 0.004 }], isms: [{ s: 0, e: r.text.indexOf(' '), x: 5, f: 'not merely a * *' }] }))
 }) })
 answer = 'http://localhost:8765'
 await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(2500); answer = null
@@ -303,12 +303,14 @@ check('typing keeps the marks; in vim, the text is read on leaving insert mode',
 await page.keyboard.type('^5x'); await sleep(1200)
 await page.evaluate(() => document.querySelector('#menubar [data-act=vim]').click()); await sleep(300)
 await page.click('#scope'); await sleep(800)
-check('another shows AI-likeness per sentence, the most AI-like blocked out', await page.evaluate(() =>
-  document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent)))
+check('another shows AI-likeness per sentence, the most AI-like blocked out, its AI-isms underlined', await page.evaluate(() =>
+  document.querySelectorAll('.scope-ai.ai-top').length > 0 && /AI 78%/.test(document.getElementById('scope').textContent) &&
+  document.querySelectorAll('.scope-ism').length === 1))
 await page.evaluate(() => document.querySelector('#rail [data-pane=aicheck]').click()); await sleep(300)
 await page.evaluate(() => document.querySelector('#side-body .go').click()); await sleep(3000)
-check('the AI check reads the document as typeset, and lists the most AI-like sentences, each a click away', await page.evaluate(() =>
-  /1 blocked out/.test(document.getElementById('side-body').innerText) && document.querySelectorAll('#side-body .ai-row').length > 0) &&
+check('the AI check reads the document as typeset, and lists its AI-isms and most AI-like sentences, each a click away', await page.evaluate(() =>
+  /1 blocked out/.test(document.getElementById('side-body').innerText) && document.querySelectorAll('#side-body .ai-row').length > 1 &&
+  /^32×$/.test(document.querySelector('#side-body .ai-chip.ism')?.textContent) && !!document.querySelector('#side-body mark.ism')) &&
   /report \u22c5 generated/.test(seen.at(-1)))
 answer = ''; await page.evaluate(() => document.querySelector('[data-act="scope"]').click()); await sleep(500); answer = null
 check('and it turns off', await page.evaluate(() => !document.querySelector('.scope-ai') && document.getElementById('scope').hidden))
@@ -316,9 +318,9 @@ engine.close()
 
 // someone else writes: the bar counts it, a note says it, a click shows it
 await page.evaluate(() => document.getElementById('side-close').click())
-await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST', headers: { 'content-type': 'application/json' },
-  body: '{"email":"bea@example.com"}' }))
-const bea = await person('Bea', { hub: B, email: 'bea@example.com' }), beaDoc = bea.doc('demo'); await sleep(2000)
+const { invite } = await page.evaluate(() => fetch('/api/p/demo/members', { method: 'POST',
+  headers: { 'content-type': 'application/json' }, body: '{"email":"bea@example.com"}' }).then(r => r.json()))
+const bea = await person('Bea', { hub: B, email: 'bea@example.com', invite }), beaDoc = bea.doc('demo'); await sleep(2000)
 beaDoc.getArray('chat').push([{ id: 'b1', author: 'Bea', text: '@Ada look at the intro', ts: Date.now() }]); await sleep(1500)
 check('a message from someone else is counted on the bar and said in a note', await page.evaluate(() =>
   document.querySelector('#rail [data-pane=chat] .badge').textContent === '1' && /Bea.*mentioned you.*look at the intro/.test(document.getElementById('toast')?.textContent)))

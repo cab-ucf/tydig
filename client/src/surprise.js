@@ -3,8 +3,9 @@
 // much it surprised the model, or by how flat the model's guesses were before
 // it, each sentence underlined on the same scale; or each sentence tinted by
 // how rare its AI-likeness is among human writing, by MELD (an AI-text
-// detector) where the engine runs it. Typst source is scored as the prose it
-// typesets: the engine sees text, the editor keeps where it came from.
+// detector) where the engine runs it, and its AI-isms underlined. Typst
+// source is scored as the prose it typesets: the engine sees text, the editor
+// keeps where it came from.
 import { StateField, StateEffect, ChangeSet } from '@codemirror/state'
 import { EditorView, Decoration, ViewPlugin, hoverTooltip } from '@codemirror/view'
 
@@ -88,7 +89,7 @@ export function prose(src, typst = true) {
 export const MODES = {
   bits: ['surprise', 'how unexpected each word was to the model'],
   ent: ['flatness', 'how unsure the model was before each word: flat means many words could have come next'],
-  ai: ['AI-likeness', 'how AI-like each sentence reads (MELD): tinted from 10%, blocked out from 70%'],
+  ai: ['AI-likeness', 'how AI-like each sentence reads (MELD): tinted from 10%, blocked out from 70%; AI-isms underlined'],
 }
 const ramp = R => x => {
   const t = Math.min(1, x), u = Math.min(1.999, t * 2), i = u | 0, f = u - i
@@ -117,7 +118,11 @@ export const aiText = a => a === undefined ? 'AI …' : !a ? 'no AI detector'
   : a.words < 100 ? 'AI: too short' : `AI ${Math.round(100 * aiPct(a.tail))}%`
 export const aiAbout = a => a === undefined ? 'MELD is still reading it.' : !a ? 'This engine runs no AI detector.' :
   `MELD: ${a.words < 100 ? 'needs 100+ words to judge; ' : ''}${share(a.tail, 'documents')}` +
-  `${a.tail < 0.1 ? `; closest to ${a.family}, ${a.task}` : ''}.`
+  `${a.tail < 0.1 ? `; closest to ${a.family}, ${a.task}` : ''}${a.isms?.length ? `; ${a.isms.length} AI-isms, underlined` : ''}.`
+// an AI-ism: how many times as common in AI text, and the feature found (… for
+// any words in a turn of phrase)
+export const ismAbout = z => `${Math.round(2 ** z.x)} times as common in AI text as in human writing: ` +
+  `“${z.f.replace(/\*( \*)*/g, '…').replace(/ ([,.;:?!)])/g, '$1')}”`
 const bits = x => `${x.toFixed(1)} bits`
 const big = n => n < 1e6 ? Math.round(n).toLocaleString() : `10^${Math.round(Math.log10(n))}`
 const el = (tag, props) => Object.assign(document.createElement(tag), props)
@@ -181,6 +186,10 @@ export function surprise(opts) {
         : { class: 'scope-sent', attributes: c ? { style: `text-decoration-color:${c}` } : {} }
       if (a < b && spec) marks.push(Decoration.mark({ ...spec, sent: z }).range(a, b))
     }
+    if (ai) for (const z of h.ai?.isms || []) {
+      const [a, b] = src(z.s, z.e)
+      if (a < b) marks.push(Decoration.mark({ class: 'scope-ism', ism: z }).range(a, b))
+    }
     if (!ai) for (const w of h.words) {
       const [a, b] = src(w.s, w.e), c = tint[by](w[by])
       if (a < b) marks.push(Decoration.mark({ class: 'scope-w', attributes: c ? { style: `background:${c}` } : {}, word: w }).range(a, b))
@@ -214,11 +223,11 @@ export function surprise(opts) {
   }))
   const poke = () => view && view.state.doc !== sent?.doc && (clearTimeout(t), ask())
   const hover = hoverTooltip((v, pos) => {
-    let w, z
+    let w, z, m
     v.state.field(scopeField).between(pos, pos, (a, b, d) => {
-      d.spec.word ? w = d.spec.word : d.spec.sent && (z = d.spec.sent)
+      d.spec.word ? w = d.spec.word : d.spec.sent ? z = d.spec.sent : d.spec.ism && (m = d.spec.ism)
     })
-    if (!w && !z) return null
+    if (!w && !z && !m) return null
     return { pos, above: true, create: () => {
       const dl = el('dl'), dom = el('div', { className: 'cm-scope-tip' })
       dom.append(dl)
@@ -237,6 +246,7 @@ export function surprise(opts) {
         row(dl, 'AI-likeness', z.ai ? share(z.ai.tail, 'sentences') : last?.ai === undefined ? 'MELD is still reading' :
           last.ai ? 'too short to judge' : 'this engine runs no AI detector', by === 'ai')
       }
+      if (m) row(dl, 'AI-ism', ismAbout(m), true)
       return { dom }
     } }
   })

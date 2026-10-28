@@ -19,9 +19,12 @@ import * as agents from './agents.mjs'
 import * as assist from './assist.mjs'
 import * as link from './link.mjs'
 import * as packages from './packages.mjs'
+import * as irch from './irch.mjs'
 
 const PORT = Number(process.env.PORT || 3000)
 const app = express().disable('x-powered-by')
+// over the link, a request without its token is not answered (link.mjs)
+app.use((req, res, next) => link.ok(req) ? next() : req.socket.end())
 // No answer says where things live on this machine: errors from git, podman
 // or the filesystem name the data folder, so it never leaves as written.
 app.use((req, res, next) => {
@@ -54,6 +57,8 @@ app.all('/api/auth/*splat', (req, res, next) => {
   if (!originOk(req.headers.origin)) return res.status(403).json({ code: 'INVALID_ORIGIN',
     message: `This hub does not trust ${req.headers.origin}: open it at the address it was set up with (TYDIG_URL).` })
   req.headers['x-tydig-ip'] = req.socket.ip || req.ip
+  req.headers['x-tydig-link'] = req.socket.link ? '1' : ''
+  req.url = req.url.replace('/api/auth/oauth2/callback/', '/api/auth/callback/') // an IdP's, from better-auth 1.6
   next()
 }, toNodeHandler(auth))
 app.get('/api/auth-config', (req, res) => res.json({
@@ -127,11 +132,12 @@ app.use('/api/p/:proj', (req, res, next) => {
   req.org = access(req.user.id, req.params.proj)
   req.org ? next() : res.status(403).json({ error: 'you do not have access to this project' })
 }, p)
-for (const m of [files, build, history, remote, templates, agents, assist]) p.use(m.router)
+for (const m of [files, build, history, remote, templates, agents, assist, irch]) p.use(m.router)
 
-// sharing: an account joins at once; an address without one is invited
+// sharing: a verified account joins at once; any other address is invited,
+// so whoever signed up as it unverified needs the invite link too
 p.post('/members', admin, async (req, res) => {
-  const email = String(req.body?.email || '').trim(), u = userByEmail(email)
+  const email = String(req.body?.email || '').trim(), had = userByEmail(email), u = had?.emailVerified && had
   if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
   const inv = !u && await auth.api.createInvitation({ headers: new Headers({ cookie: req.headers.cookie }),
     body: { email, role: 'member', organizationId: req.org.id } })
@@ -216,7 +222,7 @@ const server = app.listen(PORT, () => {
 server.on('upgrade', async (req, sock, head) => {
   sock.on('error', () => {})
   const u = new URL(req.url, 'http://x'), n = u.searchParams.get('proj'), lsp = u.pathname === '/lsp'
-  if (!(lsp ? isProj(n) : /^\/sync(\/|$)/.test(u.pathname)) || !originOk(req.headers.origin)) return sock.destroy()
+  if (!link.ok(req) || !(lsp ? isProj(n) : /^\/sync(\/|$)/.test(u.pathname)) || !originOk(req.headers.origin)) return sock.destroy()
   req.user = (await session(req.headers.cookie))?.user
   if (!req.user || lsp && !access(req.user.id, n)) return sock.destroy()
   lsp ? build.lsp(req, sock, head, n, req.user.id) : sync.handleUpgrade(req, sock, head, ws => hocuspocus.handleConnection(ws, req))

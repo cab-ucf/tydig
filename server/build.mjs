@@ -8,10 +8,11 @@ import { existsSync } from 'node:fs'
 import { WebSocketServer } from 'ws'
 import { run, proj, inProj, building, editable, readIn } from './store.mjs'
 import { at } from './sandbox.mjs'
+import { QUOTA, used } from './files.mjs'
 
 // builds on this machine itself, for development: never where a sandbox exists
 const UNSAFE = process.env.TYDIG_UNSAFE_BUILDS === '1' && !process.env.TYDIG_SANDBOX
-const MAX = Number(process.env.TYDIG_MAX_BUILDS || 2)
+const MAX = Number(process.env.TYDIG_MAX_BUILDS || 2), PER = Number(process.env.TYDIG_MAX_USER_BUILDS || 1)
 const SANDBOX = at(process.env.TYDIG_SANDBOX || 'sandbox:7000')
 const DOCX = new URL('../sandbox/tydig-docx', import.meta.url).pathname
 
@@ -20,9 +21,11 @@ const ask = (n, cmd, secs, i, own) => {
   s.write(JSON.stringify({ proj: n, cmd, secs, i, own }) + '\n')
   return s
 }
-const inSandbox = (n, cmd, secs, own) => new Promise((ok, no) => {
+const inSandbox = (n, cmd, secs, own, signal) => new Promise((ok, no) => {
   let out = ''
-  ask(n, cmd, secs, false, own).on('data', d => out += d).on('error', no).on('end', () => {
+  const s = ask(n, cmd, secs, false, own)
+  signal?.addEventListener('abort', () => s.destroy(new Error('stopped')))
+  s.on('data', d => out += d).on('error', no).on('end', () => {
     let r
     try { r = JSON.parse(out) } catch { r = { code: -1, stdout: '', stderr: out ? 'the build sandbox broke off its answer'
       : 'the build sandbox did not answer: it may still be making its image (minutes, once per version)' } }
@@ -38,16 +41,25 @@ const MAKEFILES = ['Makefile', 'makefile', 'GNUmakefile']
 const makefile = n => MAKEFILES.find(f => existsSync(inProj(n, f)))
 // a command in the project (cwd /work in the sandbox); own: in the image of
 // the project's Containerfile, if it has one
-const sandboxed = (n, [cmd, ...args], secs, own) => (UNSAFE
+const sandboxed = (n, [cmd, ...args], secs, own, signal) => (UNSAFE
   ? run(cmd === 'tydig-docx' ? DOCX : cmd, args, { cwd: proj(n), timeout: secs * 1000,
-    maxBuffer: 8e6, env: { ...process.env, TYPST_ROOT: proj(n) } })
-  : inSandbox(n, [cmd, ...args], secs, own)).finally(() => scrub(n))
-// one build at a time per project, TYDIG_MAX_BUILDS in all
-async function exec(n, cmd, own) {
+    maxBuffer: 8e6, env: { ...process.env, TYPST_ROOT: proj(n) }, signal })
+  : inSandbox(n, [cmd, ...args], secs, own, signal)).finally(() => scrub(n))
+// one build at a time per project, TYDIG_MAX_USER_BUILDS per person,
+// TYDIG_MAX_BUILDS in all; stopped once its project passes its quota
+const runs = new Map() // user -> builds running
+async function exec(n, cmd, own, u) {
   if (building.has(n)) throw Object.assign(new Error('a build is already running'), { status: 409 })
   if (building.size >= MAX) throw Object.assign(new Error('the hub is busy; try again shortly'), { status: 429 })
-  building.add(n)
-  try { return await sandboxed(n, cmd, 180, own) } finally { building.delete(n) }
+  if (runs.get(u) >= PER) throw Object.assign(new Error('you have a build running; try again when it ends'), { status: 429 })
+  building.add(n); runs.set(u, (runs.get(u) || 0) + 1)
+  const ac = new AbortController(), full = async () => await used(n) > QUOTA
+  const t = setInterval(async () => await full() && ac.abort(), 5000)
+  try { const r = await sandboxed(n, cmd, 180, own, ac.signal); if (!await full()) return r }
+  catch (e) { if (!ac.signal.aborted) throw e }
+  finally { clearInterval(t); building.delete(n); runs.set(u, runs.get(u) - 1) }
+  throw Object.assign(new Error(`the build took the project past its ${QUOTA / 2 ** 20} MB ` +
+    'limit (TYDIG_QUOTA_MB): delete some of what it wrote'), { status: 413 })
 }
 const why = e => typeof e.code === 'string' || /image not known|initializing source/.test(e.stderr)
   ? 'the build sandbox is not running or has no image: `just` on the hub starts it'
@@ -83,7 +95,7 @@ router.post('/build/:recipe', async (req, res) => {
   const n = req.params.proj, r = req.params.recipe
   if (!/^\w[\w-]{0,63}$/.test(r)) return res.status(400).json({ error: 'bad recipe' })
   const cmd = makefile(n) ? ['make', ...UNSAFE ? [] : ['-C', '/work'], r] : ['just', r]
-  try { const o = await exec(n, cmd, true); res.json({ ok: true, output: o.stdout + o.stderr }) }
+  try { const o = await exec(n, cmd, true, req.user.id); res.json({ ok: true, output: o.stdout + o.stderr }) }
   catch (e) { res.status(e.status || 200).json({ ok: false, output: why(e) }) }
 })
 // Word, its citations live EndNote fields: out/<file>.docx
@@ -91,7 +103,7 @@ router.post('/docx', async (req, res) => {
   const n = req.params.proj, f = req.body?.file
   if (!editable(f) || !f.endsWith('.typ') || !existsSync(inProj(n, f)))
     return res.status(400).json({ ok: false, output: 'not a .typ file of this project' })
-  try { res.json({ ok: true, path: (await exec(n, ['tydig-docx', f])).stdout.trim().split('\n').pop() }) }
+  try { res.json({ ok: true, path: (await exec(n, ['tydig-docx', f], false, req.user.id)).stdout.trim().split('\n').pop() }) }
   catch (e) { res.status(e.status || 200).json({ ok: false, output: why(e) }) }
 })
 

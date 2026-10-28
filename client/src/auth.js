@@ -3,14 +3,14 @@
 // the account's own actions.
 import { link, plain } from './link.js'
 import { createAuthClient } from 'better-auth/client'
-import { organizationClient, genericOAuthClient } from 'better-auth/client/plugins'
+import { organizationClient } from 'better-auth/client/plugins'
 
 // the hub's name, from its brand.css
 document.title = getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().slice(1, -1)
 
 export const authClient = createAuthClient({
   baseURL: location.origin,
-  plugins: [organizationClient(), genericOAuthClient()],
+  plugins: [organizationClient()],
 })
 
 export async function requireUser() {
@@ -18,7 +18,7 @@ export async function requireUser() {
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
-    if (data?.user) return me = data.user, join ? joined(me) : me
+    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : me
     await loginScreen()
   }
 }
@@ -76,6 +76,16 @@ async function joined(user) {
   if (r.error) { alert(r.error); history.replaceState(null, '', location.pathname); return user }
   location.replace(`${location.pathname}?proj=${encodeURIComponent(r.project)}${location.hash}`)
   return new Promise(() => {})
+}
+// an invite link opened signed in: its address's account takes it
+async function accepted(user) {
+  const { data, error } = await authClient.organization.acceptInvitation({ invitationId: invite })
+  history.replaceState(null, '', location.href.replace(/[?&]invite=[^&#]*/, ''))
+  if (error) return alert(error.message || 'This invite link is for another address, or has expired.'), user
+  const slug = data?.invitation?.organizationId && (await authClient.organization.list()).data
+    ?.find(o => o.id === data.invitation.organizationId)?.slug
+  if (slug) location.replace(`${location.pathname}?proj=${encodeURIComponent(slug)}${location.hash}`)
+  return slug ? new Promise(() => {}) : user
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'docs/'
@@ -138,7 +148,7 @@ async function loginScreen() {
   const submit = root.querySelector('.auth-submit'), tabs = root.querySelectorAll('.auth-tabs button')
   if (cfg.sso) {
     root.querySelector('.auth-sso').onclick = () =>
-      authClient.signIn.oauth2({ providerId: cfg.sso.providerId, callbackURL: location.href })
+      authClient.signIn.social({ provider: cfg.sso.providerId, callbackURL: location.href })
     if (cfg.sso.only) form.hidden = root.querySelector('.auth-tabs').hidden = true
   }
   let up = false

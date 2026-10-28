@@ -5,11 +5,11 @@ import * as Y from 'yjs'
 import { diffArrays, diffWordsWithSpace } from 'diff'
 import { renderCite, citeAt, bibOf } from './cite.js'
 import { parseBib } from '../../server/refs.mjs'
-import { prose, readAi, aiPct } from './surprise.js'
+import { prose, readAi, aiPct, ismAbout } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist, focusOn }
   from './util.js'
-import { files, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
+import { files, meta, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { typeset, aiMarks } from './preview.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -66,9 +66,11 @@ $('side-close').onclick = () => { settings.sideOpen = false; mode = null; if (se
 // ---- AI check ----
 // The document as typeset, what a reviewer reads (the computed numbers, the
 // template's words, an #if's branch taken), read by MELD: its AI-likeness,
-// how many sentences fall in each band, and the most AI-like, each a click
-// from where it was written.
+// how many sentences fall in each band, and the most AI-like; and its AI-isms,
+// the turns of phrase AI text uses far more than people do. Each a click from
+// where it was written.
 let aiReport = null
+const sp = t => t.replace(/\s+/g, ' '), flat = t => sp(t).trim()
 const BANDS = [[0.7, 'blocked out (70% and up)'], [0.4, 'strong (40 to 70%)'], [0.08, 'tinted (8 to 40%)'], [0, 'typical']]
 const chip = p => el('span', { className: `ai-chip${p >= 0.7 ? ' ai-top' : p >= 0.4 ? ' ai-mid' : ''}`,
   style: `--ai:${Math.min(1, 0.22 + 0.85 * p).toFixed(2)}`, textContent: `${Math.round(100 * p)}%` })
@@ -96,8 +98,7 @@ async function renderAiCheck(body) {
       if (error) throw new Error(error)
       const a = await readAi(engine, text)
       if (!a) throw new Error('this engine runs no AI detector')
-      aiReport = { file: main, a, sents: a.sents.filter(x => x.s != null).map(x =>
-        ({ p: aiPct(x.tail), text: text.slice(x.s, x.e).replace(/\s+/g, ' ').trim() })) }
+      aiReport = { file: main, a, text, sents: a.sents.filter(x => x.s != null).map(x => ({ ...x, p: aiPct(x.tail), text: flat(text.slice(x.s, x.e)) })) }
     } catch (e) { aiReport = { file: main, error: e.message } }
     redraw('aicheck')
     // on the preview too: each sentence where it was written
@@ -108,22 +109,34 @@ async function renderAiCheck(body) {
     }
     by.forEach((l, f) => aiMarks(f, l))
   } })
-  const r = aiReport, all = r?.sents || []
+  const r = aiReport, all = r?.sents || [], isms = r?.a?.isms || []
   const prs = r ? [...files].filter(([p]) => p.endsWith('.typ')).map(([p, t]) => [p, prose(t.toString())]) : []
+  const row = (s, head, body, n = '') => { const at = s && source(s.text, prs)
+    return el('div', { className: 'ai-row', onclick: () => at ? reveal(...at) : toast('typeset by code: no file spells it out') },
+      head, el('span', {}, ...body, el('small', { textContent: n + (at?.[0] ?? 'typeset by code') }))) }
+  const phrases = Object.values(Object.groupBy(isms, z => flat(r.text.slice(z.s, z.e)).toLowerCase()))
+    .map(g => ({ g, x: Math.max(...g.map(z => z.x)), s: all.find(s => s.s <= g[0].s && g[0].e <= s.e) }))
+  const marked = s => { // the sentence, its AI-isms marked
+    const out = []; let at = s.s
+    for (const z of isms.filter(z => s.s <= z.s && z.e <= s.e))
+      out.push(sp(r.text.slice(at, z.s)), el('mark', { className: 'ism', title: ismAbout(z), textContent: sp(r.text.slice(z.s, z.e)) })), at = z.e
+    return [...out, sp(r.text.slice(at, s.e))]
+  }
   body.replaceChildren(el('p', { className: 'hint', textContent: 'How AI-like each sentence of the PDF reads to MELD, ' +
-    'measured against human writing: what a reviewer might flag. The overlay (Settings) shows it as you write.' }),
+    'measured against human writing, and its AI-isms (×: how many times as common in AI text): what a reviewer might flag. ' +
+    'The overlay (Settings) shows both as you write.' }),
   go, status, ...!r ? [] : [
     el('div', { className: 'ai-bands' }, ...BANDS.map(([lo, name], i) => {
       const n = all.filter(s => s.p >= lo && (i === 0 || s.p < BANDS[i - 1][0])).length
       return el('div', {}, lo ? chip(lo + 0.01) : el('span', { className: 'ai-chip', textContent: '·' }), ` ${n} ${name}`)
     })),
     el('p', { className: 'cfile', textContent: r.error ? `${r.file}: ${r.error}`
-      : `${r.file}: ${r.a.words < 100 ? 'too short to judge as a whole' : `AI-likeness ${Math.round(100 * aiPct(r.a.tail))}% as a whole`}` }),
-    ...all.filter(s => s.p >= 0.08).sort((a, b) => b.p - a.p).slice(0, 30).map(s => {
-      const at = source(s.text, prs)
-      return el('div', { className: 'ai-row', onclick: () => at ? reveal(...at) : toast('typeset by code: no file spells it out') }, chip(s.p),
-        el('span', {}, s.text.length > 180 ? s.text.slice(0, 180) + '…' : s.text, el('small', { textContent: at?.[0] ?? 'typeset by code' })))
-    }),
+      : `${r.file}: ${r.a.words < 100 ? 'too short to judge as a whole' : `AI-likeness ${Math.round(100 * aiPct(r.a.tail))}% as a whole`}` +
+        `; ${isms.length} AI-ism${isms.length === 1 ? '' : 's'}` }),
+    ...phrases.sort((a, b) => b.x - a.x || b.g.length - a.g.length).slice(0, 30).map(({ g, x, s }) =>
+      row(s, el('span', { className: 'ai-chip ism', title: ismAbout(g[0]), textContent: `${Math.round(2 ** x)}×` }),
+        [flat(r.text.slice(g[0].s, g[0].e))], g.length > 1 ? `${g.length} times · ` : '')),
+    ...all.filter(s => s.p >= 0.08).sort((a, b) => b.p - a.p).slice(0, 30).map(s => row(s, chip(s.p), marked(s))),
     all.length && !all.some(s => s.p >= 0.08) ? el('p', { className: 'empty', textContent: 'Every sentence reads as typical of human writing.' }) : '',
   ])
 }
@@ -178,6 +191,13 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
     : `saved, but the push failed: ${esc(push.error || '')}`, !r.error && push?.ok !== false)
   redraw('history')
 }
+// the hub could not commit (meta.commitError): said once, until it can again
+let failed = null
+meta.observe(() => {
+  const e = meta.get('commitError')
+  if (e && e !== failed) toast(`edits are kept, but not committed: ${esc(e)}`, false, 0)
+  failed = e
+})
 const badge = v => !v ? '' : v.verified ? `<span class="prov ok" title="ML-DSA-65 signature by a key ` +
   `registered to ${esc(v.by ?? 'this account')}; file hashes match (key ${esc(v.keyId)})">signed by ` +
   `${esc(v.by ?? '?')} &#10003;</span>` : '<span class="prov warn" title="signature present but not verifiable">unverified</span>'

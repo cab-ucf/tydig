@@ -1,13 +1,15 @@
-// The link collaborators open: <TYDIG_PAGE>#<id>, tydig's static page plus
-// the public id of a key only this hub holds. The page reaches the hub over
-// iroh (irp's wasm client, github.com/cab-ucf/irp): no domain, certificate
-// or open port. tydig-link (link/, Rust) holds the key and hands each iroh
-// stream, one HTTP/1.0 exchange, to the hub's HTTP server through a socket
-// of the hub's own; websockets ride the bridge below.
+// The link collaborators open: <TYDIG_PAGE>#<id>;t=<token>, tydig's static
+// page plus this hub's public id and access token, both from a seed that
+// stays here. The page reaches the hub over iroh (irp's wasm client,
+// github.com/cab-ucf/irp): no domain, certificate or open port. tydig-link
+// (link/, Rust) holds the key and hands each iroh stream, one HTTP/1.0
+// exchange (irweb/http/2), to the hub's HTTP server through a socket of the
+// hub's own; websockets ride the bridge below. Every request on those sockets
+// carries the token (ok below).
 import express from 'express'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
-import { createHash, createPrivateKey, createPublicKey, randomBytes } from 'node:crypto'
+import { createHash, createPrivateKey, createPublicKey, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
@@ -19,14 +21,24 @@ const PAGE = process.env.TYDIG_LINK === '0' ? '' : process.env.TYDIG_PAGE || 'ht
 const PIN = process.env.TYDIG_LINK_RELAY
 const seedFile = path.join(DATA, 'link-seed')
 if (PAGE && !existsSync(seedFile)) writeFileSync(seedFile, newSeed(randomBytes(16)) + '\n', { mode: 0o600 })
-const secret = PAGE && derive(readFileSync(seedFile, 'utf8').trim(), 'irweb v1 endpoint identity')
+const seed = PAGE && readFileSync(seedFile, 'utf8').trim()
+const secret = PAGE && derive(seed, 'irweb v1 endpoint identity')
+const TOKEN = PAGE && Buffer.from(Buffer.from(derive(seed, 'irweb v2 access token')).toString('hex'))
 // its public half, as iroh makes it: Ed25519 from the 32 bytes as a seed
 const id = secret && createPublicKey(createPrivateKey({ format: 'der', type: 'pkcs8',
   key: Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), secret]) }))
   .export({ type: 'spki', format: 'der' }).subarray(-32)
-export const LINK = PAGE && `${PAGE}#${newSeed(id)}` + (PIN ? `;r=${PIN}` : '')
+export const LINK = PAGE && `${PAGE}#${newSeed(id)};t=${TOKEN}` + (PIN ? `;r=${PIN}` : '')
 if (LINK) writeFileSync(path.join(DATA, 'link'), LINK + '\n', { mode: 0o600 })
 export let online = false
+// a request over the link carries its token, compared in constant time;
+// refused, its socket is closed unanswered (index.mjs), so tydig-link answers
+// 403 and closes the page's connection
+export const ok = req => {
+  if (!req.socket.link) return true
+  const t = Buffer.from(String(req.headers['irweb-access'] ?? ''))
+  return t.length === TOKEN.length && timingSafeEqual(t, TOKEN)
+}
 
 export async function start(server) {
   if (!LINK) return

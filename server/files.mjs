@@ -11,11 +11,12 @@ import { unpack } from './unpack.mjs'
 import { proj, inProj, okPath, walk, safe, openIn, writeIn, git, live, mirror,
   putFile, fileNow, building, commit, bad, hubFile, writeAtomic } from './store.mjs'
 
-const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
+export const QUOTA = Number(process.env.TYDIG_QUOTA_MB || 1000) * 2 ** 20
 // every file but .git, .collab and links, at once; one gone meanwhile is left out
 const listing = async n => (await Promise.all((await Array.fromAsync(walk(proj(n)))).map(p =>
   lstat(inProj(n, p)).then(s => ({ path: p, size: s.size, mtime: s.mtimeMs }), () => null)))).filter(Boolean)
-const over = async (n, more) => (await listing(n)).reduce((b, f) => b + f.size, more) > QUOTA &&
+export const used = async n => (await listing(n)).reduce((b, f) => b + f.size, 0)
+const over = async (n, more) => await used(n) + more > QUOTA &&
   `this would pass the project's ${QUOTA / 2 ** 20} MB limit (TYDIG_QUOTA_MB)`
 const rel = req => {
   const p = req.params.rel.join('/')

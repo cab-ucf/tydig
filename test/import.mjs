@@ -52,6 +52,9 @@ sh('python3', ['-c', `import zipfile
 with zipfile.ZipFile('${t}/empty.zip', 'w', zipfile.ZIP_DEFLATED) as z: z.writestr('empty.txt', ''); z.writestr('one.txt', 'x')`])
 check('a .zip with an empty file in it (deflated, as Python makes them)',
   (await imp('corona', readFileSync(path.join(t, 'empty.zip')), 'empty.zip')).added?.join() === 'empty.txt,one.txt')
+writeFileSync('data/corona/Makefile', 'fill:\n\thead -c 6000000 /dev/zero > big.bin\n'); await sleep(1000)
+const fill = await ann.res('/p/corona/build/fill', { method: 'POST' })
+check('a build is held to the project\'s quota, as uploads are', fill.status === 413 && /limit/.test((await fill.json()).output))
 check('a file that is not an archive is refused', /not an archive/.test((await imp('corona', Buffer.from('hello'), 'x.zip')).error || ''))
 
 done()
