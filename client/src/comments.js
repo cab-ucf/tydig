@@ -4,7 +4,7 @@
 import * as Y from 'yjs'
 import { Annotation, StateField } from '@codemirror/state'
 import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
-import { $, el, esc, dot, uid, toast, settings, projName, icon, phone } from './util.js'
+import { $, el, esc, dot, uid, toast, settings, projName, icon, phone, api, P } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
 import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
@@ -179,8 +179,7 @@ const head = (m, pre = '', post = '') => el('div', { className: 'meta' }, pre, d
 const message = m => {
   const on = m.re && comments.get(m.re)
   return el('div', { className: 'msg' },
-    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : m.irch ? el('em', { textContent: 'irch' }) : ''),
-    el('p', {}, ...mentions(m.text)))
+    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : ''), el('p', {}, ...mentions(m.text)))
 }
 // Enter sends; Shift-Enter is a new line
 // what is typed outlives the pane redrawing around it (panels.js keeps focus)
@@ -219,9 +218,13 @@ export function renderComments(body) {
   read('comments')
 }
 
+// the project's irch channel, if it names one: a link, opened by your irch
+const irch = api(P('/irch')).then(r => r.link, () => null)
 export function renderChat(body) {
-  const list = chat.toArray()
-  body.replaceChildren(...list.length ? [] : [el('p', { className: 'empty', textContent: 'Talk with everyone ' +
+  const list = chat.toArray(), out = el('a', { className: 'irch-link', hidden: true,
+    textContent: 'Discuss in irch ↗', title: "Opens the project's channel in your irch" })
+  irch.then(l => l && Object.assign(out, { href: l, hidden: false }))
+  body.replaceChildren(out, ...list.length ? [] : [el('p', { className: 'empty', textContent: 'Talk with everyone ' +
     'on this project. @name tells a person, or asks an agent member to do something.' })],
   ...list.map(message), composer(null, 'Message everyone'))
   body.scrollTop = body.scrollHeight

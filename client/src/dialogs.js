@@ -134,12 +134,13 @@ export async function showShare() {
       <input id="agent-name" placeholder="agent name, e.g. claude" required><button class="go">add</button></form>
       <p class="hint">An agent works on this project only: reads and edits its text, and answers where it is
         @mentioned, in comments and the Discussion. Run it where Claude Code is installed.</p>` : ''}
-    ${irch.on ? `<h4>irch</h4>${irch.where ? `<div class="share-list">${row(irch.where, 'mirrors the Discussion',
-      'unirch', 1, 'stop', owner)}</div>` : owner ? `<form id="irch-add" class="row">
-      <input id="irch-code" placeholder="an irch invite code" required><button class="go">link</button></form>
-      <p class="hint">The Discussion and a channel of an irch space then carry each other's messages, so
-        they reach everyone's phone. In irch: the space's <i>Invite</i>. The channel is #${esc(projName)},
-        made if this hub may, else the space's first.</p>` : ''}` : ''}`
+    <h4>irch</h4>
+    ${owner ? `<form id="irch-link" class="row"><input id="irch-url" placeholder="irch://open/…"
+      value="${esc(irch.link || '')}"><button class="go">${irch.link ? 'change' : 'link'}</button></form>
+      <p class="hint">The channel this project is discussed in: in irch, the channel's <i>Copy Link</i>. Only a
+        link: each person's irch opens it, if they are in that space; nothing is copied between them.</p>`
+      : irch.link ? `<p class="hint"><a href="${esc(irch.link)}">Discuss in irch ↗</a></p>`
+      : '<p class="hint">No irch channel named for this project.</p>'}`
   const on = (act, f) => { for (const b of body.querySelectorAll(`[data-${act}]`)) b.onclick = () => f(b.dataset[act]) }
   const then = r => r?.error ? alert(r.error) : showShare()
   on('remove', async id => confirm('Remove this collaborator? They lose access at once.') &&
@@ -150,10 +151,10 @@ export async function showShare() {
   on('uncode', async c => then(await del(P('/join/' + c))))
   on('agent', async a => confirm(`Remove @${a}? Its token stops working at once.`) &&
     then(await del(P('/agents/' + a))))
-  on('unirch', async () => then(await del(P('/irch'))))
   if (!owner) return
-  if ($('irch-add')) $('irch-add').onsubmit = async e => {
-    e.preventDefault(); then(await post(P('/irch'), { code: $('irch-code').value }))
+  $('irch-link').onsubmit = async e => {
+    e.preventDefault(); then(await api(P('/irch'), { method: 'PUT', body: JSON.stringify({ link: $('irch-url').value }),
+      headers: { 'content-type': 'application/json' } }))
   }
   $('code-add').onclick = async () => then(await post(P('/join')))
   $('share-add').onsubmit = async e => {

@@ -31,6 +31,19 @@ export async function changeName() {
   const { error } = await authClient.updateUser({ name })
   error ? alert(error.message) : location.reload()
 }
+// your @mentions, told in an irch space of yours (server/irch.mjs)
+export async function irchNotify() {
+  const r = await fetch('/api/irch-notify').then(r => r.json()).catch(() => ({}))
+  if (!r.on) return alert('This hub runs no irch (TYDIG_IRCH).')
+  if (r.where) return confirm(`Your @mentions go to ${r.where} in irch. Stop?`) &&
+    fetch('/api/irch-notify', { method: 'DELETE' }).then(() => alert('Stopped.'))
+  const code = prompt('Your @mentions, on your phone through irch: in irch, make a space just for you ' +
+    '(+ › Create my own), then Invite People, and paste its code here:')?.trim()
+  if (!code) return
+  const res = await fetch('/api/irch-notify', { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code }) }).then(r => r.json())
+  alert(res.error || `Done: your @mentions go to ${res.where}.`)
+}
 export async function changePassword() {
   const currentPassword = prompt('Current password:')
   const newPassword = currentPassword && prompt('New password (8+ characters):')
