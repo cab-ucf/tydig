@@ -26,10 +26,11 @@ const access = `irweb-access: ${token}`
 let conn
 await until(async () => (conn = await dial()), 60_000)
 check('with the token, the hub answers', /^HTTP\/1\.\d 200/.test(await ask(conn, `GET /api/auth-config HTTP/1.0\r\n${access}`)))
-for (const [what, h] of [['without the token', ''], ['with another', `\r\nirweb-access: ${'0'.repeat(64)}`],
-  ['with it in the body alone', '']]) {
-  const c = await dial()
-  const r = await ask(c, `POST /api/auth/sign-in/email HTTP/1.0${h}`, what.includes('body') ? access : '')
+const ws = '\r\nconnection: upgrade\r\nupgrade: websocket\r\nsec-websocket-version: 13\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ=='
+for (const [what, head, body = ''] of [['without the token', 'POST /api/auth/sign-in/email HTTP/1.0'],
+  ['with another', `POST /api/auth/sign-in/email HTTP/1.0\r\nirweb-access: ${'0'.repeat(64)}`],
+  ['with it in the body alone', 'POST /api/auth/sign-in/email HTTP/1.0', access], ['an upgrade without it', 'GET /sync HTTP/1.1' + ws]]) {
+  const c = await dial(), r = await ask(c, head, body)
   check(`${what}, 403 and the connection closed`, /^HTTP\/1\.0 403/.test(r) && await Promise.race([c.closed().then(() => true),
     new Promise(ok => setTimeout(ok, 5000, false))]))
 }
