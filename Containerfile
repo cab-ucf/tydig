@@ -36,9 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && git config --system user.email collab@localhost && git config --system user.name tydig \
  && git config --system --add safe.directory '*'
 # irch, which mirrors a Discussion with a channel (server/irch.mjs)
-ARG IRCH=0.0.11
-ARG IRCH_amd64=267341933465c45ab03f8cd2958bb8fb924f26112481cfba8d14af9a32937645
-ARG IRCH_arm64=c73c9533ce81a0def89e19326e943308a37fb4470a137da2197022dbbc26fb06
+ARG IRCH=0.0.15
+ARG IRCH_amd64=de1dc819cbe9a2680cb1c9c40af0cabf53735faf236a3b9a7823f5a69edba8c2
+ARG IRCH_arm64=aeed132bfc72b80b7213a8ca20dcf22b637c47d6e37d1eda1822d8aff78e5380
 RUN a=$(dpkg --print-architecture) && eval sha=\$IRCH_$a \
  && m=$([ "$a" = arm64 ] && echo aarch64 || echo x86_64) \
  && curl -fsSL -o /usr/local/bin/irch https://github.com/cab-ucf/irch/releases/download/v$IRCH/irch-$m-unknown-linux-musl \
