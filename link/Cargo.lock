@@ -2981,6 +2981,7 @@ name = "tydig-link"
 version = "0.1.0"
 dependencies = [
  "iroh",
+ "noq-proto",
  "tokio",
 ]
 

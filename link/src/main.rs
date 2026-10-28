@@ -8,7 +8,7 @@ use std::{future::pending, io::Read, sync::Arc, time::Duration};
 
 use iroh::{
     Endpoint, EndpointId, RelayMode, RelayUrl, SecretKey,
-    endpoint::{Incoming, RecvStream, SendStream, presets},
+    endpoint::{Incoming, QuicTransportConfig, RecvStream, SendStream, presets},
 };
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
@@ -38,7 +38,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // moves more. The page dials them all, so wherever this lands it is found.
     let mut ep = None;
     for (i, r) in relays.iter().enumerate() {
+        // BBRv3, as loss is the norm: at 0.1% and 50 ms Cubic moves 1.1 MB/s a
+        // stream, BBRv3 23.
+        let cc = noq_proto::congestion::Bbr3Config::default();
         let e = Endpoint::builder(presets::Minimal)
+            .transport_config(
+                QuicTransportConfig::builder()
+                    .congestion_controller_factory(Arc::new(cc))
+                    .build(),
+            )
             .secret_key(SecretKey::from_bytes(&key))
             .alpns(vec![ALPN.to_vec()])
             .relay_mode(RelayMode::custom([r.clone()]))

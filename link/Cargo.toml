@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 iroh = { version = "1.4", default-features = false, features = ["tls-ring"] }
+noq-proto = { version = "1.4", default-features = false }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 
 [profile.release]

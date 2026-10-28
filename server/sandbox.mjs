@@ -81,12 +81,15 @@ const args = (proj, secs, i, cmd, own) => {
 
 // A project with a Containerfile builds in its own image, as its Justfile
 // does: made before each build (podman's cache makes that a moment), from the
-// project less .git and .collab. Its RUN steps are podman's, not gVisor's.
+// project less .git and .collab. Its RUN steps are podman's, not gVisor's, and
+// podman's network reaches all this machine does (the LAN, cloud metadata):
+// rootless, a build cannot join egress's network, so RUN has none unless
+// TYDIG_IMAGE_NET=1 (members all trusted).
 // Then /root opened to all: under gVisor a build sees only files' "other" bits
 // (rustup, uv tool and pip --user install there). Run by its ID: Paper and
 // paper share a tag, which the other's build may move at any moment. Its
 // ignore files are read where they are, never through a link.
-const ID = /\b([0-9a-f]{64})\s*$/
+const ID = /\b([0-9a-f]{64})\s*$/, IMAGE_NET = !NONET && process.env.TYDIG_IMAGE_NET === '1'
 const mine = async proj => {
   const dir = path.join(DATA, proj), tag = `localhost/tydig-p-${proj.toLowerCase()}`, t = `/tmp/${proj}`
   if (!lstatSync(path.join(dir, 'Containerfile'), { throwIfNoEntry: false })?.isFile()) return
@@ -94,10 +97,11 @@ const mine = async proj => {
     try { return readFileSync(path.join(dir, f), { encoding: 'utf8', flag: constants.O_NOFOLLOW }) } catch { return '' }
   })
   mkdirSync(t, { recursive: true }); writeFileSync(`${t}/ignore`, keep.join('\n') + '\n.git\n.collab\n')
-  const log = await said(['build', '-q', '--http-proxy=false', ...NONET ? ['--network=none'] : [],
+  const log = await said(['build', '-q', '--http-proxy=false', ...IMAGE_NET ? [] : ['--network=none'],
     '--ignorefile', `${t}/ignore`, '-t', `${tag}:src`, '-f', path.join(dir, 'Containerfile'), dir], 1800)
   const src = ID.exec(log.out)?.[1]
-  if (log.code || !src) throw new Error(`the project's Containerfile did not build:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
+  if (log.code || !src) throw new Error(`the project's Containerfile did not build${IMAGE_NET ? ''
+    : ' (its RUN steps have no network: TYDIG_IMAGE_NET=1 on the hub gives them its machine\'s)'}:\n${log.err.replace(/^.*level=warning.*\n/gm, '')}`)
   writeFileSync(`${t}/open`, `FROM ${src}\nUSER 0\nRUN [ ! -d /root ] || chmod -R a+rX /root\n`)
   const image = ID.exec((await said(['build', '-q', '--network=none', '-t', tag, '-f', `${t}/open`, t], 600)).out)?.[1] ?? src
   return { image, env: JSON.parse((await said(['image', 'inspect', '--format', '{{json .Config.Env}}', image])).out || 'null') || [] }
