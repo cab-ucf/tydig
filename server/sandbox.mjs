@@ -129,8 +129,7 @@ const serve = sock => {
     catch { return no('bad sandbox request') }
     if (live >= MAX) return no('the hub is running too many sandboxes; try again shortly')
     live++
-    let o
-    if (r.own) try { o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o) }
+    if (r.own) try { const o = await mine(r.proj); if (o) a = args(r.proj, Math.ceil(r.secs), r.i, r.cmd, o) }
     catch (e) { live--; return no(e.message) }
     const p = spawn('podman', a, { stdio: ['pipe', 'pipe', r.i ? 'ignore' : 'pipe'] })
     const bye = () => { try { p.kill() } catch {} }, t = setTimeout(bye, (r.secs + 15) * 1000)
