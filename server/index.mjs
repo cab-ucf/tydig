@@ -76,6 +76,7 @@ app.use('/api', async (req, res, next) => {
   req.user = s.user; next()
 }, express.json({ type: r => r.is('json') && !/^\/p\/[^/]+\/(raw|import)\//.test(r.path) })) // a .json uploaded is a file
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
+app.use('/api/irch-notify', irch.notify)
 app.get('/api/link', (req, res) => res.json({ link: link.LINK, online: link.online }))
 // a join code (auth.mjs) makes whoever is signed in a member of its project
 app.post('/api/join', async (req, res) => {
