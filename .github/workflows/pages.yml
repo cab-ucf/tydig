@@ -1,22 +1,31 @@
 # The static site: the editor (opens <site>/#<id>;t=<token>, else TYDIG_HUB),
-# app/ for older links; with no hub it opens on a landing page.
+# app/ for older links; with no hub it opens on a landing page. Deployed once
+# main's tests pass; its version file names the commit hubs then run (just update).
 # Variables: TYDIG_HUB (`just` prints it after the #), TYDIG_BRAND.
 name: pages
-on: { push: { branches: [main] }, workflow_dispatch: }
+on:
+  workflow_run: { workflows: [test], types: [completed], branches: [main] }
+  workflow_dispatch:
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env: { VITE_HUB: '${{ vars.TYDIG_HUB }}', TYDIG_BRAND: '${{ vars.TYDIG_BRAND }}' }
     environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}' }
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { ref: '${{ github.event.workflow_run.head_sha }}' }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: npm }
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $(cat fonts/packages)
       - run: npm ci -w client && npm run build
-      - run: cp -r client/dist _site && cp -r client/dist _site/app && cp .nojekyll _site
+      - run: |
+          cp -r client/dist _site && cp -r client/dist _site/app && cp .nojekyll _site
+          git rev-parse HEAD > _site/version
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with: { path: _site }
       - id: deploy
