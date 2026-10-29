@@ -124,7 +124,9 @@ async function loginScreen() {
     root.innerHTML = `<div class="auth-card"><div class="auth-brand"></div>
       <p><b>Ty</b>pst, <b>d</b>ecentralized collaboration with <b>i</b>roh, saved in <b>g</b>it:
       papers written together in the browser, computed by a hub you run.</p>
-      ${plain ? `<p>The hub is not answering: it may be off or restarting. Try again in a minute.</p>
+      ${plain && !link ? `<p>This site holds its hub's link in an older form: on the hub,
+      <code>just publish</code> renews it.</p>` : plain ? `<p>The hub is not answering: it may
+      be off or restarting. Try again in a minute.</p>
       <button class="go auth-retry">try again</button>` : `
       <p>${link ? 'That hub did not answer. Another one:' : "Open a hub with the link its owner sent you:"}</p>
       ${hubBox}`}<p class="auth-foot"><a href="${DOCS}" target="_blank" rel="noopener">Docs</a> ·

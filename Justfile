@@ -14,14 +14,26 @@ compose := as + "podman compose -f " + src + "/compose.yml " + scope
 # build and start the hub, then print its link
 up:
     #!/usr/bin/env bash
-    [ "{{sys}}" = y ] && exec {{as}}just -f {{src}}/Justfile up # the deployed tag (nixos.nix)
+    [ "{{sys}}" = y ] && exec {{as}}just -f {{src}}/Justfile up
     mkdir -p "$TYDIG_DATA" && touch .env || exit
     systemctl --user enable --now podman.socket podman-restart.service 2>/dev/null
+    {{compose}} build || exit # the running hub stays up meanwhile
     {{compose}} down 2>/dev/null
     ! ss -ltnH "sport = :$TYDIG_PORT" 2>/dev/null | grep -q . ||
         { echo "port $TYDIG_PORT is taken (ss -ltnp): stop it, or set TYDIG_PORT=8090 in .env"; exit 1; }
-    {{compose}} up -d --build || exit
+    {{compose}} up -d || exit
     for i in $(seq 30); do test -s "$TYDIG_DATA/link" && exec cat "$TYDIG_DATA/link"; sleep 1; done
+
+# run the commit the link page runs, once main holds it (nixos.nix: hourly)
+update:
+    #!/usr/bin/env bash
+    [ "{{sys}}" = y ] && exec {{as}}just -f {{src}}/Justfile update
+    v=$(curl -fsS "${TYDIG_PAGE:-https://cxn.pub/}version") && [[ $v =~ ^[0-9a-f]{40}$ ]] ||
+        { echo "update: no version at ${TYDIG_PAGE:-https://cxn.pub/}"; exit 1; }
+    [ "$v" = "$(cat .git/deployed 2>/dev/null)" ] && exit
+    git fetch -q origin main && git merge-base --is-ancestor "$v" origin/main ||
+        { echo "update: $v is not on main"; exit 1; }
+    git checkout -q --detach "$v" && just up && echo "$v" > .git/deployed
 
 # make the static site (cxn.pub) open this hub, in this hub's brand (gh)
 publish:
