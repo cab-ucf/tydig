@@ -1,4 +1,5 @@
-# NixOS: `imports = [ ./nixos.nix ];` and the hub is the tydig service, no
+# NixOS: import this module (a flake: inputs.tydig.url = "github:cab-ucf/tydig",
+# then inputs.tydig.nixosModules.default) and the hub is the tydig service, no
 # checkout: it runs CI's images for the version its link page runs
 # (cxn.pub/version) with the compose.yml inside them, as the tydig account
 # (rootless podman: a build that escapes holds that account, not yours), and
@@ -45,8 +46,11 @@ in {
       default = "/var/lib/tydig/env";
       description = "More of it, out of the Nix store (secrets), if it exists; it wins.";
     };
+    allowedSigners = lib.mkOption { type = lib.types.lines; default = ""; visible = false; };
   };
   config = {
+    warnings = lib.optional (cfg.allowedSigners != "")
+      "services.tydig.allowedSigners does nothing now (hubs run CI's images): delete it";
     users.users.tydig = {
       isNormalUser = true; home = "/var/lib/tydig"; createHome = true; homeMode = "700";
       linger = true; autoSubUidGidRange = true; shell = "/run/current-system/sw/bin/nologin";
@@ -63,6 +67,7 @@ in {
           [ -e ${cfg.environmentFile} ] || [ ! -e src/.env ] || cp src/.env ${cfg.environmentFile} # an older nixos.nix's
           cat ${pkgs.writeText "tydig.env" (lib.generators.toKeyValue { } cfg.settings)} > .env
           cat ${cfg.environmentFile} >> .env 2>/dev/null; chown tydig .env
+          [ -e src/data ] || rm -rf src
         '';
       };
       script = ''

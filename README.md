@@ -11,7 +11,8 @@ Needs [podman](https://podman.io). Prints a link: collaborators open it in
 any browser, nothing to install. After `just publish`, plain `cxn.pub` opens
 this hub; Settings › Share › new code gives three words to say ("cxn.pub, code
 tidy ruby otter") that let someone make an account and join the project.
-[Docs](https://cxn.pub/docs/).
+[Docs](https://cxn.pub/docs/). On NixOS, instead: `inputs.tydig.url =
+"github:cab-ucf/tydig";` and `tydig.nixosModules.default` among the modules.
 
 ```typst
 #let R = json("build/results.json")
