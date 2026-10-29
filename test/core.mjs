@@ -16,9 +16,9 @@ const nih = async t => (await api(`/projects/${t}`, { method: 'POST', headers: {
   body: JSON.stringify({ template: t, brand: 'ucf' }) }), (await api(`/p/${t}/files`)).map(f => f.path))
 const made = []; for (const t of ['nih-r21', 'nih-r03', 'nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established',
   'nsf-eager', 'nsf-aidatasets-impact', 'nsf-aidatasets-planning', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod',
-  'whitepaper-concept', 'arpah-1cure'])
+  'whitepaper-concept', 'arpah-1cure', 'arpah-ehi'])
   made.push(await nih(t))
-const [r21, r03, sepa, goali, esi, mira, eager, aid, plan, cmmi, cmi, heil, dod, concept, cure] = made
+const [r21, r03, sepa, goali, esi, mira, eager, aid, plan, cmmi, cmi, heil, dod, concept, cure, ehi] = made
 const { readFileSync: get } = await import('node:fs')
 check('templates are listed, report first, brands apart', (await api('/templates')).templates[0] === 'report' &&
   (await api('/templates')).brands.includes('ucf'))
@@ -58,6 +58,9 @@ check('white papers, three styles on one layer: Heilmeier, a DoD BAA\'s (cover p
 check('ARPA-H 1-CURE: the solution summary first, four volumes, phases from the years',
   ['summary.typ', 'main.typ', 'volume2.typ', 'lib/arpah.typ', 'lib/grant.typ'].every(f => cure.includes(f)) &&
   /ARPA-H-SOL-26-147/.test(yml('arpah-1cure')) && /before: true/.test(get('data/arpah-1cure/package.yaml', 'utf8')))
+check('ARPA-H EHI: the blind solution summary first, then C, D, E and a letter',
+  ['summary.typ', 'main.typ', 'tdd.typ', 'payments.typ', 'letters.typ', 'lib/ehi.typ'].every(f => ehi.includes(f)) &&
+  /ARPA-H-SOL-26-150/.test(yml('arpah-ehi')) && /before: true/.test(get('data/arpah-ehi/package.yaml', 'utf8')))
 
 const A = mk(), B = mk()
 await sleep(1500)
@@ -183,7 +186,7 @@ else {
   check('make full assembles the application, naming what is missing', out.includes('out/full.pdf') && /missing: Biographical Sketch/.test(full.output || ''))
   check('make budget writes the computed budget as Excel', out.includes('out/budget.xlsx') && /out\/budget\.xlsx/.test(xl.output || ''))
   for (const t of ['nih-r25-sepa', 'nsf-cmi-goali', 'nih-r35-esi', 'nih-r35-established', 'nsf-eager', 'nsf-aidatasets-impact',
-    'nsf-aidatasets-planning', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept', 'arpah-1cure']) {
+    'nsf-aidatasets-planning', 'nsf-cmmi', 'nsf-cmi-research', 'whitepaper-heilmeier', 'whitepaper-dod', 'whitepaper-concept', 'arpah-1cure', 'arpah-ehi']) {
     const r = await api(`/p/${t}/build/full`, { method: 'POST' })
     check(`${t}: every attachment builds and the whole application assembles`, r.ok && /out\/full\.pdf/.test(r.output) && !/error/i.test(r.output))
   }

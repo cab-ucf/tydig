@@ -1,0 +1,124 @@
+# Every fact the application states more than once: edit it here, and the
+# solution summary, the proposal, the Task Description Document and the
+# milestone payment schedule all follow. ARPA-H Emerging Health Innovators
+# (ARPA-H-SOL-26-150): one early-career PI, one topic, 24 months base and a
+# 12-month Director's Award option, fixed-price milestones a quarter.
+title: A short title that says what it does
+short: Short title             # in each page's header (no names: blind review)
+dates:
+  summary: October 30, 2026      # 2:00 PM ET
+  proposal: February 10, 2027    # 2:00 PM ET
+start: 2027-07-01              # the award's first day (tentatively June 30)
+years: 3                       # budget.yaml's years: 2 base, 1 option
+topic: 6                       # one of the ISO's 16 (lib/ehi.typ lists them)
+reference:                     # the solution summary's number, once assigned
+validity: 120 days             # the proposal's, 120 at least
+proprietary: false             # true marks each page "Proprietary" (ISO 3.5)
+
+mechanism:
+  code: EHI
+  name: Emerging Health Innovators (Other Transaction)
+  modular: false
+  cap: { annual: 350000, award: 1050000 }   # with indirect costs (FAQ 11)
+  subaward: 0.30               # subawards and consultants, of the whole
+
+program:
+  agency: ARPA-H
+  name: Emerging Health Innovators (EHI)
+  office: Office of Commercialization
+  email: EHI2026@ARPA-H.gov
+  call: ARPA-H-SOL-26-150
+
+institution:
+  name: University of Central Florida
+  department: College of Medicine
+  address: 4000 Central Florida Blvd, Orlando, FL 32816
+  uei: ABCDEF123456
+  types: [Academia]            # any of For-Profit, Non-profit, Academia
+  admin: { name: Example Contracts Officer, email: contracts@example.edu,
+    phone: "407-555-0100" }
+places: [Orlando, FL]
+
+# The first is the PI: the Project Lead and technical point of contact, within
+# 8 years of a first terminal degree, less the periods excluded. No co-PIs;
+# someone at another organization is a team member (subawardee/consultant).
+investigators:
+  - { name: Ada Lovelace, degrees: PhD, title: Assistant Professor,
+      role: Project Lead (PI), email: ada.lovelace@example.edu,
+      phone: "407-555-0101", terminal: "PhD, May 2020",
+      excluded: "Postdoctoral fellowship, Jun 2020 – Jul 2022", eligible: Yes }
+  - { name: Mary Somerville, degrees: MS, title: Chief Engineer,
+      role: Consultant, organization: Example Health Inc.,
+      orgtype: For-Profit, email: mary@example.com, phone: "617-555-0102" }
+
+# Words that would name the team: each is flagged red where review is blind
+# (the summary's items 1-3). Names, organizations and the PI's surname are
+# already in; add a lab, a product or a city that gives you away.
+anonymize: [UCF, Knights]
+
+# The plan: a step (task) each, in order, each step needing the last. A
+# milestone a quarter, q: [first, last] of the 12 (quarters 9-12: the option);
+# its last quarter is when it is paid. amount: overrides the even split of
+# that year's budget. Read by the summary's plan, the Task Description
+# Document and the Milestone Payment Schedule.
+tasks:
+  - title: Build and benchmark the prototype
+    org: University of Central Florida (Dr. Ada Lovelace)
+    places: Orlando, FL
+    subjects: No
+    approach:
+    deliverables: [Prototype design report, Benchmark data set]
+    gonogo: "Sensitivity ≥ 90% on the benchmark, or stop"
+    milestones:
+      - { q: [1, 1], name: Kick-off and specification, metric: Specification
+          with quantitative targets approved by the PM,
+          deliverable: Specification document }
+      - { q: [1, 2], name: Benchmark assembled, metric: "≥ 1,000 annotated cases",
+          deliverable: Benchmark data set }
+      - { q: [2, 3], name: First prototype, metric: "Sensitivity ≥ 80%",
+          deliverable: Prototype report,
+          risk: The signal is too weak, mitigation: A second readout in parallel }
+      - { q: [3, 4], name: Optimized prototype, metric: "Sensitivity ≥ 90%",
+          deliverable: Benchmark report }
+  - title: Validate in a preclinical model
+    org: University of Central Florida (Dr. Ada Lovelace)
+    places: Orlando, FL
+    subjects: "Yes: animal research, under IACUC protocol (to be approved)"
+    approach:
+    deliverables: [Validation data, Year 2 report]
+    gonogo: "≥ 2-fold over standard of care, p < 0.05"
+    milestones:
+      - { q: [5, 5], name: IACUC approval, metric: Approved protocol,
+          deliverable: Approval letter }
+      - { q: [5, 6], name: Pilot cohort, metric: "n ≥ 10 animals; ≥ 1.5-fold",
+          deliverable: Pilot data }
+      - { q: [6, 7], name: Full cohort, metric: "n ≥ 30; ≥ 2-fold, p < 0.05",
+          deliverable: Data package }
+      - { q: [8, 8], name: Base period report, metric: All base metrics met,
+          deliverable: Final base period report }
+  - title: Director's Award option, toward first-in-human
+    org: University of Central Florida, with Example Health Inc.
+    places: Orlando, FL; Boston, MA
+    subjects: No
+    approach:
+    deliverables: [Regulatory plan, Transition plan]
+    gonogo: "FDA pre-submission feedback supports an IDE"
+    milestones:
+      - { q: [9, 9], name: Design freeze, metric: Design history file,
+          deliverable: Design history file }
+      - { q: [9, 10], name: Verification, metric: All requirements verified,
+          deliverable: Verification report }
+      - { q: [10, 11], name: FDA pre-submission, metric: Q-Sub filed,
+          deliverable: Q-Sub package }
+      - { q: [12, 12], name: Transition, metric: A partner signed,
+          deliverable: Transition plan; final report }
+
+# A letter of support from an official, required with the full proposal
+letters:
+  - name: Example Dean
+    title: Dean, College of Medicine
+    institution: University of Central Florida
+    date: February 1, 2027
+    body: |
+      I write in support of your EHI proposal, #G.title. #todo[the
+      institution's commitment: time, space, equipment, mentoring]

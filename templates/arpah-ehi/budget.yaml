@@ -1,0 +1,17 @@
+# The inputs of the cost: lib/budget.typ computes the totals a year, and the
+# milestone payments split each year's into its quarters. Years 1-2 the
+# base ($700,000 at most), year 3 the option ($350,000), indirect included.
+# Subawards and consultants at most 30% of the whole. One entry a year.
+# category: subaward, materials, equipment, travel or other.
+rates:
+  fringe: 0.30
+  fa: 0.50        # negotiated rate, on modified total direct costs
+  raise: 0.03
+personnel:        # base salary, calendar months of effort a year
+  - { name: Ada Lovelace, salary: 110000, months: [3, 3, 3] }
+  - { name: Graduate research assistant (TBN), salary: 30000, months: [12, 12, 12], fringe: 0.05 }
+other:            # fa: false keeps one out of the F&A base
+  - { item: "Consultant: Example Health Inc.", cost: [10000, 10000, 40000], category: subaward, fa: false }
+  - { item: Supplies and animal costs, cost: [40000, 50000, 20000], category: materials }
+  - { item: "Travel: EHI annual meeting and a workshop, 2 people, 4 days each", cost: [8000, 8000, 8000], category: travel }
+  - { item: Graduate tuition, cost: [15000, 15000, 15000], category: other, fa: false }

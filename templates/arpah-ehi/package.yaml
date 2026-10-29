@@ -1,0 +1,14 @@
+# What is sent, on solutions.arpa-h.gov: the solution summary first (before:
+# not assembled with the rest), then the full proposal, Attachments B-F and
+# a letter of support. B and F are ARPA-H's own templates: fill them in and
+# upload to docs/. The Checklist panel, the checklist page and `make full`
+# read this.
+items:
+  - { id: summary, name: "Attachment A, Solution Summary (due Oct 30, 2026, 2 PM ET)", file: out/summary.pdf, before: true, limit: 2 pages besides the cover sheet }
+  - { id: proposal, name: "Attachment C, Technical and Management Proposal", file: out/proposal.pdf, limit: 8 pages for sections 1-4 }
+  - { id: tdd, name: "Attachment D, Task Description Document", file: out/tdd.pdf }
+  - { id: payments, name: "Attachment E, Milestone Payment Schedule", file: out/payments.pdf }
+  - { id: pitch, name: "Attachment B, Pitch Slides (ARPA-H's; 8 minutes)", file: docs/pitch.pdf }
+  - { id: admin, name: "Attachment F, Administrative and National Policy Requirements (ARPA-H's)", file: docs/attachment-f.pdf }
+  - { id: forms, each: investigators, name: "Biosketch, Current and Pending Support, Collaborators (Common Forms)", file: "docs/forms-{key}.pdf" }
+  - { id: letters, name: Letter of support from an organization official, file: out/letters.pdf }
