@@ -43,6 +43,9 @@ if (suites.some(s => ['ui', 'link'].includes(s)) && !existsSync(path.join(root, 
   sh('npm i --prefix .uitest --no-audit --no-fund puppeteer')
 if (suites.includes('irweb') && !existsSync(path.join(root, '.uitest/node_modules/@number0/iroh')))
   sh('npm i --prefix .uitest --no-audit --no-fund @number0/iroh@1.2.0')
+// a hub's git gc runs on in the background after it: removed again until it is done
+const rm = async d => { for (let i = 0; i < 50; i++) try { return rmSync(d, { recursive: true, force: true }) }
+  catch { await new Promise(r => setTimeout(r, 200)) } }
 let failed = 0
 for (const s of suites) {
   const dir = mkdtempSync(path.join(tmpdir(), `tydig-${s}-`)), env = { ...ENV[s] }
@@ -64,7 +67,7 @@ for (const s of suites) {
   const code = await new Promise(ok => spawn(process.execPath, [path.join(root, `test/${s}.mjs`)],
     { cwd: HUBLESS.includes(s) ? root : dir, stdio: 'inherit', env: { ...process.env, ...env } }).on('close', ok))
   await Promise.all(bg.splice(0).map(p => new Promise(ok => p.exitCode !== null || p.signalCode !== null ? ok() : (p.on('exit', ok), p.kill()))))
-  if (code) { failed++; console.log(`FAILED: ${s} (hub log in ${dir})`) } else rmSync(dir, { recursive: true, force: true, maxRetries: 10 })
+  if (code) { failed++; console.log(`FAILED: ${s} (hub log in ${dir})`) } else await rm(dir)
 }
 console.log(failed ? `\n${failed} suite(s) failed` : '\nall suites passed')
 process.exit(failed ? 1 : 0)
