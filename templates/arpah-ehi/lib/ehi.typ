@@ -88,7 +88,7 @@
 // The steps, each with its quarters, milestones and go/no-go
 #let plan() = {
   plan-warn
-  table(columns: (1.1fr, auto, 2fr, 1fr), stroke: 0.5pt, inset: 4pt,
+  table(columns: (1fr, auto, 2.6fr, 1fr), stroke: 0.5pt, inset: 4pt,
     [*Step*], [*Quarters*], [*Milestones (quantitative metric)*], [*Go/no-go*],
     ..G.tasks.enumerate().map(((i, t)) => ([#(i + 1). #t.title],
       [Q#t.milestones.first().q.first()–Q#t.milestones.last().q.last()],
