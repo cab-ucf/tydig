@@ -49,6 +49,7 @@ COPY server/package.json server/
 RUN npm ci --omit=dev -w server
 COPY server/ server/
 COPY templates/ templates/
+COPY compose.yml ./
 # what the sandbox service builds the build image from (server/sandbox.mjs)
 COPY sandbox/ buildctx/sandbox/
 COPY fonts/ buildctx/fonts/
