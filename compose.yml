@@ -13,7 +13,7 @@ services:
   app:
     <<: *locked
     build: { context: ., args: { TYDIG_BRAND: "${TYDIG_BRAND:-tydig}" } }
-    image: localhost/tydig
+    image: ${TYDIG_HUB_IMAGE:-localhost/tydig} # nixos.nix: CI's
     ports: ["${TYDIG_BIND:-127.0.0.1}:${TYDIG_PORT:-8080}:3000"] # TYDIG_BIND=0.0.0.0: all
     env_file: .env
     environment:
@@ -29,14 +29,14 @@ services:
 
   sandbox:
     <<: *locked
-    image: localhost/tydig
+    image: ${TYDIG_HUB_IMAGE:-localhost/tydig}
     command: [node, server/sandbox.mjs]
     environment:
       TYDIG_DATA: ${TYDIG_DATA}
       TYDIG_SANDBOX: 0.0.0.0:7000
       TYDIG_BUILD_NET: ${TYDIG_BUILD_NET:-1}
       TYDIG_IMAGE_NET: ${TYDIG_IMAGE_NET:-0}
-      TYDIG_REGISTRY: ${TYDIG_REGISTRY:-}
+      TYDIG_REGISTRY: ${TYDIG_REGISTRY-ghcr.io/cab-ucf}
       TYDIG_BUILD_CONTEXT: /app/buildctx
       # builds under gVisor (in the build image); none: plain containers
       TYDIG_RUNTIME: ${TYDIG_RUNTIME:-gvisor}
@@ -51,7 +51,7 @@ services:
 
   egress:
     <<: *locked
-    image: localhost/tydig
+    image: ${TYDIG_HUB_IMAGE:-localhost/tydig}
     command: [node, server/egress.mjs]
     networks: [default, build]
     healthcheck: { disable: true }
