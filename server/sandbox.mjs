@@ -9,11 +9,12 @@ import { constants, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, sta
 import path from 'node:path'
 
 // The build image is this hub's own: named by a hash of sandbox/ and fonts/,
-// built at start when missing, so it can never be older than the code.
+// pulled at start from TYDIG_REGISTRY (CI pushes one per hash and arch), else
+// built here, so it can never be older than the code.
 const CTX = process.env.TYDIG_BUILD_CONTEXT || path.resolve(import.meta.dirname, '..')
 const tree = d => readdirSync(d, { withFileTypes: true }).flatMap(e =>
   e.isDirectory() ? tree(path.join(d, e.name)) : [path.join(d, e.name)]).sort()
-const named = () => {
+export const named = () => {
   const sum = createHash('sha256')
   for (const f of tree(path.join(CTX, 'sandbox'))) sum.update(f.slice(CTX.length)).update(readFileSync(f))
   for (const f of tree(path.join(CTX, 'fonts'))) sum.update(f.slice(CTX.length) + statSync(f).size)
@@ -29,11 +30,15 @@ const said = (args, secs = 60) => new Promise(ok => {
   p.stdout.on('data', d => r.out += d); p.stderr.on('data', d => r.err.length < 1e5 && (r.err += d))
   p.on('error', e => r.err += e.message).on('close', c => { clearTimeout(t); ok({ ...r, code: c ?? -1 }) })
 })
-async function image() {
+async function image(from) {
   if (await podman(['image', 'exists', IMAGE])) return
-  console.log(`build image ${IMAGE}: building it (a few minutes, once per version)`)
-  if (!await podman(['build', '-t', IMAGE, '-f', path.join(CTX, 'sandbox/Containerfile'), CTX], { stdio: 'inherit' }))
-    return console.warn(`build image ${IMAGE} failed to build: builds cannot run`)
+  if (from && await podman(['pull', '-q', from]) && await podman(['tag', from, IMAGE]))
+    console.log(`build image ${IMAGE}: pulled ${from}`), await podman(['untag', from, from])
+  else {
+    console.log(`build image ${IMAGE}: building it (a few minutes, once per version)`)
+    if (!await podman(['build', '-t', IMAGE, '-f', path.join(CTX, 'sandbox/Containerfile'), CTX], { stdio: 'inherit' }))
+      return console.warn(`build image ${IMAGE} failed to build: builds cannot run`)
+  }
   const old = await new Promise(ok => { let o = ''; spawn('podman', ['images', '--format', '{{.Repository}}:{{.Tag}}',
     'localhost/tydig-build']).on('error', () => ok('')).stdout.on('data', d => o += d).on('end', () => ok(o)) })
   for (const t of old.split('\n').filter(t => t && t !== IMAGE)) await podman(['rmi', t])
@@ -157,8 +162,9 @@ const serve = sock => {
 if (import.meta.url === `file://${process.argv[1]}`) {
   if (!DATA) throw new Error('set TYDIG_DATA')
   if (!AT.includes(':')) rmSync(AT, { force: true })
+  const reg = !IMAGE && process.env.TYDIG_REGISTRY, arch = { x64: 'amd64' }[process.arch] ?? process.arch
   IMAGE ||= named()
-  await image()
+  await image(reg && `${reg}/tydig-build:${IMAGE.split(':')[1]}-${arch}`)
   // an earlier run's project images: names only, so their layers stay as cache
   for (const t of (await said(['images', '--format', '{{.Repository}}:{{.Tag}}'])).out.split('\n'))
     if (t.startsWith(P)) await podman(['untag', t, t])
