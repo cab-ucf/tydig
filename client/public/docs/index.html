@@ -17,7 +17,8 @@ table{border-collapse:collapse;width:100%;font-size:.92em}td{padding:.25rem .5re
 <li>Needs <a href="https://podman.io">podman</a> (with <code>podman compose</code>) and <a href="https://just.systems">just</a>.</li>
 <li><code>just</code> starts the hub on <code>:8080</code>, then prints its link. Its images come from <code>ghcr.io/cab-ucf</code>, built by CI for each commit on main; a checkout with changes of its own builds here, as does <code>TYDIG_REGISTRY=</code> (empty) in <code>.env</code>.</li>
 <li>Data lives in <code>./data</code> (<code>TYDIG_DATA</code>). Back it up, or give each project a git remote.</li>
-<li>To isolate it, run <code>just</code> as an account of its own. On NixOS, import <code>nixos.nix</code>: it makes the account and, hourly, runs <code>just update</code>, which moves the hub to the commit its link page runs (main's, once its tests pass). Elsewhere, run <code>just update</code> from cron or a timer.</li>
+<li>NixOS: <code>imports = [ ./nixos.nix ];</code> is all (from a checkout, or <code>"${fetchTarball "https://github.com/cab-ucf/tydig/archive/main.tar.gz"}/nixos.nix"</code>). The hub is then the <code>tydig</code> service: CI's images, run as an account of its own, everything in <code>/var/lib/tydig</code>, moved hourly to the version cxn.pub runs; no checkout. Settings: <code>services.tydig.settings</code>, secrets in <code>/var/lib/tydig/env</code>. <code>systemctl status tydig</code>, <code>journalctl -fu tydig</code>, <code>tydig link</code>, <code>tydig passwd EMAIL</code>.</li>
+<li>Elsewhere, run <code>just</code> as an account of its own to isolate it, and <code>just update</code> from cron to keep it at cxn.pub's version.</li>
 <li><code>just down</code>, <code>just logs</code>, <code>just passwd EMAIL</code> (no mail: prints a new password).</li>
 </ul>
 
