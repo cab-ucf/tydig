@@ -4,7 +4,7 @@
 import { $, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose, focusOn }
   from './util.js'
 import { MODES } from './surprise.js'
-import { signOut, changeName, changePassword, deleteAccount } from './auth.js'
+import { signOut, changeName, changePassword, deleteAccount, irchNotify } from './auth.js'
 import { view, path, undo, restyle, toggleVim, toggleLsp, toggleSpell, toggleScope, scopeBy } from './editor.js'
 import { toggleGhost } from './ghost.js'
 import { addComment, discuss, showInPreview } from './comments.js'
@@ -50,7 +50,7 @@ export const actions = {
   ...Object.fromEntries(Object.keys(MODES).map(by => ['scope-' + by, () => scopeBy(by)])),
   vim: toggleVim, lsp: toggleLsp, spell: toggleSpell, share: showShare, gitremote: showGitRemote,
   archive: () => archive(), 'delete-project': deleteProject,
-  signout: signOut, name: changeName, password: changePassword, 'delete-account': deleteAccount,
+  signout: signOut, name: changeName, password: changePassword, 'delete-account': deleteAccount, 'irch-notify': irchNotify,
   palette: () => choose([...document.querySelectorAll('#menubar [data-act]')].map(b => ({
     label: b.firstChild.textContent.trim(), hint: b.querySelector('kbd')?.textContent,
     run: () => actions[b.dataset.act]() })), 'find a command...'),

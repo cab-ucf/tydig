@@ -71,7 +71,7 @@ const TOOLS = {
       return [
         ...[...cs].filter(([k, c]) => at.test(c.text) && !done.has(k))
           .map(([k, c]) => ({ id: k, from: c.author, text: c.text, ...on(c) })),
-        // not from irch: anyone in a linked space could direct the project's agents
+        // not mirrored from irch (before it was only linked): not the project's members
         ...chat.filter(m => !m.agent && !m.irch && at.test(m.text) && !done.has(m.id))
           .map(m => ({ id: m.id, from: m.author, text: m.text, ...on(m.re && cs.get(m.re)) })),
       ]

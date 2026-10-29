@@ -636,3 +636,5 @@ body.focus .cm-content { max-width: 66ch; margin: 0 auto; padding: 12vh 1.5rem 4
 ::highlight(ai-2) { background-color: color-mix(in srgb, var(--ai-hi) 48%, transparent); }
 ::highlight(ai-3) { background-color: color-mix(in srgb, var(--ai-top) 55%, transparent); }
 ::highlight(pv-at) { background: color-mix(in srgb, var(--teal) 45%, transparent); color: inherit; }
+.to-notes { margin-left: auto; padding: 0 4px; border: 0; background: none; opacity: .45; cursor: pointer; }
+.to-notes:hover { opacity: 1; }

@@ -24,8 +24,8 @@ The water was #if R.T1 > R.T2 [cooling] else [heating].
 - Grant templates; journal and poster templates from Typst Universe.
 - Citations checked at the source, Word export.
 - Agents over MCP, ghost text, a surprise overlay.
-- The Discussion mirrored with an [irch](https://github.com/cab-ucf/irch)
-  channel, so it reaches phones: Share › irch, with the space's invite.
+- [irch](https://github.com/cab-ucf/irch), linked, never mirrored: a
+  project names its channel, and your @mentions reach your phone there.
 
 | where | what |
 |---|---|

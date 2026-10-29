@@ -4,7 +4,7 @@
 import * as Y from 'yjs'
 import { Annotation, StateField } from '@codemirror/state'
 import { Decoration, ViewPlugin, hoverTooltip, showTooltip } from '@codemirror/view'
-import { $, el, esc, dot, uid, toast, settings, projName, icon, phone } from './util.js'
+import { $, el, esc, dot, uid, toast, settings, projName, icon, phone, api, P } from './util.js'
 import { ydoc, files, comments, chat, user } from './doc.js'
 import { view, path, reveal } from './editor.js'
 import { openSidebar, redraw, mode, tabs, citeBubble } from './panels.js'
@@ -174,13 +174,23 @@ export function showInPreview() {
 // @names stand out: an agent member answers to its own
 const mentions = text => text.split(/(@[\w-]+)/)
   .map((t, i) => i % 2 ? el('b', { className: 'at', textContent: t }) : t)
-const head = (m, pre = '', post = '') => el('div', { className: 'meta' }, pre, dot(m.color || 'var(--fg-dim)'),
-  el('b', { textContent: m.author }), el('time', { textContent: new Date(m.ts).toLocaleString() }), post)
+const head = (m, pre = '', ...post) => el('div', { className: 'meta' }, pre, dot(m.color || 'var(--fg-dim)'),
+  el('b', { textContent: m.author }), el('time', { textContent: new Date(m.ts).toLocaleString() }), ...post)
+// Into your notes: loroh shows it and asks first (loroh://add); copied too,
+// for any other notes app, or none
+const noted = (m, where = '') => el('button', { className: 'to-notes', title: 'Add to notes (loroh)',
+  textContent: '📝', onclick: e => {
+    e.stopPropagation()
+    const url = `${location.origin}${location.pathname}?proj=${projName}`
+    const md = `- **${m.author}**${where}: ${m.text.trim().replace(/\n/g, '\n  ')} ([${projName}](${url}))`
+    navigator.clipboard?.writeText(md).catch(() => {})
+    location.href = 'loroh://add?' + new URLSearchParams({ file: 'Inbox.md', text: md })
+    toast('Opening loroh (and copied as Markdown)')
+  } })
 const message = m => {
   const on = m.re && comments.get(m.re)
   return el('div', { className: 'msg' },
-    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : m.irch ? el('em', { textContent: 'irch' }) : ''),
-    el('p', {}, ...mentions(m.text)))
+    head(m, '', on ? el('em', { textContent: `on a comment in ${on.file}` }) : '', noted(m)), el('p', {}, ...mentions(m.text)))
 }
 // Enter sends; Shift-Enter is a new line
 // what is typed outlives the pane redrawing around it (panels.js keeps focus)
@@ -202,7 +212,7 @@ const composer = (re, hint) => {
 export function renderComments(body) {
   const cs = numbered()
   body.replaceChildren(...cs.map(c => {
-    const pin = el('span', { className: 'pin-n', textContent: c.n }), meta = head(c, pin)
+    const pin = el('span', { className: 'pin-n', textContent: c.n }), meta = head(c, pin, noted(c, ` on ${c.file}`))
     if (!pinSafe(c.file, c.from))
       Object.assign(pin, { className: 'pin-n no-pin', title: 'no preview pin: anchor is inside code/raw/math' })
     meta.onclick = () => { // where it is now
@@ -219,9 +229,13 @@ export function renderComments(body) {
   read('comments')
 }
 
+// the project's irch channel, if it names one: a link, opened by your irch
+const irch = api(P('/irch')).then(r => r.link, () => null)
 export function renderChat(body) {
-  const list = chat.toArray()
-  body.replaceChildren(...list.length ? [] : [el('p', { className: 'empty', textContent: 'Talk with everyone ' +
+  const list = chat.toArray(), out = el('a', { className: 'irch-link', hidden: true,
+    textContent: 'Discuss in irch ↗', title: "Opens the project's channel in your irch" })
+  irch.then(l => l && Object.assign(out, { href: l, hidden: false }))
+  body.replaceChildren(out, ...list.length ? [] : [el('p', { className: 'empty', textContent: 'Talk with everyone ' +
     'on this project. @name tells a person, or asks an agent member to do something.' })],
   ...list.map(message), composer(null, 'Message everyone'))
   body.scrollTop = body.scrollHeight
