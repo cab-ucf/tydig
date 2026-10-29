@@ -30,11 +30,12 @@ jobs:
             --label org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY \
             --cache-from type=registry,ref=$r/tydig-cache:$1-$a \
             --cache-to type=registry,ref=$r/tydig-cache:$1-$a,mode=max .; }
-          for b in $(ls client/brands); do push $b $r/tydig:$c-$b-$a -f Containerfile --build-arg TYDIG_BRAND=$b; done
-          b=$(docker run --rm -e TYDIG_BUILD_CONTEXT=/app/buildctx $r/tydig:$c-tydig-$a node \
+          for b in $(ls client/brands); do
+            push $b $r/tydig:$c-$b-$a -f Containerfile --build-arg TYDIG_BRAND=$b; done
+          s=$(docker run --rm -e TYDIG_BUILD_CONTEXT=/app/buildctx $r/tydig:$c-tydig-$a node \
             --input-type=module -e "import { named } from '/app/server/sandbox.mjs'; console.log(named())")
-          b=$r/tydig-build:${b#*:}-$a
-          docker buildx imagetools inspect $b >/dev/null 2>&1 || push build $b -f sandbox/Containerfile
+          s=$r/tydig-build:${s#*:}-$a
+          docker buildx imagetools inspect $s >/dev/null 2>&1 || push build $s -f sandbox/Containerfile
   deploy:
     needs: image
     if: github.ref == 'refs/heads/main'
