@@ -2,7 +2,6 @@
 // updated by it live, and nothing in it that reaches out of the project.
 import { execFileSync as sh } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { person, check, done, sleep } from './lib.mjs'
@@ -12,7 +11,7 @@ const api = (p, o = {}) => ann.res(p, { ...o, headers: { 'content-type': 'applic
 const imp = (n, body, name) => api(`/p/${n}/import?name=${name}`, { method: 'POST', body, headers: { 'content-type': 'application/octet-stream' } })
 
 // an archive as people make them: one folder, its .git, a symlink out, a figure
-const t = mkdtempSync(path.join(tmpdir(), 'tydig-imp-')), top = path.join(t, 'corona-r21')
+const t = mkdtempSync(path.resolve('imp-')), top = path.join(t, 'corona-r21')
 mkdirSync(path.join(top, 'src'), { recursive: true }); mkdirSync(path.join(top, '.git'))
 writeFileSync(path.join(top, 'src', 'aims.typ'), '= Specific Aims\nCorona.\n')
 writeFileSync(path.join(top, 'Makefile'), 'all:\n\techo ok\n')
