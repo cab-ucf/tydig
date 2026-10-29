@@ -7,21 +7,27 @@ src := if sys == "y" { "/var/lib/tydig/src" } else { justfile_directory() }
 export TYDIG_DATA := env("TYDIG_DATA", if sys == "y" { "/var/lib/tydig/data" } else { justfile_directory() / "data" })
 export TYDIG_PORT := env("TYDIG_PORT", "8080")
 export TYDIG_URL := env("TYDIG_URL", "http://localhost:" + TYDIG_PORT)
+export TYDIG_REGISTRY := env("TYDIG_REGISTRY", "ghcr.io/cab-ucf") # where CI's images are; empty: build here
 export TYDIG_PODMAN_SOCK := env("TYDIG_PODMAN_SOCK", env("XDG_RUNTIME_DIR", "") / "podman/podman.sock")
 scope := if env("TYDIG_SCOPE", "") == "1" { "--profile scope" } else { "" }
 compose := as + "podman compose -f " + src + "/compose.yml " + scope
 
-# build and start the hub, then print its link
+# start the hub, then print its link
 up:
     #!/usr/bin/env bash
     [ "{{sys}}" = y ] && exec {{as}}just -f {{src}}/Justfile up
     mkdir -p "$TYDIG_DATA" && touch .env || exit
     systemctl --user enable --now podman.socket podman-restart.service 2>/dev/null
-    {{compose}} build || exit # the running hub stays up meanwhile
+    # this commit's image from CI, else built here; the running hub stays up meanwhile
+    old=$(podman image inspect -f '{{{{.Id}}' localhost/tydig 2>/dev/null)
+    img=$TYDIG_REGISTRY/tydig:$(git rev-parse HEAD)-${TYDIG_BRAND:-tydig}-$(podman info -f '{{{{.Host.Arch}}')
+    [ -n "$TYDIG_REGISTRY" ] && [ -z "$(git status --porcelain)" ] && podman pull -q "$img" >/dev/null &&
+        podman tag "$img" localhost/tydig && podman untag "$img" "$img" || {{compose}} build || exit
     {{compose}} down 2>/dev/null
     ! ss -ltnH "sport = :$TYDIG_PORT" 2>/dev/null | grep -q . ||
         { echo "port $TYDIG_PORT is taken (ss -ltnp): stop it, or set TYDIG_PORT=8090 in .env"; exit 1; }
     {{compose}} up -d || exit
+    [ -z "$old" ] || podman rmi "$old" >/dev/null 2>&1 # the image it replaced, unless in use
     for i in $(seq 30); do test -s "$TYDIG_DATA/link" && exec cat "$TYDIG_DATA/link"; sleep 1; done
 
 # run the commit the link page runs, once main holds it (nixos.nix: hourly)

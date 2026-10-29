@@ -1,19 +1,45 @@
 # The static site: the editor (opens <site>/#<id>;t=<token>, else TYDIG_HUB),
-# app/ for older links; with no hub it opens on a landing page. Deployed once
-# main's tests pass; its version file names the commit hubs then run (just update).
+# app/ for older links; with no hub it opens on a landing page. Once main's
+# tests pass: the hub's images to ghcr.io, per brand and arch
+# (tydig:<commit>-<brand>-<arch>, tydig-build:<hash>-<arch>), then the site,
+# whose version file names the commit hubs then run (just update).
 # Variables: TYDIG_HUB (`just` prints it after the #), TYDIG_BRAND.
 name: pages
 on:
   workflow_run: { workflows: [test], types: [completed], branches: [main] }
   workflow_dispatch:
-permissions: { contents: read, pages: write, id-token: write }
+permissions: { contents: read }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
-  deploy:
+  image:
     if: >-
       github.event_name == 'workflow_dispatch' || github.event.workflow_run.event == 'push'
       && github.event.workflow_run.conclusion == 'success'
+    strategy: { matrix: { on: [ubuntu-24.04, ubuntu-24.04-arm] } }
+    runs-on: ${{ matrix.on }}
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { ref: '${{ github.event.workflow_run.head_sha }}' }
+      - env: { TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        run: |
+          r=ghcr.io/${GITHUB_REPOSITORY_OWNER,,} a=$(dpkg --print-architecture) c=$(git rev-parse HEAD)
+          docker login -u "$GITHUB_ACTOR" --password-stdin ghcr.io <<< "$TOKEN"
+          docker buildx create --use
+          push() { docker buildx build --push --provenance=false -t "$2" "${@:3}" \
+            --label org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY \
+            --cache-from type=registry,ref=$r/tydig-cache:$1-$a \
+            --cache-to type=registry,ref=$r/tydig-cache:$1-$a,mode=max .; }
+          for b in $(ls client/brands); do push $b $r/tydig:$c-$b-$a -f Containerfile --build-arg TYDIG_BRAND=$b; done
+          b=$(docker run --rm -e TYDIG_BUILD_CONTEXT=/app/buildctx $r/tydig:$c-tydig-$a node \
+            --input-type=module -e "import { named } from '/app/server/sandbox.mjs'; console.log(named())")
+          b=$r/tydig-build:${b#*:}-$a
+          docker buildx imagetools inspect $b >/dev/null 2>&1 || push build $b -f sandbox/Containerfile
+  deploy:
+    needs: image
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions: { contents: read, pages: write, id-token: write }
     env: { VITE_HUB: '${{ vars.TYDIG_HUB }}', TYDIG_BRAND: '${{ vars.TYDIG_BRAND }}' }
     environment: { name: github-pages, url: '${{ steps.deploy.outputs.page_url }}' }
     steps:
