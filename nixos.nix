@@ -71,6 +71,8 @@ in {
         mkdir -p data; img=$(${pull})
         podman pod rm -f pod_tydig >/dev/null 2>&1 || : # whatever ran before
         podman rm -f $(podman ps -aq -f label=com.docker.compose.project=tydig) >/dev/null 2>&1 || :
+        podman images --format '{{.Repository}}:{{.Tag}}' | grep /tydig: | grep -vxF $img |
+          xargs -r podman rmi >/dev/null 2>&1 || : # the versions it replaced
         podman run --rm $img cat compose.yml > compose.yml; echo $img > image
         TYDIG_HUB_IMAGE=$img exec podman-compose -f compose.yml up
       '';
