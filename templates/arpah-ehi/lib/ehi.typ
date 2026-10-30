@@ -23,6 +23,9 @@
   "Near Real-time, Non-contact Determination of Sterility in Distributed Manufacturing Systems",
   "ICAT (In-Cavity Adjuvant Therapy): Implantable Systems for Local Cancer Control at the Resection Margin",
   "Causally-Grounded Alignment for Clinical Generative Artificial Intelligence Tools")
+// Text added to the PI's own, dark red until grant.yaml says final
+#let add(body) = if G.at("final", default: false) { body } else {
+  text(fill: rgb("#8b0000"), body) }
 #let topic = [Topic #G.topic: #topics.at(G.topic - 1)]
 
 // No name in the header: the summary is reviewed blind

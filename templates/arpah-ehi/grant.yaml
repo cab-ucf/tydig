@@ -13,6 +13,7 @@ years: 3                       # budget.yaml's years: 2 base, 1 option
 topic: 6                       # one of the ISO's 16 (lib/ehi.typ lists them)
 reference:                     # the solution summary's number, once assigned
 validity: 120 days             # the proposal's, 120 at least
+final: false                   # true: text added in dark red prints black
 proprietary: false             # true marks each page "Proprietary" (ISO 3.5)
 
 mechanism:

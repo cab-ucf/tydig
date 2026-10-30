@@ -13,43 +13,49 @@ TOPICS = re.findall(r'"([^"]+)"', open('lib/ehi.typ').read().split('#let topics'
 topic = f"Topic {G['topic']}: {TOPICS[G['topic'] - 1]}"
 I = G['institution']
 
-def run(t, sz=24, b=False):
+RED = not G.get('final') and '<w:color w:val="8B0000"/>' or ''
+
+def run(t, sz=24, b=False, red=False):
     hl = '<w:highlight w:val="yellow"/>' if re.search(r'\[.+\]', t) else ''
     return (f'<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/>'
-            f'{"<w:b/>" if b else ""}{hl}<w:sz w:val="{sz}"/></w:rPr>'
+            f'{"<w:b/>" if b else ""}{RED if red else ""}{hl}<w:sz w:val="{sz}"/></w:rPr>'
             f'<w:t xml:space="preserve">{escape(t)}</w:t></w:r>')
 
-def rich(t, sz=24):  # *bold* spans
-    return ''.join(run(s, sz, i % 2) for i, s in enumerate(t.split('*')) if s)
+def rich(t, sz=24, red=False):  # *bold* and #add[added] spans
+    return ''.join(run(s, sz, i % 2, red or j % 2)
+                   for j, a in enumerate(re.split(r'#add\[(.*?)\]', t))
+                   for i, s in enumerate(a.split('*')) if s)
 
-def para(t, sz=24, jc='both', after=80, b=False, keep=False):
+def para(t, sz=24, jc='both', after=80, b=False, keep=False, red=False):
     return (f'<w:p><w:pPr>{"<w:keepNext/>" if keep else ""}<w:spacing w:after="{after}" w:line="240" w:lineRule="auto"/>'
-            f'<w:jc w:val="{jc}"/></w:pPr>{run(t, sz, b) if b else rich(t, sz)}</w:p>')
+            f'<w:jc w:val="{jc}"/></w:pPr>{run(t, sz, b, red) if b else rich(t, sz, red)}</w:p>')
 
-def cell(lines, w):
+def cell(lines, w, red=False):
     return (f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa"/></w:tcPr>'
-            + ''.join(para(l, 20, 'left', 0) for l in lines) + '</w:tc>')
+            + ''.join(para(l, 20, 'left', 0, red=red) for l in lines) + '</w:tc>')
 
 def items():  # items 1-3 of summary.typ, as paragraphs
     s = open('summary.typ').read()
-    s = s[s.index('= 1. Define'):s.index('#plan()')]
+    s = s[s.index('= 1. Define'):s.index('#add[#plan()]' if ADDED else '#plan()')]
     out = {}
     for h, body in re.findall(r'= (\d)\. [^\n]*\n(.*?)(?=\n  = \d\.|\Z)', s, re.S):
         body = re.sub(r'#todo\[(.*?)\]', r'[\1]', body, flags=re.S).replace('\\$', '$')
         out[h] = [' '.join(p.split()) for p in body.strip().split('\n\n')]
     return out
 
-def plan():
+ADDED = '#add[#plan()]' in open('summary.typ').read()
+
+def plan(red=ADDED):
     w = (1850, 1100, 4500, 1900)
     head = ''.join(cell([h], x) for h, x in zip(
         ('*Step*', '*Quarters*', '*Milestones (quantitative metric)*', '*Go/no-go*'), w))
     rows = []
     for i, t in enumerate(G['tasks']):
         m = t['milestones']
-        rows.append('<w:tr>' + cell([f"{i + 1}. {t['title']}"], w[0])
-            + cell([f"Q{m[0]['q'][0]}–Q{m[-1]['q'][-1]}"], w[1])
-            + cell([f"{x['name']}: {' '.join(x['metric'].split())}" for x in m], w[2])
-            + cell([t['gonogo']], w[3]) + '</w:tr>')
+        rows.append('<w:tr>' + cell([f"{i + 1}. {t['title']}"], w[0], red)
+            + cell([f"Q{m[0]['q'][0]}–Q{m[-1]['q'][-1]}"], w[1], red)
+            + cell([f"{x['name']}: {' '.join(x['metric'].split())}" for x in m], w[2], red)
+            + cell([t['gonogo']], w[3], red) + '</w:tr>')
     b = '<w:{0} w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
     borders = ''.join(b.format(e) for e in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'))
     return (f'<w:tbl><w:tblPr><w:tblW w:w="{sum(w)}" w:type="dxa"/><w:tblBorders>{borders}'
