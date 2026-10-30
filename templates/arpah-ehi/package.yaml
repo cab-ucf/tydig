@@ -4,7 +4,7 @@
 # upload to docs/. The Checklist panel, the checklist page and `make full`
 # read this.
 items:
-  - { id: summary, name: "Attachment A, Solution Summary (due Oct 30, 2026, 2 PM ET)", file: out/summary.pdf, before: true, limit: 2 pages besides the cover sheet }
+  - { id: summary, name: "Attachment A, Solution Summary (due Oct 30, 2026, 2 PM ET), in ARPA-H's template", file: out/summary.docx, before: true, limit: 2 pages besides the cover sheet }
   - { id: proposal, name: "Attachment C, Technical and Management Proposal", file: out/proposal.pdf, limit: 8 pages for sections 1-4 }
   - { id: tdd, name: "Attachment D, Task Description Document", file: out/tdd.pdf }
   - { id: payments, name: "Attachment E, Milestone Payment Schedule", file: out/payments.pdf }

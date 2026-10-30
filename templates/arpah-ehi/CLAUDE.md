@@ -10,6 +10,9 @@ milestones a quarter. It is edited live in tydig, so keep each change small.
 
 1. Solution Summary (`summary.typ`, Attachment A): October 30, 2026, 2:00 PM
    ET. Required. ARPA-H answers "encourage" or "discourage", nothing more.
+   Its template is mandatory: `make` fills ARPA-H's own
+   (`docs/attachment-a.docx`) into `out/summary.docx`, the file sent;
+   `out/summary.pdf` is the preview that checks pages and names.
 2. Full proposal: February 10, 2027, 2:00 PM ET (questions by February 3):
    `main.typ` (C), `tdd.typ` (D), `payments.typ` (E), `letters.typ`, and
    ARPA-H's own B (pitch slides, 8 minutes) and F (administrative, with each
@@ -44,7 +47,7 @@ All go to https://solutions.arpa-h.gov; questions to EHI2026@ARPA-H.gov.
 
 ## Building
 
-`make` builds `out/summary.pdf`, `out/proposal.pdf`, `out/tdd.pdf`,
+`make` builds `out/summary.docx` (sent), `out/summary.pdf`, `out/proposal.pdf`, `out/tdd.pdf`,
 `out/payments.pdf`, `out/letters.pdf`; `make full` assembles the full
 proposal behind a checklist; `make budget` writes `out/budget.xlsx`.
 Typst 0.15; python3 with pypdf, openpyxl, ruamel.yaml.
