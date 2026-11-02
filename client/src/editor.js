@@ -91,6 +91,12 @@ async function lspExt(p) {
     return lspExtension({ client, documentUri: `file://${root}/${p}`, languageId: 'typst' })
   } catch { gone(); return [] }
 }
+// out of sight (main.js): tinymist closes, and opens again on return
+export function restLsp(away) {
+  const old = tinymist; tinymist = null
+  old?.then(({ client }) => client.close(), () => {})
+  if (!away && path) lspExt(path).then(ext => view?.dispatch({ effects: lspC.reconfigure(ext) }))
+}
 export function toggleLsp() {
   const old = tinymist; tinymist = null
   old?.then(({ client }) => client.close(), () => {}) // the hub allows a person two sockets

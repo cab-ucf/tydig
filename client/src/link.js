@@ -58,16 +58,16 @@ async function why() {
   return `The relay works from here, so the hub is not on it: is it running, and does its log say
     <code>link: online</code>? Is this its current link (<code>just link</code> prints it)?`
 }
-let client
+let client, lib // irp's client, loaded once however often it connects
+const load = () => lib ??= new Promise((ok, no) => {
+  const at = f => new URL('irweb/' + f, document.baseURI).href
+  document.head.append(Object.assign(document.createElement('script'), { src: at('irweb_web.js'), onerror: no,
+    onload: () => wasm_bindgen({ module_or_path: at('irweb_web_bg.wasm') }).then(ok, no) }))
+}).catch(e => { lib = null; throw e })
 const connect = () => client ??= new Promise((ok, no) => {
   say('Connecting to the hub&hellip;')
-  const at = f => new URL('irweb/' + f, document.baseURI).href
-  const s = Object.assign(document.createElement('script'), { src: at('irweb_web.js'), onerror: no })
-  s.onload = () => wasm_bindgen({ module_or_path: at('irweb_web_bg.wasm') })
-    .then(() => wasm_bindgen.Client.connect(link.code + (link.pin ? `;r=${link.pin}` : '')))
-    .then(ok, no)
+  load().then(() => wasm_bindgen.Client.connect(link.code + (link.pin ? `;r=${link.pin}` : ''))).then(ok, no)
   setTimeout(() => no(new Error('no answer in 30 s')), 30_000)
-  document.head.append(s)
 }).then(c => { document.getElementById('link-status')?.remove(); return c }, e => {
   client = null
   say('Could not reach the hub; checking why&hellip;', true)
@@ -75,6 +75,12 @@ const connect = () => client ??= new Promise((ok, no) => {
     ${w} <button>try again</button>`, true))
   throw e
 })
+
+// Out of sight (main.js): the endpoint goes, and its relay socket with it,
+// once no request is using it (busy); the next request connects anew.
+let busy = 0, done = null
+const drop = () => { if (!busy && done) { try { done.free() } catch {} done = null } }
+export const rest = () => { const p = client; client = null; p?.then(c => { done = c; drop() }, () => {}) }
 
 // The hub's cookies: a page cannot hold another origin's, so it keeps its own jar.
 const JAR = link && `tydig.jar:${link.id}`
@@ -151,7 +157,9 @@ if (link) {
   const native = globalThis.fetch.bind(globalThis)
   globalThis.fetch = (input, init) => {
     const req = new Request(input, init), u = new URL(req.url)
-    return u.origin === location.origin && u.pathname.startsWith('/api/') ? hubFetch(req) : native(req)
+    if (u.origin !== location.origin || !u.pathname.startsWith('/api/')) return native(req)
+    busy++
+    return hubFetch(req).finally(() => { busy--; drop() })
   }
   // only the app's own sockets: the iroh client reaches its relay by WebSocket too
   globalThis.WebSocket = new Proxy(WebSocket, { construct: (WS, [url, p]) =>

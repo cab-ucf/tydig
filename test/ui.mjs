@@ -463,6 +463,16 @@ check('Word export makes the citations EndNote fields, the bibliography its list
     midKept === was && Math.abs(end - mid) < 1e-4)
   await page.click('#split', { count: 2, clickCount: 2 })
 }
+// Out of sight a while, the page goes quiet; in sight again, it reconnects
+{
+  const state = () => page.evaluate(() => document.getElementById('status').dataset.state)
+  const sight = h => page.evaluate(h => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h })
+    document.dispatchEvent(new Event('visibilitychange')) }, h)
+  await sight(true); await sleep(16000)
+  const off = await state()
+  await sight(false); await sleep(3000)
+  check('hidden, the page drops its sync; shown again, it reconnects', off === 'disconnected' && await state() === 'connected')
+}
 const realErrors = errors.filter(e => !/awaiting project choice/.test(e))
 check('no page errors or failed requests', realErrors.length === 0)
 check('the app talks to no other host but this machine\'s model (fonts are bundled)', external.length === 0)

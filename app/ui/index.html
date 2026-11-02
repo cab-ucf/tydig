@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tydig</title>
+<style>
+:root { color-scheme: light dark; --bg: #eff1f5; --fg: #4c4f69;
+  --dim: #8c8fa1; --line: #ccd0da; --teal: #2ec4b6; --bad: #d20f39 }
+@media (prefers-color-scheme: dark) { :root { --bg: #1e1e2e;
+  --fg: #cdd6f4; --dim: #7f849c; --line: #45475a; --bad: #f38ba8 } }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+  background: var(--bg); color: var(--fg); font: 16px system-ui, sans-serif }
+main { width: min(26rem, 100vw - 32px) }
+svg { width: 56px; height: 56px; display: block; margin: 0 auto 24px }
+form, li { display: flex; gap: 8px }
+input { flex: 1; min-width: 0; font: inherit; color: inherit; padding: 8px;
+  background: none; border: 1px solid var(--line); border-radius: 6px }
+input:focus { outline: 2px solid var(--teal); outline-offset: -1px }
+button { font: inherit; color: inherit; background: none; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px }
+form button { background: var(--teal); border-color: var(--teal);
+  color: #1e1e2e }
+ul { list-style: none; padding: 0; margin: 16px 0 }
+li { margin: 4px 0 }
+li button:first-child { flex: 1; text-align: left; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap }
+li button:last-child { color: var(--dim) }
+p { color: var(--dim); font-size: 14px }
+#msg { color: var(--bad) }
+[inert] { opacity: .6 }
+</style>
+<main>
+<svg viewBox="0 0 120 120" aria-hidden="true">
+<rect width="120" height="120" rx="26" fill="#313244"/>
+<rect fill="#2ec4b6" x="24" y="24" width="44" height="72"/>
+<rect fill="#2ec4b6" x="24" y="12" width="14" height="10"/>
+<path fill="#1e1e2e" d="M49.5 82Q44.6 82 41.7 79.2Q38.8 76.3 38.8 71.4V54H29
+V46.8H38.8V36.9H46.8V46.8H60.8V54H46.8V71.2Q46.8 72.8 47.7 73.8Q48.6 74.8
+50.1 74.8H60.5V82Z"/>
+<path fill="#9b5de5" d="M76 14h22v12H84v70h-8z"/>
+</svg>
+<form><input name="hub" required aria-label="hub" autocomplete="off"
+  autocapitalize="off" spellcheck="false"
+  placeholder="cxn.pub, code tidy ruby otter"><button>open</button></form>
+<p id="msg" role="alert"></p>
+<ul></ul>
+<p>A hub's address, the link its owner sent, or the code they said.</p>
+</main>
+<script>
+// Which hub: the ones opened before, or one typed in. The app (src/lib.rs)
+// reads it, checks the hub answers, and lets this window go there alone.
+const $ = s => document.querySelector(s), f = $('form'), say = t =>
+  $('#msg').textContent = t
+let hubs = []
+try { hubs = JSON.parse(localStorage.hubs || '[]') } catch {}
+const keep = () => {
+  try { localStorage.hubs = JSON.stringify(hubs) } catch {}
+}
+const name = u =>
+  (u = new URL(u)).host + (u.hash ? ' · ' + u.hash.slice(1, 9) : '')
+const el = (t, p) => Object.assign(document.createElement(t), p)
+function list() {
+  $('ul').replaceChildren(...hubs.map(u => {
+    const li = el('li')
+    li.append(
+      el('button', { textContent: name(u), title: u, onclick: () => go(u) }),
+      el('button', { textContent: '×', title: 'forget', ariaLabel: 'forget',
+        onclick: () => { hubs = hubs.filter(h => h !== u); keep(); list() } }))
+    return li
+  }))
+}
+async function go(input) {
+  f.inert = true; say('')
+  try {
+    const url = await __TAURI_INTERNALS__.invoke('open', { input })
+    const u = new URL(url); u.searchParams.delete('join') // a code is used once
+    hubs = [u.href, ...hubs.filter(h => h !== u.href)].slice(0, 8); keep()
+    location.href = url
+  } catch (e) { say(String(e)); f.inert = false; f.hub.focus() }
+}
+f.onsubmit = e => { e.preventDefault(); go(f.hub.value) }
+list()
+// a tydig:// link: filled in, opened once asked
+const q = new URLSearchParams(location.search).get('open')
+q ? (f.hub.value = q, f.querySelector('button').focus()) : f.hub.focus()
+</script>
+</html>

@@ -5,3 +5,5 @@ dist/
 .uitest/
 .claude/worktrees/
 target/
+/app/gen/
+/app/permissions/
