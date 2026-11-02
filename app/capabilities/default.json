@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "The start page alone (no remote URLs): it may open a hub.",
+  "windows": ["main"],
+  "permissions": ["allow-open"]
+}

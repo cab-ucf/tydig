@@ -37,5 +37,21 @@ The water was #if R.T1 > R.T2 [cooling] else [heating].
 | `sandbox/` | the build image |
 | `scope/` | the surprise engine (Perplexiscope) |
 | `test/` | `just test` |
+| `app/` | the app: a window for hubs, nothing more |
+
+## App
+
+Optional: a browser does the same. It asks for a hub (its address, its link,
+or "cxn.pub, code tidy ruby otter"), remembers it, and opens exactly the page
+a browser would; `tydig://<any of those>` links open it too. Links off the hub
+open in the browser; downloads go to Downloads. Out of sight a while, the
+page (here or in a browser) drops its connections; @mentions reach phones
+through irch. Builds: `app.yml`, or in `app/` (cargo install tauri-cli):
+
+```sh
+cargo run                                   # try it (Linux: libwebkit2gtk-4.1-dev)
+cargo tauri build                           # this desktop's installers
+cargo tauri android init && cargo tauri android build   # phones; ios alike
+```
 
 GPL-3.0-or-later.

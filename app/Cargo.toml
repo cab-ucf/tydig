@@ -1,0 +1,38 @@
+[package]
+name = "tydig-app"
+description = "tydig's hubs in a window of their own"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.91"
+publish = false
+
+[lib]
+name = "tydig_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "tydig"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = "2"
+tauri-plugin-deep-link = "2"
+tauri-plugin-opener = "2"
+serde_json = "1" # generate_context! needs it
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+[features]
+# The page from the binary, as `cargo tauri build` makes it; plain cargo too.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
