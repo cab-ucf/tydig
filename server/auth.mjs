@@ -92,8 +92,10 @@ export const joins = {
 // After the first account, signing up takes a join code, or an invitation
 // (sharing a project with an address makes one) and its id from the invite link.
 const OPEN = env.TYDIG_SIGNUP === 'open', MAX_PROJECTS = Number(env.TYDIG_MAX_PROJECTS || 50)
-const invitesFor = email => db.prepare("SELECT * FROM invitation WHERE lower(email) = lower(?) " +
-  "AND status = 'pending'").all(String(email)).filter(i => new Date(i.expiresAt) > new Date())
+export const invitesFor = email => db.prepare("SELECT i.*, o.slug AS project, u.name AS inviter " +
+  'FROM invitation i JOIN organization o ON o.id = i.organizationId LEFT JOIN user u ON u.id = i.inviterId ' +
+  "WHERE lower(i.email) = lower(?) AND i.status = 'pending'").all(String(email))
+  .filter(i => new Date(i.expiresAt) > new Date())
 const no = (code, message) => { throw new APIError(code, { message }) }
 const gate = createAuthMiddleware(async ctx => {
   if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))

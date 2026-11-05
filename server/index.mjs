@@ -8,8 +8,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
 import { DATA, HUB, hubFile, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped, epoch, edited } from './store.mjs'
-import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin }
-  from './auth.mjs'
+import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin,
+  invitesFor } from './auth.mjs'
 import * as build from './build.mjs'
 import * as files from './files.mjs'
 import * as history from './history.mjs'
@@ -77,6 +77,10 @@ app.use('/api', async (req, res, next) => {
 }, express.json({ type: r => r.is('json') && !/^\/p\/[^/]+\/(raw|import)\//.test(r.path) })) // a .json uploaded is a file
 app.get('/api/me', (req, res) => res.json({ id: req.user.id, name: req.user.name, email: req.user.email }))
 app.use('/api/irch-notify', irch.notify)
+// invitations to this address, asked about in the app: an account made
+// without the invite link (or before it) would never see them otherwise
+app.get('/api/invites', (req, res) => res.json(invitesFor(req.user.email)
+  .map(({ id, project, inviter }) => ({ id, project, inviter }))))
 app.get('/api/link', (req, res) => res.json({ link: link.LINK, online: link.online }))
 // a join code (auth.mjs) makes whoever is signed in a member of its project
 app.post('/api/join', async (req, res) => {

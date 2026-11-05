@@ -50,6 +50,15 @@ const bobEmail = (await (await as(bob, '/me')).json()).email
 const post = (jar, p, body) => as(jar, p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 check('Bob cannot add himself', (await post(bob, `/p/${proj}/members`, { email: bobEmail })).status === 403)
 check('unknown email invited', (await (await post(ann, `/p/${proj}/members`, { email: 'nobody@t.co' })).json()).invited === true)
+// an account made without its invite link is asked about the invitation in the app
+const cyEmail = `cy${Date.now()}@t.co`
+await post(ann, `/p/${proj}/members`, { email: cyEmail })
+const cy = await signup(cyEmail, 'Cy'), cyInv = await (await as(cy, '/invites')).json()
+check('Cy, signed up without the link, is asked about Ann\'s invitation',
+  cyInv.length === 1 && cyInv[0].project === proj && cyInv[0].inviter === 'Ann')
+check('nobody else is', !(await (await as(bob, '/invites')).json()).length)
+check('Cy joins', (await post(cy, '/auth/organization/accept-invitation', { invitationId: cyInv[0].id })).ok &&
+  (await as(cy, `/p/${proj}/files`)).ok && !(await (await as(cy, '/invites')).json()).length)
 const { invite } = await (await post(ann, `/p/${proj}/members`, { email: bobEmail })).json()
 check('Ann adds Bob, who accepts', (await post(bob, '/auth/organization/accept-invitation', { invitationId: invite })).ok)
 check('Bob now sees and reads the project', (await (await as(bob, '/projects')).json()).some(p => p.name === proj) &&

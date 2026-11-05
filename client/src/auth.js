@@ -18,7 +18,7 @@ export async function requireUser() {
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
-    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : me
+    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : invited(me)
     await loginScreen()
   }
 }
@@ -99,6 +99,26 @@ async function accepted(user) {
     ?.find(o => o.id === data.invitation.organizationId)?.slug
   if (slug) location.replace(`${location.pathname}?proj=${encodeURIComponent(slug)}${location.hash}`)
   return slug ? new Promise(() => {}) : user
+}
+// invitations to this address, each asked about: join, decline, or later
+async function invited(user) {
+  let to
+  for (const i of await fetch('/api/invites').then(r => r.json()).catch(() => [])) {
+    const d = document.body.appendChild(document.createElement('dialog'))
+    d.innerHTML = `<h3>Invited to ${esc(i.project)}</h3><p>${esc(i.inviter || 'Its owner')}
+      invited you (${esc(user.email)}); its members will see your name and address.</p>
+      <form method="dialog"><button value="join" class="go">Join</button>
+      <button value="no">Decline</button> <button value="">Later</button></form>`
+    const a = await new Promise(ok => { d.onclose = () => ok(d.returnValue); d.showModal() })
+    d.remove()
+    const { error } = a && await authClient.organization[a === 'join' ? 'acceptInvitation'
+      : 'rejectInvitation']({ invitationId: i.id })
+    if (error) alert(error.message)
+    else if (a === 'join') to ??= i.project
+  }
+  if (!to || q.get('proj')) return user
+  location.replace(`${location.pathname}?proj=${encodeURIComponent(to)}${location.hash}`)
+  return new Promise(() => {})
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'docs/'
