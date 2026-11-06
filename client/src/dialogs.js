@@ -2,7 +2,7 @@
 // agents, irch) and the git remote.
 import { authClient } from './auth.js'
 import { plain } from './link.js'
-import { $, api, post, del, esc, el, toast, projName, P, choose, me } from './util.js'
+import { $, api, post, del, esc, el, toast, projName, P, choose, me, settings } from './util.js'
 
 const go = n => location.search = `?proj=${n}`
 const modal = id => $(id).open || $(id).showModal()
@@ -73,6 +73,7 @@ export async function openPicker() {
     'search Typst Universe: journal, poster, thesis, IEEE…')
   }
   $('proj-brand').replaceChildren(new Option('no branding', ''), ...brands.map(b => new Option(b)))
+  $('proj-brand').value = settings.ucf && brands.includes('ucf') ? 'ucf' : ''
   $('proj-new').onsubmit = async () => {
     const n = $('proj-name').value
     const r = await post(`/projects/${n}`, { template: $('proj-tpl').value, brand: $('proj-brand').value })
@@ -130,8 +131,9 @@ export async function showShare() {
         Stop it once everyone is in; members stay.</p>
       <form id="share-add" class="row">
       <input type="email" id="share-email" placeholder="collaborator@email" required><button class="go">add</button></form>
-      <p class="hint">An address is invited unless its account here is verified: send them its invite link
-        (below it), which signs them up, or in, with the project waiting. The address alone gets nothing.</p>`
+      <p class="hint">${share.mails ? 'An address is mailed its invitation, and asked about it in the app.'
+        : 'An address is asked about its invitation in the app; nothing is mailed, so tell them.'}
+        Its invite link (below it) signs them up, or in, with the project waiting.</p>`
       : '<p class="hint">Only the owner can add collaborators.</p>'}
     ${share.link ? `<p class="hint">They open this in any browser, nothing to install:</p>
       <input readonly value="${esc(site)}">` : ''}
@@ -145,7 +147,8 @@ export async function showShare() {
     ${owner ? `<form id="irch-link" class="row"><input id="irch-url" placeholder="irch://open/…"
       value="${esc(irch.link || '')}"><button class="go">${irch.link ? 'change' : 'link'}</button></form>
       <p class="hint">The channel this project is discussed in: in irch, the channel's <i>Copy Link</i>. Only a
-        link: each person's irch opens it, if they are in that space; nothing is copied between them.</p>`
+        link: each person's irch opens it, if they are in that space; nothing is copied between them.</p>
+      ${irch.link ? '<button id="irch-invite">invite over irch</button>' : ''}`
       : irch.link ? `<p class="hint"><a href="${esc(irch.link)}">Discuss in irch ↗</a></p>`
       : '<p class="hint">No irch channel named for this project.</p>'}`
   const on = (act, f) => { for (const b of body.querySelectorAll(`[data-${act}]`)) b.onclick = () => f(b.dataset[act]) }
@@ -162,6 +165,12 @@ export async function showShare() {
   $('irch-link').onsubmit = async e => {
     e.preventDefault(); then(await api(P('/irch'), { method: 'PUT', body: JSON.stringify({ link: $('irch-url').value }),
       headers: { 'content-type': 'application/json' } }))
+  }
+  // a join code, said in the project's channel: copied, and the channel opened
+  if ($('irch-invite')) $('irch-invite').onclick = async () => {
+    const c = codes[0]?.code || (await post(P('/join'))).code
+    await navigator.clipboard.writeText(`Join ${projName} on tydig: ${siteWith('join=' + c)}`)
+    toast('Copied: paste it in the channel.'); location.href = irch.link; showShare()
   }
   $('code-add').onclick = async () => then(await post(P('/join')))
   $('share-add').onsubmit = async e => {

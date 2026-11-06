@@ -1,7 +1,7 @@
 // What every button and key does (any element with data-act names an
 // action here; keys.js binds the keys), and the layout: panes, themes, focus mode, the
 // editor|preview divider, and the phone's tab bar.
-import { $, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose, focusOn }
+import { $, ucf, settings, LAYOUT, saveSettings, theme, phone, phoneQ, projName, P, download, MOD, choose, focusOn }
   from './util.js'
 import { MODES } from './surprise.js'
 import { signOut, changeName, changePassword, deleteAccount, irchNotify } from './auth.js'
@@ -43,6 +43,7 @@ export const actions = {
   fullscreen: () => document.fullscreenElement ? document.exitFullscreen()
     : document.documentElement.requestFullscreen(),
   'zoom-in': () => zoom('+'), 'zoom-out': () => zoom('-'), 'zoom-fit': () => zoom('fit'),
+  ucf: flip('ucf'),
   theme: () => { settings.theme = { dark: 'cyber', cyber: 'light', light: 'dark' }[theme()]; applyLayout() },
   discuss, comments: pane('comments'), chat: pane('chat'), checklist: pane('checklist'), template: pane('template'),
   tags: () => path && tagMenu(path), history: pane('history'), build: pane('build'), review: pane('review'), spelling: pane('spelling'), aicheck: pane('aicheck'),
@@ -78,6 +79,7 @@ export function applyLayout() {
   })
   $('side').hidden = !settings.sideOpen // hidden in the markup, so it does not flash before this
   $('scope').hidden = !settings.scope; $('rail').querySelector('[data-pane=aicheck]').hidden = !settings.scope
+  ucf.disabled = !settings.ucf
   document.documentElement.dataset.theme = t; on('dark-preview', t !== 'light'); restyle()
   $('page').style.width = settings.zoom ? `${Math.round(820 * settings.zoom)}px` : '100%'
   $('zoom-pct').textContent = settings.zoom ? `${Math.round(100 * settings.zoom)}%` : 'Fit'

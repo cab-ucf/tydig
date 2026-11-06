@@ -6,11 +6,13 @@ import { getMigrations } from 'better-auth/db/migration'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { verifyPassword } from 'better-auth/crypto'
 import Database from 'better-sqlite3'
+import nodemailer from 'nodemailer'
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { DATA } from './store.mjs'
+import { LINK } from './link.mjs'
 
 const env = process.env
 const secretFile = path.join(DATA, '.auth-secret')
@@ -133,6 +135,14 @@ async function handOver(u) {
 }
 
 const BASE = env.TYDIG_URL || 'http://localhost:3000'
+// mail, if the hub can send it (TYDIG_SMTP=smtps://user:pass@host): invitations,
+// and the link that confirms an address; links go to the hub's link, else BASE
+const smtp = env.TYDIG_SMTP && nodemailer.createTransport(env.TYDIG_SMTP)
+const FROM = env.TYDIG_MAIL_FROM || smtp && decodeURIComponent(new URL(env.TYDIG_SMTP).username)
+const site = q => Object.assign(new URL(LINK || BASE), { search: q }).href
+const mail = (to, subject, text) => smtp?.sendMail({ from: FROM, to, subject, text })
+  .catch(e => console.warn('mail:', e.message))
+export const mails = !!smtp
 export const auth = betterAuth({
   database: db,
   secret: env.TYDIG_SECRET || readFileSync(secretFile, 'utf8').trim(),
@@ -143,6 +153,9 @@ export const auth = betterAuth({
   session: { expiresIn: 30 * 86400, updateAge: 86400 },
   advanced: { ipAddress: { ipAddressHeaders: ['x-tydig-ip'] } }, // set by index.mjs
   hooks: { before: gate },
+  emailVerification: { sendOnSignUp: !!smtp, autoSignInAfterVerification: true,
+    sendVerificationEmail: ({ user, token }) => mail(user.email, 'Confirm your address for tydig',
+      `Hi ${user.name},\n\nOpen this to confirm it is you:\n${site('verify=' + token)}\n`) },
   // an invitation is taken with its link, or by an address its IdP vouches for:
   // anyone may sign up as any address with a join code, or where signup is open
   databaseHooks: { user: { create: { after: async (u, ctx) => {
@@ -159,7 +172,11 @@ export const auth = betterAuth({
       scopes: ['openid', 'profile', 'email'],
       redirectURI: `${BASE}/api/auth/oauth2/callback/sso`, // as IdPs know it (index.mjs)
     }] })] : [],
-    organization({ allowUserToCreateOrganization: true, creatorRole: 'owner', organizationLimit: u => // owned
+    organization({ sendInvitationEmail: ({ id, email, inviter, organization: o }) =>
+      mail(email, `${inviter.user.name} invited you to ${o.slug} on tydig`,
+        `${inviter.user.name} (${inviter.user.email}) invited you to write ${o.slug} together.\n\n` +
+        `Open this to join, with an account here or a new one:\n${site('invite=' + id)}\n`),
+      allowUserToCreateOrganization: true, creatorRole: 'owner', organizationLimit: u => // owned
       db.prepare("SELECT count(*) n FROM member WHERE userId = ? AND role = 'owner'").get(u.id).n >= MAX_PROJECTS }),
   ],
 })

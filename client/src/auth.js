@@ -15,6 +15,12 @@ export const authClient = createAuthClient({
 
 export async function requireUser() {
   let early = self.tydigSession // asked by early.js, while the app downloaded
+  if (verify) { // the link mailed to confirm an address, which signs in too
+    const { error } = await authClient.verifyEmail({ query: { token: verify } })
+    history.replaceState(null, '', location.href.replace(/[?&]verify=[^&#]*/, ''))
+    if (error) alert(error.message || 'That link has expired: open the app for a new one.')
+    early = null
+  }
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
@@ -77,7 +83,7 @@ function explain(error, email) {
 
 // An invite link (?invite=<id>) opens on Create account and carries its key;
 // a join link (?join=<code>) carries a code, which works signed in or not.
-const q = new URLSearchParams(location.search), invite = q.get('invite')
+const q = new URLSearchParams(location.search), invite = q.get('invite'), verify = q.get('verify')
 let join = q.get('join')
 async function joined(user) {
   // a code typed is meant; one that came inside a link is asked about first
@@ -103,7 +109,10 @@ async function accepted(user) {
 // invitations to this address, each asked about: join, decline, or later
 async function invited(user) {
   let to
-  for (const i of await fetch('/api/invites').then(r => r.json()).catch(() => [])) {
+  const r = await fetch('/api/invites').then(r => r.json()).catch(() => ({}))
+  if (r.confirm) alert(`You were invited to a project. To see it, confirm ${user.email}: ` +
+    'open the link mailed to it.')
+  for (const i of r.invites || []) {
     const d = document.body.appendChild(document.createElement('dialog'))
     d.innerHTML = `<h3>Invited to ${esc(i.project)}</h3><p>${esc(i.inviter || 'Its owner')}
       invited you (${esc(user.email)}); its members will see your name and address.</p>
