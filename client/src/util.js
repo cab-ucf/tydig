@@ -1,6 +1,7 @@
 // Shared by every module: the page, settings, the session, the hub's API.
 import { link } from './link.js' // first: patches fetch and WebSocket in link mode
 import { requireUser } from './auth.js'
+import ucfCss from '../brands/ucf/brand.css?inline'
 export { link }
 
 export const $ = id => document.getElementById(id)
@@ -51,7 +52,17 @@ document.documentElement.dataset.theme = theme()
 export const phoneQ = matchMedia('(max-width: 800px), (max-height: 500px) and (pointer: coarse)')
 export const phone = () => phoneQ.matches
 
+// a click outside a dialog (on its backdrop) closes it, as Escape does
+let outside
+const out = e => e.target.tagName === 'DIALOG' && (r => e.clientX < r.left || e.clientX > r.right ||
+  e.clientY < r.top || e.clientY > r.bottom)(e.target.getBoundingClientRect())
+document.addEventListener('pointerdown', e => outside = out(e))
+document.addEventListener('click', e => outside && out(e) && e.target.close())
 export const me = await requireUser()
+// UCF's colours: an @ucf.edu address's default, whatever the hub's brand (Settings)
+export const ucf = document.head.appendChild(el('style', { textContent: ucfCss }))
+settings.ucf ??= /@ucf\.edu$/i.test(me.email)
+ucf.disabled = !settings.ucf
 export const api = async (p, opt) => {
   const r = await fetch('/api' + p, opt)
   if (r.status === 401) { location.reload(); return new Promise(() => {}) }

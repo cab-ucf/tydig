@@ -15,10 +15,16 @@ export const authClient = createAuthClient({
 
 export async function requireUser() {
   let early = self.tydigSession // asked by early.js, while the app downloaded
+  if (verify) { // the link mailed to confirm an address, which signs in too
+    const { error } = await authClient.verifyEmail({ query: { token: verify } })
+    history.replaceState(null, '', location.href.replace(/[?&]verify=[^&#]*/, ''))
+    if (error) alert(error.message || 'That link has expired: open the app for a new one.')
+    early = null
+  }
   for (;;) {
     const data = await early ?? (await authClient.getSession()).data
     early = null
-    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : me
+    if (data?.user) return me = data.user, join ? joined(me) : invite ? accepted(me) : invited(me)
     await loginScreen()
   }
 }
@@ -77,7 +83,7 @@ function explain(error, email) {
 
 // An invite link (?invite=<id>) opens on Create account and carries its key;
 // a join link (?join=<code>) carries a code, which works signed in or not.
-const q = new URLSearchParams(location.search), invite = q.get('invite')
+const q = new URLSearchParams(location.search), invite = q.get('invite'), verify = q.get('verify')
 let join = q.get('join')
 async function joined(user) {
   // a code typed is meant; one that came inside a link is asked about first
@@ -99,6 +105,29 @@ async function accepted(user) {
     ?.find(o => o.id === data.invitation.organizationId)?.slug
   if (slug) location.replace(`${location.pathname}?proj=${encodeURIComponent(slug)}${location.hash}`)
   return slug ? new Promise(() => {}) : user
+}
+// invitations to this address, each asked about: join, decline, or later
+async function invited(user) {
+  let to
+  const r = await fetch('/api/invites').then(r => r.json()).catch(() => ({}))
+  if (r.confirm) alert(`You were invited to a project. To see it, confirm ${user.email}: ` +
+    'open the link mailed to it.')
+  for (const i of r.invites || []) {
+    const d = document.body.appendChild(document.createElement('dialog'))
+    d.innerHTML = `<h3>Invited to ${esc(i.project)}</h3><p>${esc(i.inviter || 'Its owner')}
+      invited you (${esc(user.email)}); its members will see your name and address.</p>
+      <form method="dialog"><button value="join" class="go">Join</button>
+      <button value="no">Decline</button> <button value="">Later</button></form>`
+    const a = await new Promise(ok => { d.onclose = () => ok(d.returnValue); d.showModal() })
+    d.remove()
+    const { error } = a && await authClient.organization[a === 'join' ? 'acceptInvitation'
+      : 'rejectInvitation']({ invitationId: i.id })
+    if (error) alert(error.message)
+    else if (a === 'join') to ??= i.project
+  }
+  if (!to || q.get('proj')) return user
+  location.replace(`${location.pathname}?proj=${encodeURIComponent(to)}${location.hash}`)
+  return new Promise(() => {})
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'docs/'

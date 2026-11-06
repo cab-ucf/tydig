@@ -82,6 +82,7 @@ The water was #if R.T1 &gt; R.T2 [cooling] else [heating].</code></pre></li>
 <table>
 <tr><td><code>TYDIG_URL</code></td><td>the address people open (sign-in checks it); behind TLS also <code>TYDIG_TRUST_PROXY=1</code></td></tr>
 <tr><td><code>TYDIG_PORT</code>, <code>TYDIG_BIND=0.0.0.0</code></td><td>the hub's port (8080), on localhost unless bound to all</td></tr>
+<tr><td><code>TYDIG_SMTP</code>, <code>TYDIG_MAIL_FROM</code></td><td>mail (<code>smtps://user:pass@host</code>): invitations, and links that confirm an address; then only confirmed addresses see their invitations in the app</td></tr>
 <tr><td><code>TYDIG_SSO_DISCOVERY</code>, <code>_CLIENT_ID</code>, <code>_CLIENT_SECRET</code>, <code>_LABEL</code>, <code>_ONLY</code></td><td>institutional sign-in (OIDC); redirect URI <code>&lt;url&gt;/api/auth/oauth2/callback/sso</code></td></tr>
 <tr><td><code>TYDIG_SIGNUP=open</code></td><td>anyone who reaches the hub may sign up</td></tr>
 <tr><td><code>TYDIG_LINK=0</code>, <code>TYDIG_LINK_RELAY</code>, <code>TYDIG_PAGE</code></td><td>no link; pin one relay; another static site</td></tr>
