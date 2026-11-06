@@ -3,12 +3,24 @@
 import * as Y from 'yjs'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import { IndexeddbPersistence } from 'y-indexeddb'
-import { $, link, me, projName } from './util.js'
+import { $, link, me, projName, api } from './util.js'
 import { openPicker } from './dialogs.js'
 import { FILE as TAGFILE, TAGS, tagsOf, setTag } from '../../server/tags.mjs'
 import { setText } from '../../server/text.mjs'
 
-if (!projName) { openPicker(); throw new Error('awaiting project choice') }
+// no project named: the last one opened, else any; with none, the picker
+// stays until one is made (closing it left a page connecting to nothing)
+if (!projName) {
+  const ns = (await api('/projects')).filter(p => !p.archived).map(p => p.name)
+  const n = ns.includes(localStorage.proj) ? localStorage.proj : ns[0]
+  if (n) location.replace(`?proj=${n}${location.hash}`)
+  else {
+    openPicker(); $('picker').oncancel = e => e.preventDefault()
+    $('picker').querySelector('.dlg-close').hidden = true
+  }
+  throw new Error('awaiting project choice')
+}
+localStorage.proj = projName
 
 export const ydoc = new Y.Doc()
 export const files = ydoc.getMap('files') // path -> Y.Text

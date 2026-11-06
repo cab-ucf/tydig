@@ -57,7 +57,8 @@ let outside
 const out = e => e.target.tagName === 'DIALOG' && (r => e.clientX < r.left || e.clientX > r.right ||
   e.clientY < r.top || e.clientY > r.bottom)(e.target.getBoundingClientRect())
 document.addEventListener('pointerdown', e => outside = out(e))
-document.addEventListener('click', e => outside && out(e) && e.target.close())
+document.addEventListener('click', e => outside && out(e) &&
+  e.target.dispatchEvent(new Event('cancel', { cancelable: true })) && e.target.close())
 export const me = await requireUser()
 // UCF's colours: an @ucf.edu address's default, whatever the hub's brand (Settings)
 export const ucf = document.head.appendChild(el('style', { textContent: ucfCss }))
