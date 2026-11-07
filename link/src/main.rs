@@ -44,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // stream, BBRv3 23.
         let cc = noq_proto::congestion::Bbr3Config::default();
         let e = Endpoint::builder(presets::Minimal)
+            .crypto_provider(Arc::new(rustls::crypto::aws_lc_rs::default_provider()))
             .transport_config(
                 QuicTransportConfig::builder()
                     .congestion_controller_factory(Arc::new(cc))
@@ -76,6 +77,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(connection(inc, sock.clone(), cap.clone()));
     }
     Ok(())
+}
+
+#[test]
+fn handshakes_are_post_quantum() {
+    let p = rustls::crypto::aws_lc_rs::default_provider();
+    assert_eq!(p.kx_groups[0].name(), rustls::NamedGroup::X25519MLKEM768);
 }
 
 async fn connection(inc: Incoming, sock: Arc<str>, cap: Arc<Semaphore>) {
