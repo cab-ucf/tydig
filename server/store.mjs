@@ -123,7 +123,14 @@ export async function readIn(n, rel) {
   try { return await fh.readFile() } finally { await fh.close() }
 }
 export async function writeIn(n, rel, data) {
-  await fs.mkdir(path.dirname(inProj(n, rel)), { recursive: true })
+  // folders one at a time, none through a link: a symlink a pull or a build
+  // left would lead mkdir -p out of the project
+  let d = proj(n)
+  for (const part of path.dirname(rel).split('/').filter(p => p && p !== '.')) {
+    const s = await fs.lstat(d = path.join(d, part)).catch(() => null)
+    if (s && !s.isDirectory()) throw bad()
+    if (!s) await fs.mkdir(d).catch(e => { if (e.code !== 'EEXIST') throw e })
+  }
   const fh = await openIn(n, rel, true)
   try { await fh.truncate(0); await fh.writeFile(data) } finally { await fh.close() }
 }
