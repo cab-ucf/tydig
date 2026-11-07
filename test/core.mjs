@@ -209,6 +209,10 @@ check('symlink out of the project not served', (await fetch(`${HUB}/api/p/demo/r
 fA.set('trap.typ', new Y.Text('overwritten'))
 await sleep(2800)
 check('mirror does not write through a symlink', readFileSync('data/outside', 'utf8') === 'untouched')
+mkdirSync('data/outdir'); symlinkSync(`${process.cwd()}/data/outdir`, 'data/demo/door')
+fA.set('door/new/x.typ', new Y.Text('x'))
+await sleep(2800)
+check('mirror makes no folder through a symlink', !ex('data/outdir/new'))
 
 // path traversal guards
 const bad = await fetch(`${HUB}/api/p/demo/raw/../../etc/passwd`)
