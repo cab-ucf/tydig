@@ -9,7 +9,7 @@ import { prose, readAi, aiPct, ismAbout } from './surprise.js'
 import { renderSpelling } from './spell.js'
 import { $, el, esc, api, post, toast, settings, phone, me, projName, P, rawUrl, choose, icon, assist, focusOn }
   from './util.js'
-import { files, meta, provider, local, okPath, GEN, setText, AWAY } from './doc.js'
+import { files, meta, provider, local, editable, setText, AWAY } from './doc.js'
 import { view, path, open, openFile, reveal } from './editor.js'
 import { typeset, aiMarks } from './preview.js'
 import { renderComments, renderChat, unseen } from './comments.js'
@@ -180,7 +180,7 @@ export async function checkpoint(message = prompt('Checkpoint name:')) {
   try {
     const { registerDeviceKey, signCheckpoint } = await import('./prov.js')
     await registerDeviceKey(api, me.id)
-    const texts = [...files].filter(([p]) => okPath(p) && !GEN.test(p)).map(([p, t]) => [p, t.toString()])
+    const texts = [...files].filter(([p]) => editable(p)).map(([p, t]) => [p, t.toString()])
     signed = await signCheckpoint({ user: me.id, project: projName, message, files: texts })
   } catch (e) { console.warn('checkpoint will be unsigned:', e) }
   const r = await post(P('/checkpoint'), { message, ...signed }).catch(() => ({ error: 'the hub did not ' +

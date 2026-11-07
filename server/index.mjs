@@ -9,7 +9,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { WebSocketServer } from 'ws'
 import { DATA, HUB, hubFile, proj, okName, isProj, commit, ensureRepo, hocuspocus, save, dropped, epoch, edited } from './store.mjs'
 import { auth, sso, TRUSTED, originOk, session, projectsOf, access, userByEmail, lifecycle, joins, db, admin,
-  invitesFor, mails } from './auth.mjs'
+  askable, mails } from './auth.mjs'
 import * as build from './build.mjs'
 import * as files from './files.mjs'
 import * as history from './history.mjs'
@@ -83,7 +83,7 @@ app.use('/api/irch-notify', irch.notify)
 // link that confirms it (sign-up's own, then once an hour at most)
 const asked = new Map()
 app.get('/api/invites', async (req, res) => {
-  const u = req.user, all = invitesFor(u.email), hold = mails && !u.emailVerified && all.length > 0
+  const u = req.user, all = askable(u), hold = mails && !u.emailVerified && all.length > 0
   if (hold && Date.now() - (asked.get(u.id) ?? +new Date(u.createdAt)) > 3600_000) {
     asked.set(u.id, Date.now())
     await auth.api.sendVerificationEmail({ body: { email: u.email } }).catch(() => {})

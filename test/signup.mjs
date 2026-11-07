@@ -39,6 +39,12 @@ check('a member cannot point the project at a remote',
 const { statSync, existsSync } = await import('node:fs')
 await as(ann, '/projects/known_hosts', { method: 'POST' })
 check('a project named like a hub file leaves the hub\'s alone', existsSync('data/.hub/.known_hosts'))
+// an older hub's folders, moved at each start (migrate.mjs): a project of such a name is no such folder
+for (const n of ['agents', 'federation']) await as(ann, `/projects/${n}`, { method: 'POST' })
+await as(ann, '/p/agents/raw/paper.json', { method: 'PUT', body: '[{"name":"x","hash":"y"}]' })
+;(await import('../server/migrate.mjs')).migrate('data', 'data/.hub')
+check('a project named like an older hub\'s folder outlives a restart, and plants no agent in another',
+  existsSync('data/agents/paper.json') && existsSync('data/federation/.git') && !existsSync('data/.hub/paper/agents.json'))
 check('auth.db (hashes, sessions) is readable by the hub user alone', (statSync('data/auth.db').mode & 0o077) === 0 && (statSync('data').mode & 0o077) === 0)
 
 const org = await (await as(ann, '/auth/organization/get-full-organization?organizationSlug=paper')).json()
@@ -98,6 +104,11 @@ await as(cat, '/p/inner/members', { method: 'POST', body: JSON.stringify({ email
 const ivy = jar(await joinUp('ivy@example.com', code))
 check('a code signs up any address, but takes no invitation meant for it',
   !(await (await as(ivy, '/projects')).json()).some(p => p.name === 'inner'))
+const asked = async c => (await (await as(c, '/invites')).json()).invites.map(i => i.project)
+check('nor is asked about it in the app: one made before the account is taken by its link', !(await asked(ivy)).includes('inner'))
+await as(cat, '/projects/later', { method: 'POST' })
+await as(cat, '/p/later/members', { method: 'POST', body: JSON.stringify({ email: 'ivy@example.com' }) })
+check('one made for the account, once it was here, is asked about', (await asked(ivy)).includes('later'))
 await as(cat, `/p/paper/join/${code}`, { method: 'DELETE' })
 check('a stopped code signs no one up', (await joinUp('fay@example.com', code)).status === 403)
 check('and its members stay', (await as(dee, '/p/paper/files')).ok)

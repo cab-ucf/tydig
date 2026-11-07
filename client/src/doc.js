@@ -6,7 +6,7 @@ import { IndexeddbPersistence } from 'y-indexeddb'
 import { $, link, me, projName } from './util.js'
 import { openPicker } from './dialogs.js'
 import { FILE as TAGFILE, TAGS, tagsOf, setTag } from '../../server/tags.mjs'
-import { setText } from '../../server/text.mjs'
+import { setText, GEN, okPath, editable } from '../../server/text.mjs'
 
 if (!projName) { openPicker(); throw new Error('awaiting project choice') }
 
@@ -54,12 +54,10 @@ provider.on('status', ({ status }) => {
     ?? 'offline (saving locally)'
 })
 
-// Text outside build output lives here; anything else is a file on disk.
-export const GEN = /^(out|build|figures)\//
+// Text outside build output (editable) lives here; anything else is a file on disk.
+// setText: only the span that changed, so comment anchors, cursors and undo survive.
+export { GEN, okPath, editable, setText }
 export const isImg = p => /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(p)
-export const okPath = p => /^[\w./@ -]+$/.test(p) &&
-  p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
-export { setText } // only the span that changed: comment anchors, cursors and undo survive
 
 // A file's tags, from the project's .gitattributes (server/tags.mjs):
 // ai-generated, read-only. Setting one edits that file, so it syncs and is kept.

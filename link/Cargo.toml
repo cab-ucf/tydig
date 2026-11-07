@@ -7,7 +7,9 @@ rust-version = "1.91"
 publish = false
 
 [dependencies]
-iroh = { version = "1.4", default-features = false, features = ["tls-ring"] }
+iroh = { version = "1.4", default-features = false, features = ["tls-aws-lc-rs"] }
+# X25519MLKEM768 first: the page's wasm offers it (irp's core/src/pq.rs).
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "prefer-post-quantum"] }
 noq-proto = { version = "1.4", default-features = false }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 

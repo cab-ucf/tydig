@@ -10,7 +10,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { DATA, HUB, git, run, commit, live, mirror, editable, hubFile,
-  isProj, mergeInto, collab, gitPin } from './store.mjs'
+  isProj, mergeInto, collab, gitPin, readJson, writeJson } from './store.mjs'
 import { admin } from './auth.mjs'
 import { publicOnly } from './public.mjs'
 
@@ -18,11 +18,8 @@ const idFile = path.join(DATA, 'hub-id')
 if (!existsSync(idFile)) writeFileSync(idFile, randomBytes(8).toString('hex') + '\n')
 export const hubId = readFileSync(idFile, 'utf8').trim()
 
-const cfg = async n => JSON.parse(await readFile(hubFile(n, 'remote.json'), 'utf8').catch(() => 'null'))
-const setCfg = async (n, c) => {
-  await mkdir(path.join(HUB, n), { recursive: true })
-  await writeFile(hubFile(n, 'remote.json'), JSON.stringify(c), { mode: 0o600 })
-}
+const cfg = n => readJson(hubFile(n, 'remote.json'))
+const setCfg = (n, c) => writeJson(hubFile(n, 'remote.json'), c)
 const redact = u => String(u).replace(/\/\/[^/@]*@/, '//***@')
 export const sshUrl = u => /^(git@|ssh:\/\/)/.test(String(u))
 

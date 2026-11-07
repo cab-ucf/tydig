@@ -3,7 +3,7 @@
 import * as Y from 'yjs'
 import { $, el, dot, color, esc, api, del, settings, phone, download, asText, projName, P, rawUrl, choose, me }
   from './util.js'
-import { ydoc, files, comments, meta, provider, okPath, GEN, setText, tags, tag, TAGS } from './doc.js'
+import { ydoc, files, comments, meta, provider, okPath, GEN, editable, setText, tags, tag, TAGS } from './doc.js'
 import { path, open, openFile, reveal } from './editor.js'
 import { fileComments, rel } from './comments.js'
 import { scheduleCompile } from './preview.js'
@@ -152,7 +152,7 @@ async function upload(list, dir) {
       await unpackInto(projName, f, dir); continue
     }
     const p = (dir ? dir + '/' : '') + f.name.replace(/[^\w.@ -]/g, '_'), t = files.get(p)
-    const s = okPath(p) && !GEN.test(p) ? await asText(f) : null
+    const s = editable(p) ? await asText(f) : null
     if (s != null) { t ? setText(t, s) : files.set(p, new Y.Text(s)); continue }
     const r = await fetch(rawUrl(p), { method: 'PUT', body: f })
     if (!r.ok) failed.push(`${p}: ` + (r.status === 413 ? 'larger than 50 MB'

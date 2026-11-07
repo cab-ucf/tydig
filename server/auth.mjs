@@ -98,6 +98,11 @@ export const invitesFor = email => db.prepare("SELECT i.*, o.slug AS project, u.
   'FROM invitation i JOIN organization o ON o.id = i.organizationId LEFT JOIN user u ON u.id = i.inviterId ' +
   "WHERE lower(i.email) = lower(?) AND i.status = 'pending'").all(String(email))
   .filter(i => new Date(i.expiresAt) > new Date())
+// those an account is asked about in the app: on an invite-only hub, one made
+// before it, by its link alone, unless its address is verified (a join code
+// signs up any address)
+export const askable = u => invitesFor(u.email)
+  .filter(i => OPEN || u.emailVerified || new Date(i.createdAt) >= new Date(u.createdAt))
 const no = (code, message) => { throw new APIError(code, { message }) }
 const gate = createAuthMiddleware(async ctx => {
   if (ctx.request && /^\/organization\/(create|update|delete)$/.test(ctx.path))

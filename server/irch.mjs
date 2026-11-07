@@ -5,17 +5,11 @@
 import express from 'express'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import path from 'node:path'
-import { HUB, hubFile, opened } from './store.mjs'
+import { HUB, hubFile, opened, readJson as read, writeJson as write } from './store.mjs'
 import { admin, db, TRUSTED } from './auth.mjs'
-
-const read = f => existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null
-const write = (f, v) => {
-  mkdirSync(path.dirname(f), { recursive: true })
-  writeFileSync(f, JSON.stringify(v), { mode: 0o600 })
-}
 
 // ---- a project's channel: only a link ----
 const LINK = /^irch:\/\/open\/[0-9a-f]{64}\/[0-9a-f]{16}$/
