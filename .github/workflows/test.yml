@@ -2,7 +2,11 @@
 # and pull request; the link's Rust, formatted and linted. Third-party code
 # pinned: actions by commit, typst by hash.
 name: test
-on: [push, pull_request]
+# Once per pull request (a push to its branch is not a second run), or by
+# hand; Markdown alone runs nothing: minutes are scarce.
+on:
+  pull_request: { paths-ignore: ["**.md"] }
+  workflow_dispatch:
 permissions: { contents: read }
 jobs:
   test:
