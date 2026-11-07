@@ -16,5 +16,11 @@ for (const to of ['127.0.0.1:443', 'localhost:443', '10.0.0.1:443', '192.168.1.1
   check(`refused: ${to}`, (await say(`CONNECT ${to} HTTP/1.1\r\nHost: ${to}\r\n\r\n`)).startsWith('HTTP/1.1 403'))
 check('plain HTTP is not proxied', (await say('GET http://example.com/ HTTP/1.1\r\nHost: example.com\r\n\r\n')).startsWith('HTTP/1.1 405'))
 check('a public address passes the check', (await publicOnly('8.8.8.8'))[0].address === '8.8.8.8')
+// A project's Containerfile: what podman would fetch past --network=none
+const { reaches } = await import('../server/sandbox.mjs')
+for (const f of ['ADD http://169.254.169.254/latest/meta-data/ /m', 'add ["https://x.example/a", "/a"]',
+  'ADD git@github.com:a/b.git /b', 'ADD \\\n  http://10.0.0.1/ /x', 'RUN --network=host curl x', 'ONBUILD ADD . /x'])
+  check(`refused: ${JSON.stringify(f)}`, !!reaches(`FROM docker.io/library/alpine\n${f}\n`))
+check('a plain Containerfile passes', !reaches('FROM docker.io/library/alpine\n# ADD http://x\nCOPY . /src\nRUN make\n'))
 eg.kill()
 done()
