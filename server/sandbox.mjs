@@ -98,11 +98,20 @@ const args = (proj, secs, i, cmd, own) => {
 // run's secret, so no project's FROM can name another's; it is run by its ID.
 // Its ignore files are read where they are, never through a link.
 const KEY = randomBytes(32), P = 'localhost/tydig-p-'
+// What podman itself would fetch, past --network=none (which covers RUN
+// only): ADD from a URL or git, any --network, ONBUILD (a later build's
+// ADD). The first such line, refused unless TYDIG_IMAGE_NET=1. A base image's
+// own ONBUILD is beyond a text check: the hub's firewall answers for that.
+export const reaches = text => text.replace(/[\\`]\r?\n/g, ' ').split(/\r?\n/).map(l => l.trim())
+  .find(l => /^onbuild\b/i.test(l) || /--network\b/i.test(l) || /^add\b/i.test(l) && /:\/\/|git@/i.test(l))
 const ID = /\b([0-9a-f]{64})\s*$/, IMAGE_NET = !NONET && process.env.TYDIG_IMAGE_NET === '1'
 const mine = async proj => {
   const dir = path.join(DATA, proj), t = `/tmp/${proj}`
   const tag = P + createHmac('sha256', KEY).update(proj).digest('hex').slice(0, 32)
   if (!lstatSync(path.join(dir, 'Containerfile'), { throwIfNoEntry: false })?.isFile()) return
+  const far = !IMAGE_NET && reaches(readFileSync(path.join(dir, 'Containerfile'), { encoding: 'utf8', flag: constants.O_NOFOLLOW }))
+  if (far) throw new Error(`the project's Containerfile would reach the network from the hub's machine: ${far.slice(0, 200)}
+(TYDIG_IMAGE_NET=1 on the hub allows it, for hubs whose members are all trusted)`)
   const keep = ['.containerignore', '.dockerignore'].map(f => {
     try { return readFileSync(path.join(dir, f), { encoding: 'utf8', flag: constants.O_NOFOLLOW }) } catch { return '' }
   })
