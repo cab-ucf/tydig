@@ -5,12 +5,13 @@ import * as Y from 'yjs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs/promises'
-import { existsSync, watch, mkdirSync, constants as FS } from 'node:fs'
+import { existsSync, watch, mkdirSync, readFileSync, writeFileSync, constants as FS } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { migrate } from './migrate.mjs'
-import { setText } from './text.mjs'
+import { setText, GEN, editable, textOf } from './text.mjs'
+export { GEN, okPath, editable, textOf } from './text.mjs'
 
 export const run = promisify(execFile)
 export const DATA = path.resolve(process.env.TYDIG_DATA || 'data')
@@ -19,15 +20,17 @@ export const HUB = path.join(DATA, '.hub')
 mkdirSync(HUB, { recursive: true, mode: 0o700 })
 migrate(DATA, HUB)
 
-export const GEN = /^(out|build|figures)\// // build output: disk only
 export const okName = n => /^[\w-]{1,64}$/.test(n)
-export const okPath = p => typeof p === 'string' && p.length < 256 && /^[\w./@ -]+$/.test(p) &&
-  p.split('/').every(s => s && s !== '.' && s !== '..' && !/^\.(git|collab)$/i.test(s))
-export const editable = p => okPath(p) && !GEN.test(p)
 export const proj = n => path.join(DATA, n)
 export const inProj = (n, p) => path.join(DATA, n, p)
 export const hubFile = (n, f) => path.join(HUB, n, f)
 export const isProj = n => okName(n) && existsSync(inProj(n, '.git'))
+// the hub's own JSON files (DATA/.hub): null if none, written for its user alone
+export const readJson = f => existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null
+export const writeJson = (f, v) => {
+  mkdirSync(path.dirname(f), { recursive: true })
+  writeFileSync(f, JSON.stringify(v), { mode: 0o600 })
+}
 // projects being removed: nothing writes them again (a save may be under way)
 export const dropped = new Set()
 // whole or not at all, and never two writers in one temporary file
@@ -35,13 +38,6 @@ export async function writeAtomic(f, data, mode) {
   const tmp = `${f}.${randomUUID()}`
   try { await fs.writeFile(tmp, data, { mode }); await fs.rename(tmp, f) }
   finally { await fs.rm(tmp, { force: true }) }
-}
-
-// text: UTF-8, no NUL, under 1 MB, whatever the name
-const utf8 = new TextDecoder('utf-8', { fatal: true })
-export const textOf = b => {
-  if (b.length >= 1e6 || b.includes(0)) return null
-  try { return utf8.decode(b) } catch { return null }
 }
 
 // git, one call at a time per project; never prompts, never runs a build's

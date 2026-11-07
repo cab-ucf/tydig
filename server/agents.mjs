@@ -7,20 +7,15 @@
 import express from 'express'
 import * as Y from 'yjs'
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import path from 'node:path'
-import { HUB, hubFile, isProj, live, editable, mergeInto } from './store.mjs'
+import { hubFile, isProj, live, editable, mergeInto, readJson, writeJson } from './store.mjs'
 import { admin } from './auth.mjs'
 import { FILE as TAGFILE, tagsOf } from './tags.mjs'
 import { SEARCH, byDoi, byPmid, parseBib, addTo, check } from './refs.mjs'
 
 // tokens: the hub keeps their hashes (DATA/.hub/<project>/agents.json)
 const file = n => hubFile(n, 'agents.json')
-const agentsOf = n => existsSync(file(n)) ? JSON.parse(readFileSync(file(n), 'utf8')) : []
-const save = (n, a) => {
-  mkdirSync(path.join(HUB, n), { recursive: true })
-  writeFileSync(file(n), JSON.stringify(a), { mode: 0o600 })
-}
+const agentsOf = n => readJson(file(n)) ?? []
+const save = (n, a) => writeJson(file(n), a)
 const hash = t => createHash('sha256').update(String(t)).digest('hex')
 
 export const router = express.Router({ mergeParams: true })

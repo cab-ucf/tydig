@@ -14,7 +14,7 @@ import { typst } from 'codemirror-lang-typst'
 import { surprise, aiText, aiAbout, MODES, prose } from './surprise.js'
 import { spellcheck } from './spell.js'
 import { $, el, api, assist, settings, theme, projName, P, rawUrl, saveAs, asText } from './util.js'
-import { files, provider, ws, isImg, okPath, GEN, tags, onTags, TAGS } from './doc.js'
+import { files, provider, ws, isImg, editable, tags, onTags, TAGS } from './doc.js'
 import { ghost } from './ghost.js'
 import { commentExt } from './comments.js'
 import { renderTree } from './tree.js'
@@ -178,7 +178,7 @@ async function openDisk(p) {
   const blob = await r.blob(), text = isImg(p) ? null : await asText(blob), pdf = /\.pdf$/i.test(p)
   if (my !== opening) return
   // text that reached the disk some other way (a shell, git, an older hub) joins the CRDT
-  if (text != null && okPath(p) && !GEN.test(p)) { files.set(p, new Y.Text(text)); return openFile(p) }
+  if (text != null && editable(p)) { files.set(p, new Y.Text(text)); return openFile(p) }
   if (pdf || text == null && !isImg(p))
     return saveAs(blob, p, pdf ? 'application/pdf' : 'application/octet-stream')
   const lang = text != null && await langFor(p)

@@ -129,7 +129,7 @@ async function invited(user) {
   location.replace(`${location.pathname}?proj=${encodeURIComponent(to)}${location.hash}`)
   return new Promise(() => {})
 }
-const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
+export const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 const DOCS = 'docs/'
 // the static site: open any hub by its link or code
 const hubBox = `<form class="auth-hub"><input name="hub" required

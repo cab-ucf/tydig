@@ -1,11 +1,11 @@
 // Shared by every module: the page, settings, the session, the hub's API.
 import { link } from './link.js' // first: patches fetch and WebSocket in link mode
-import { requireUser } from './auth.js'
+import { requireUser, esc } from './auth.js'
+import { textOf } from '../../server/text.mjs'
 import ucfCss from '../brands/ucf/brand.css?inline'
-export { link }
+export { link, esc }
 
 export const $ = id => document.getElementById(id)
-export const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`)
 export const el = (tag, props, ...kids) => {
   const e = Object.assign(document.createElement(tag), props)
   e.append(...kids)
@@ -122,9 +122,5 @@ export const download = async (url, name) => {
   const r = await fetch(url)
   r.ok ? saveAs(await r.blob(), name, 'application/octet-stream') : alert(`download failed: ${r.status}`)
 }
-// Text is UTF-8 with no NUL byte, under 1 MB, whatever the file is called.
-export const asText = async blob => {
-  const b = blob.size < 1e6 && new Uint8Array(await blob.arrayBuffer())
-  try { return b && !b.includes(0) ? new TextDecoder('utf-8', { fatal: true }).decode(b) : null }
-  catch { return null }
-}
+// text by the hub's rule (server/text.mjs), whatever the file is called
+export const asText = async blob => blob.size < 1e6 ? textOf(new Uint8Array(await blob.arrayBuffer())) : null
