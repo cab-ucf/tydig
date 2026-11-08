@@ -6,7 +6,7 @@ import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { WebSocketServer } from 'ws'
-import { run, proj, inProj, building, editable, readIn } from './store.mjs'
+import { run, proj, inProj, building, editable, readIn, fail } from './store.mjs'
 import { at } from './sandbox.mjs'
 import { QUOTA, used } from './files.mjs'
 
@@ -49,17 +49,17 @@ const sandboxed = (n, [cmd, ...args], secs, own, signal) => (UNSAFE
 // TYDIG_MAX_BUILDS in all; stopped once its project passes its quota
 const runs = new Map() // user -> builds running
 async function exec(n, cmd, own, u) {
-  if (building.has(n)) throw Object.assign(new Error('a build is already running'), { status: 409 })
-  if (building.size >= MAX) throw Object.assign(new Error('the hub is busy; try again shortly'), { status: 429 })
-  if (runs.get(u) >= PER) throw Object.assign(new Error('you have a build running; try again when it ends'), { status: 429 })
+  if (building.has(n)) throw fail(409, 'a build is already running')
+  if (building.size >= MAX) throw fail(429, 'the hub is busy; try again shortly')
+  if (runs.get(u) >= PER) throw fail(429, 'you have a build running; try again when it ends')
   building.add(n); runs.set(u, (runs.get(u) || 0) + 1)
   const ac = new AbortController(), full = async () => await used(n) > QUOTA
   const t = setInterval(async () => await full() && ac.abort(), 5000)
   try { const r = await sandboxed(n, cmd, 180, own, ac.signal); if (!await full()) return r }
   catch (e) { if (!ac.signal.aborted) throw e }
   finally { clearInterval(t); building.delete(n); runs.set(u, runs.get(u) - 1) }
-  throw Object.assign(new Error(`the build took the project past its ${QUOTA / 2 ** 20} MB ` +
-    'limit (TYDIG_QUOTA_MB): delete some of what it wrote'), { status: 413 })
+  throw fail(413, `the build took the project past its ${QUOTA / 2 ** 20} MB ` +
+    'limit (TYDIG_QUOTA_MB): delete some of what it wrote')
 }
 const why = e => typeof e.code === 'string' || /image not known|initializing source/.test(e.stderr)
   ? 'the build sandbox is not running or has no image: `just` on the hub starts it'
