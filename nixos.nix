@@ -60,13 +60,17 @@ in {
     systemd.services.tydig = {
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ]; after = [ "network-online.target" ];
+      path = [ pkgs.util-linux ];
       serviceConfig = {
         User = "tydig"; Restart = "always"; RestartSec = 10;
+        # root, for the secrets, but never through a link tydig's files could be
+        # (an escaped build holds that account): tydig writes, nofollow reads
         ExecStartPre = "+" + pkgs.writeShellScript "tydig-env" ''
-          cd /var/lib/tydig; umask 077
-          [ -e ${cfg.environmentFile} ] || [ ! -e src/.env ] || cp src/.env ${cfg.environmentFile} # an older nixos.nix's
-          cat ${pkgs.writeText "tydig.env" (lib.generators.toKeyValue { } cfg.settings)} > .env
-          cat ${cfg.environmentFile} >> .env 2>/dev/null; chown tydig .env
+          cd /var/lib/tydig; umask 077; f=${cfg.environmentFile}
+          as() { runuser -u tydig -- "$@"; }
+          [ -e $f ] || [ ! -e src/.env ] || as cat src/.env | dd of=$f conv=excl status=none # an older nixos.nix's
+          { cat ${pkgs.writeText "tydig.env" (lib.generators.toKeyValue { } cfg.settings)}
+            dd if=$f iflag=nofollow status=none 2>/dev/null; } | as sh -c 'umask 077; cat > .env'
           [ -e src/data ] || rm -rf src
         '';
       };
