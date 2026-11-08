@@ -25,7 +25,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
           libgtk-3-dev libsoup-3.0-dev librsvg2-dev
-      - run: cargo install tauri-cli --version 2.12.4 --locked
+      - uses: ./.github/actions/cargo-tauri
       - run: cargo tauri build
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
