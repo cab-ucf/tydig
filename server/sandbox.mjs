@@ -39,8 +39,7 @@ async function image(from) {
     if (!await podman(['build', '-t', IMAGE, '-f', path.join(CTX, 'sandbox/Containerfile'), CTX], { stdio: 'inherit' }))
       return console.warn(`build image ${IMAGE} failed to build: builds cannot run`)
   }
-  const old = await new Promise(ok => { let o = ''; spawn('podman', ['images', '--format', '{{.Repository}}:{{.Tag}}',
-    'localhost/tydig-build']).on('error', () => ok('')).stdout.on('data', d => o += d).on('end', () => ok(o)) })
+  const old = (await said(['images', '--format', '{{.Repository}}:{{.Tag}}', 'localhost/tydig-build'])).out
   for (const t of old.split('\n').filter(t => t && t !== IMAGE)) await podman(['rmi', t])
 }
 const AT = process.env.TYDIG_SANDBOX || '/run/tydig/sandbox.sock'
@@ -55,13 +54,12 @@ const NET = ['--http-proxy=false', ...NONET ? ['--network=none'] : ['--network=t
 // a Containerfile's RUN steps: a build's memory and CPUs, and as podman build
 // has no --pids-limit, a process limit
 const LIMITS = ['--memory=2g', '--cpu-quota=200000', '--ulimit=nproc=2048:2048']
-// gVisor (runsc and sandbox/gvisor-run, in the build image): a build's command
-// runs under a kernel of its own, so a kernel bug it reaches is gVisor's, not
-// the host's; gVisor hides .git and .collab itself. Its one need of the
-// container is CAP_SYS_CHROOT, to set up its root; the build gets nothing.
-// Probed at start; a build it will not start for fails, never runs outside
-// it (a project's image could make it fail on purpose); TYDIG_RUNTIME=none:
-// plain containers.
+// gVisor (sandbox/gvisor-run): a build runs under a kernel of its own, so a
+// kernel bug it reaches is gVisor's, not the host's; it hides .git and .collab
+// itself. It needs CAP_SYS_CHROOT for its root; the build gets nothing.
+// Probed at start; a build it will not start fails, never runs outside it (a
+// project's image could make it fail on purpose). TYDIG_RUNTIME=none: plain
+// containers.
 let gvisor = false
 const under = cmd => gvisor ? ['gvisor-run', NONET ? 'none' : 'host', ...cmd] : cmd
 // as 1000, or in a project's image as its root (the hub's user): no capabilities
@@ -87,21 +85,17 @@ const args = (proj, secs, i, cmd, own) => {
     'sh', '-c', PIN, `${s.dev}:${s.ino}`, ...under(cmd)]
 }
 
-// A project with a Containerfile builds in its own image, as its Justfile
-// does: made before each build (podman's cache makes that a moment), from the
-// project less .git and .collab. Its RUN steps are podman's, not gVisor's, and
-// podman's network reaches all this machine does (the LAN, cloud metadata):
-// rootless, a build cannot join egress's network, so RUN has none unless
-// TYDIG_IMAGE_NET=1 (members all trusted).
-// Then /root opened to all: under gVisor a build sees only files' "other" bits
-// (rustup, uv tool and pip --user install there). Its name is keyed by this
-// run's secret, so no project's FROM can name another's; it is run by its ID.
-// Its ignore files are read where they are, never through a link.
+// A project with a Containerfile builds in its own image, made before each
+// build (cached) from the project less .git and .collab. RUN steps are
+// podman's, not gVisor's, and podman's network reaches all this machine does
+// (LAN, cloud metadata), so RUN has none unless TYDIG_IMAGE_NET=1. /root is
+// then opened to all: under gVisor a build sees only "other" bits (rustup, uv,
+// pip --user live there). Tags are keyed by this run's secret, so no FROM can
+// name another project's; ignore files are never read through a link.
 const KEY = randomBytes(32), P = 'localhost/tydig-p-'
-// What podman itself would fetch, past --network=none (which covers RUN
-// only): ADD from a URL or git, any --network, ONBUILD (a later build's
-// ADD). The first such line, refused unless TYDIG_IMAGE_NET=1. A base image's
-// own ONBUILD is beyond a text check: the hub's firewall answers for that.
+// The first line podman itself would fetch past --network=none (RUN only):
+// ADD from a URL or git, any --network, ONBUILD. A base image's own ONBUILD
+// is beyond a text check: the hub's firewall answers for that.
 export const reaches = text => text.replace(/[\\`]\r?\n/g, ' ').split(/\r?\n/).map(l => l.trim())
   .find(l => /^onbuild\b/i.test(l) || /--network\b/i.test(l) || /^add\b/i.test(l) && /:\/\/|git@/i.test(l))
 const ID = /\b([0-9a-f]{64})\s*$/, IMAGE_NET = !NONET && process.env.TYDIG_IMAGE_NET === '1'

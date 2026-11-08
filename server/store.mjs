@@ -102,7 +102,8 @@ export async function ensureRepo(n) {
 
 // Files inside the project only: no symlink, no swapped directory (the
 // kernel says where the open file is).
-export const bad = () => Object.assign(new Error('bad path'), { status: 400 })
+export const fail = (status, message) => Object.assign(new Error(message), { status })
+export const bad = () => fail(400, 'bad path')
 export async function safe(n, rel) {
   const f = inProj(n, rel), root = await fs.realpath(proj(n)) + path.sep
   const d = await fs.realpath(path.dirname(f)).catch(() => '')

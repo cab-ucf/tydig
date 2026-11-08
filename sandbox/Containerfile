@@ -11,22 +11,32 @@ RUN pip install --no-cache-dir numpy pandas matplotlib seaborn pooch openpyxl py
 # uv run: its venv and cache in /tmp, never a .venv in the project
 ENV UV_PROJECT_ENVIRONMENT=/tmp/venv UV_CACHE_DIR=/tmp/uv
 ARG TYPST=0.15.1 JUST=1.46.0 TINYMIST=0.15.8 PANDOC=3.8.2 GVISOR=20260928
-# gVisor: each build runs under a kernel of its own (server/sandbox.mjs); checked
+# every download checked: typst, just, tinymist, pandoc (sha256, those versions);
+# gVisor (sha512): each build runs under a kernel of its own (server/sandbox.mjs)
+ARG SUM_x86_64="a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c \
+ 79966e6e353f535ee7d1c6221641bcc8e3381c55b0d0a6dc6e54b34f9db36eaa \
+ 816d33895ae343f934403dbd73f687a531368464450451510f3c108b0c04bcfd \
+ 3252c5fd8234925f46973f4f17f852ccda64777a0c631d5735861c7eb4d69132"
+ARG SUM_aarch64="5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee \
+ b81970c8247fa64cfb30d2a3da0e487e4253f9f2d01865ed5e7d53cdc7b02188 \
+ 8055377bfd463c05dc7e9cf4116d355ba0c2bb80a68a583b31905830f2d311eb \
+ 898b5c1f6bcab8a60253cca1027e43476efa22d1ce99232bb958cd11803bcb90"
 ARG GVISOR_x86_64=c8d3a9fd4d4c4f5b8ff213caa4517356be128d18659ec4cde37828fe797f61a9725a602a846c81a8ed19c057a996515d31c081eba343ed4613a89951ba32ed59
 ARG GVISOR_aarch64=926538a4f20056d44838f230297ecec9192db2562e2523a207295f706b76126725f2ff7b4e59d747147510c5714057eeec862a0f77d43bf625746592b5f51b00
 RUN apt-get update && apt-get install -y --no-install-recommends make xz-utils bzip2 curl \
- && a=$(uname -m) && gh=https://github.com \
- && curl -fsSL $gh/typst/typst/releases/download/v$TYPST/typst-$a-unknown-linux-musl.tar.xz \
-    | tar -xJ -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
- && curl -fsSL $gh/casey/just/releases/download/$JUST/just-$JUST-$a-unknown-linux-musl.tar.gz \
-    | tar -xz -C /usr/local/bin just \
- && curl -fsSL $gh/Myriad-Dreamin/tinymist/releases/download/v$TINYMIST/tinymist-$a-unknown-linux-musl.tar.gz \
-    | tar -xz -C /usr/local/bin --strip-components=1 tinymist-$a-unknown-linux-musl/tinymist \
- && curl -fsSL $gh/jgm/pandoc/releases/download/$PANDOC/pandoc-$PANDOC-linux-$(dpkg --print-architecture).tar.gz \
-    | tar -xz -C /usr/local/bin --strip-components=2 pandoc-$PANDOC/bin/pandoc \
- && curl -fsSL -o /tmp/g.tbz https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$a/gvisor.tar.bz2 \
- && eval sha=\$GVISOR_$a && echo "$sha  /tmp/g.tbz" | sha512sum -c - \
- && tar -xjf /tmp/g.tbz -C /usr/local/bin runsc gvisor-bin && rm /tmp/g.tbz \
+ && a=$(uname -m) && gh=https://github.com && d=/tmp/d && eval "set -- \$SUM_$a" \
+ && get() { curl -fsSL -o $d "$1" && echo "$2  $d" | sha256sum -c -; } \
+ && get $gh/typst/typst/releases/download/v$TYPST/typst-$a-unknown-linux-musl.tar.xz $1 \
+ && tar -xJf $d -C /usr/local/bin --strip-components=1 typst-$a-unknown-linux-musl/typst \
+ && get $gh/casey/just/releases/download/$JUST/just-$JUST-$a-unknown-linux-musl.tar.gz $2 \
+ && tar -xzf $d -C /usr/local/bin just \
+ && get $gh/Myriad-Dreamin/tinymist/releases/download/v$TINYMIST/tinymist-$a-unknown-linux-musl.tar.gz $3 \
+ && tar -xzf $d -C /usr/local/bin --strip-components=1 tinymist-$a-unknown-linux-musl/tinymist \
+ && get $gh/jgm/pandoc/releases/download/$PANDOC/pandoc-$PANDOC-linux-$(dpkg --print-architecture).tar.gz $4 \
+ && tar -xzf $d -C /usr/local/bin --strip-components=2 pandoc-$PANDOC/bin/pandoc \
+ && curl -fsSL -o $d https://storage.googleapis.com/gvisor/releases/release/$GVISOR/$a/gvisor.tar.bz2 \
+ && eval sha=\$GVISOR_$a && echo "$sha  $d" | sha512sum -c - \
+ && tar -xjf $d -C /usr/local/bin runsc gvisor-bin && rm $d \
  && apt-get purge -y xz-utils bzip2 curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 # packages: warmed ones read-only in the image (builds may have no network);
 # any other is fetched through egress into /tmp, a build's own

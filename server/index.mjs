@@ -22,6 +22,7 @@ import * as packages from './packages.mjs'
 import * as irch from './irch.mjs'
 
 const PORT = Number(process.env.PORT || 3000)
+const as = req => new Headers({ cookie: req.headers.cookie }) // better-auth, as the person
 const app = express().disable('x-powered-by')
 // over the link, a request without its token is not answered (link.mjs)
 app.use((req, res, next) => link.ok(req) ? next() : req.socket.end())
@@ -119,8 +120,8 @@ app.post('/api/projects/:name', async (req, res) => {
   // a Typst Universe template is fetched first: one that is not there makes no project
   if (packages.SPEC.test(template)) try { await packages.template(template) }
   catch (e) { return res.status(e.status || 502).json({ error: e.message }) }
-  const org = await auth.api.createOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
-    body: { name: n, slug: n } }).catch(e => ({ error: e?.message || 'name unavailable' }))
+  const org = await auth.api.createOrganization({ headers: as(req), body: { name: n, slug: n } })
+    .catch(e => ({ error: e?.message || 'name unavailable' }))
   if (!org || org.error) return res.status(409).json({ error: org?.error || 'name unavailable' })
   dropped.delete(n); await remote.claim(n, req.user.id)
   await ensureRepo(n)
@@ -128,8 +129,7 @@ app.post('/api/projects/:name', async (req, res) => {
     const key = remote.sshUrl(gitUrl) ? await remote.deployKey(n) : null // kept: add it, try again
     try { await remote.adopt(n, gitUrl, branch) } catch (e) {
       await rm(proj(n), { recursive: true, force: true }); await remote.unadopt(n)
-      await auth.api.deleteOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
-        body: { organizationId: org.id } }).catch(() => {})
+      await auth.api.deleteOrganization({ headers: as(req), body: { organizationId: org.id } }).catch(() => {})
       return res.status(400).json({ error: `could not adopt ${gitUrl}: ${e.message}`, key })
     }
     return res.json({ ok: true, adopted: true })
@@ -153,8 +153,7 @@ for (const m of [files, build, history, remote, templates, agents, assist, irch]
 p.post('/members', admin, async (req, res) => {
   const email = String(req.body?.email || '').trim(), had = userByEmail(email), u = had?.emailVerified && had
   if (u) await auth.api.addMember({ body: { userId: u.id, organizationId: req.org.id, role: 'member' } })
-  const inv = !u && await auth.api.createInvitation({ headers: new Headers({ cookie: req.headers.cookie }),
-    body: { email, role: 'member', organizationId: req.org.id } })
+  const inv = !u && await auth.api.createInvitation({ headers: as(req), body: { email, role: 'member', organizationId: req.org.id } })
   res.json({ ok: true, invited: !u, invite: inv?.id ?? null })
 })
 p.get('/join', admin, (req, res) => res.json(joins.list(req.org.id)))
@@ -165,7 +164,7 @@ const kick = n => { hocuspocus.closeConnections(n); build.lspOpen.get(n)?.forEac
 // the owner removes anyone; a member, only themself (leaving)
 const self = req => db.prepare('SELECT 1 FROM member WHERE id = ? AND userId = ?').get(req.params.id, req.user.id)
 p.delete('/members/:id', (req, res, next) => self(req) ? next() : admin(req, res, next), async (req, res) => {
-  const headers = new Headers({ cookie: req.headers.cookie }), organizationId = req.org.id
+  const headers = as(req), organizationId = req.org.id
   await (self(req) ? auth.api.leaveOrganization({ headers, body: { organizationId } })
     : auth.api.removeMember({ headers, body: { memberIdOrEmail: req.params.id, organizationId } }))
   kick(req.params.proj); res.json({ ok: true })
@@ -177,7 +176,7 @@ p.put('/archived', async (req, res) => {
 p.delete('/archived', async (req, res) => { await rm(shelf(req.params.proj), { force: true }); res.json({ ok: true }) })
 // the owner deletes it: members, files, history; a git remote is untouched
 p.delete('/', admin, async (req, res) => {
-  const r = await auth.api.deleteOrganization({ headers: new Headers({ cookie: req.headers.cookie }),
+  const r = await auth.api.deleteOrganization({ headers: as(req),
     body: { organizationId: req.org.id } }).catch(e => ({ error: e.message }))
   if (r?.error) return res.status(403).json(r)
   await lifecycle.dropProject(req.params.proj); res.json({ ok: true })

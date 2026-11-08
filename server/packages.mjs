@@ -5,14 +5,13 @@ import express from 'express'
 import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
-import { HUB, okPath, writeAtomic } from './store.mjs'
+import { HUB, okPath, writeAtomic, fail } from './store.mjs'
 import { unpack } from './unpack.mjs'
 
 const U = (process.env.TYDIG_PACKAGES || 'https://packages.typst.org').replace(/\/$/, '')
 const DIR = path.join(HUB, '.packages')
 const FILE = /^([a-z0-9][a-z0-9-]*)-(\d+\.\d+\.\d+)\.tar\.gz$/
 export const SPEC = /^@preview\/([a-z0-9][a-z0-9-]*):(\d+\.\d+\.\d+)$/
-const fail = (status, message) => Object.assign(new Error(message), { status })
 
 // a package's .tar.gz (immutable, as Universe publishes them: a version never changes)
 async function tarball(f) {
